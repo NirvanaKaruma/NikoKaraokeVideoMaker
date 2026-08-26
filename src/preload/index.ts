@@ -45,6 +45,18 @@ const api = {
     }
   },
 
+  project: {
+    save: (
+      json: string,
+      defaultName: string
+    ): Promise<{ ok: boolean; canceled?: boolean; path: string | null }> =>
+      ipcRenderer.invoke(IPC.projectSave, json, defaultName),
+    load: (): Promise<{ ok: boolean; canceled?: boolean; json: string | null; error?: string }> =>
+      ipcRenderer.invoke(IPC.projectLoad),
+    readFile: (path: string): Promise<{ ok: boolean; buffer?: ArrayBuffer; error?: string }> =>
+      ipcRenderer.invoke(IPC.projectReadFile, path)
+  },
+
   exportApi: {
     pickOutput: (defaultName: string): Promise<string | null> =>
       ipcRenderer.invoke(IPC.exportPickOutput, defaultName),

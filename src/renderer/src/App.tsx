@@ -16,10 +16,12 @@ import { TextPanel } from './components/panels/TextPanel'
 import { VisualizerPanel } from './components/panels/VisualizerPanel'
 import { ExportPanel } from './components/panels/ExportPanel'
 import { SettingsPanel } from './components/panels/SettingsPanel'
+import { HelpDialog } from './components/HelpDialog'
 import { AudioPanel } from './components/panels/AudioPanel'
 
 const IS_VISUAL_SMOKE = new URLSearchParams(window.location.search).has('smokeVisual')
 const IS_SMOKE_EXPORT = new URLSearchParams(window.location.search).has('smokeExport')
+const IS_SMOKE_PROJECT = new URLSearchParams(window.location.search).has('smokeProject')
 
 /* ================= 无头自测工具 ================= */
 
@@ -377,7 +379,13 @@ async function runAudioSmoke(
 function App(): React.JSX.Element {
   const project = useProject()
   const [selectedId, setSelectedId] = useState<SelectableId>(null)
+  const [helpOpen, setHelpOpen] = useState(false)
   const stageRef = useRef<Konva.Stage | null>(null)
+  const projectRef = useRef(project)
+
+  useEffect(() => {
+    projectRef.current = project
+  }, [project])
   const pb = useAudioPlayback(project.assets.audioFile, project.layout.visualizer)
   const pbRef = useRef<PlaybackApi>(pb)
 
@@ -497,10 +505,95 @@ function App(): React.JSX.Element {
       }
       return { ok: results.every((r) => r.phase === 'done'), results }
     }
+
     return () => {
       delete window.__runExportSmoke
     }
     // 仅无头自测模式生效
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+  // 项目保存/加载自测（M5/T25）：保存 → 篡改 → 加载 → 对比
+  useEffect(() => {
+    if (!IS_SMOKE_PROJECT) return
+    window.__runProjectSmoke = async () => {
+      const checks: VisualCheckItem[] = []
+      const add = (label: string, pass: boolean, detail: string): void => {
+        checks.push({ label, pass, detail })
+      }
+      const cover = await makeSyntheticCoverFile()
+      if (cover) project.setCoverFile(cover)
+      const wav = makeTwoToneWavFile(3, 44100)
+      project.setAudioFile(wav)
+      const t0 = Date.now()
+      while (pbRef.current.status !== 'ready' && Date.now() - t0 < 15000) {
+        await sleep(150)
+      }
+      if (pbRef.current.status !== 'ready') {
+        return {
+          ok: false,
+          checks: [{ label: '音频就绪', pass: false, detail: pbRef.current.status }]
+        }
+      }
+      add('音频就绪', true, '时长 ' + pbRef.current.duration.toFixed(2) + 's')
+      project.updateText('songTitle', { text: '项目测试曲' })
+      project.updateVisualizer({ barCount: 140 })
+      project.updateBackground({ blur: 40 })
+      await sleep(300)
+      const pf = await project.buildProjectFile()
+      const audioPath = await window.api.exportApi.saveAudio(
+        await wav.arrayBuffer(),
+        'smoke-audio.wav'
+      )
+      pf.audio = { name: 'smoke-audio.wav', path: audioPath }
+      const saveRes = await window.api.project.save(JSON.stringify(pf, null, 2), 'smoke-project')
+      add('保存项目', saveRes.ok, saveRes.ok ? '已写入 ' + saveRes.path : '保存失败')
+      project.updateText('songTitle', { text: '已修改' })
+      project.updateVisualizer({ barCount: 100 })
+      project.updateBackground({ blur: 0 })
+      await sleep(300)
+      await project.loadProject()
+      const waitStart = Date.now()
+      while (Date.now() - waitStart < 8000) {
+        const l = projectRef.current.layout
+        if (l.texts.songTitle.text === '项目测试曲' && l.visualizer.barCount === 140) break
+        await sleep(150)
+      }
+      const l = projectRef.current.layout
+      const restored =
+        l.texts.songTitle.text === '项目测试曲' &&
+        l.visualizer.barCount === 140 &&
+        l.background.blur === 40
+      add(
+        '布局恢复',
+        restored,
+        '歌名=' +
+          l.texts.songTitle.text +
+          ' 柱数=' +
+          l.visualizer.barCount +
+          ' 模糊=' +
+          l.background.blur
+      )
+      // 封面走 dataURL → Image 异步解码，等待就绪
+      const coverWait = Date.now()
+      while (!projectRef.current.assets.coverElement && Date.now() - coverWait < 5000) {
+        await sleep(150)
+      }
+      const a = projectRef.current.assets
+      add('封面恢复', a.coverElement != null, a.coverElement ? '封面已恢复' : '封面缺失')
+      const audioWait = Date.now()
+      while (pbRef.current.status !== 'ready' && Date.now() - audioWait < 15000) {
+        await sleep(150)
+      }
+      add(
+        '音频恢复',
+        pbRef.current.status === 'ready' && Math.abs(pbRef.current.duration - 3) < 0.5,
+        'status=' + pbRef.current.status + ' 时长=' + pbRef.current.duration.toFixed(2) + 's'
+      )
+      return { ok: checks.every((c) => c.pass), checks }
+    }
+    return () => {
+      delete window.__runProjectSmoke
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -508,7 +601,18 @@ function App(): React.JSX.Element {
     <div className="app-shell">
       <header className="app-header">
         <h1 className="app-title">NikoKaraokeVideoMaker</h1>
-        <span className="app-stage-tag">M4 · ffmpeg 管理 + 导出</span>
+        <div className="header-actions">
+          <button type="button" className="mini-btn" onClick={() => void project.saveProject()}>
+            💾 保存项目
+          </button>
+          <button type="button" className="mini-btn" onClick={() => void project.loadProject()}>
+            📂 打开项目
+          </button>
+          <button type="button" className="mini-btn" onClick={() => setHelpOpen(true)}>
+            ❓ 帮助
+          </button>
+          <span className="app-stage-tag">M5</span>
+        </div>
       </header>
       {!ffmpeg.loading && ffmpeg.report && !ffmpeg.report.effective.available && (
         <div className="ffmpeg-banner">
@@ -530,6 +634,14 @@ function App(): React.JSX.Element {
             }}
           >
             手动指定 ffmpeg.exe
+          </button>
+        </div>
+      )}
+      {project.notice && (
+        <div className="notice-bar">
+          <span>{project.notice}</span>
+          <button type="button" className="mini-btn" onClick={project.clearNotice}>
+            ✕
           </button>
         </div>
       )}
@@ -618,6 +730,7 @@ function App(): React.JSX.Element {
           )}
         </main>
       </div>
+      <HelpDialog open={helpOpen} onClose={() => setHelpOpen(false)} />
       {exporter.stageRequest && (
         <ExportStageHost
           layout={project.layout}

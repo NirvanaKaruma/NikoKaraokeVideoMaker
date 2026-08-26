@@ -17,6 +17,11 @@ export const IPC = {
   /** main → renderer 进度事件 */
   ffmpegDownloadProgress: 'ffmpeg:download:progress',
 
+  /** 项目保存/加载（T23） */
+  projectSave: 'project:save',
+  projectLoad: 'project:load',
+  projectReadFile: 'project:read-file',
+
   /** 导出 */
   exportPickOutput: 'export:pick-output',
   exportSaveVideo: 'export:save-video',

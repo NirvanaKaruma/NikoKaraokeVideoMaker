@@ -29,6 +29,19 @@ declare global {
         cancelDownload: (token: string) => Promise<boolean>
         onDownloadProgress: (cb: (p: DownloadProgress) => void) => () => void
       }
+      project: {
+        save: (
+          json: string,
+          defaultName: string
+        ) => Promise<{ ok: boolean; canceled?: boolean; path: string | null }>
+        load: () => Promise<{
+          ok: boolean
+          canceled?: boolean
+          json: string | null
+          error?: string
+        }>
+        readFile: (path: string) => Promise<{ ok: boolean; buffer?: ArrayBuffer; error?: string }>
+      }
       exportApi: {
         pickOutput: (defaultName: string) => Promise<string | null>
         saveVideo: (buffer: ArrayBuffer, name: string) => Promise<string>

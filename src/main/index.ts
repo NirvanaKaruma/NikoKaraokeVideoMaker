@@ -5,6 +5,7 @@ import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 import { IPC } from '../shared/ipc'
 import { registerFfmpegIpc } from './ffmpegIpc'
+import { registerProjectIpc } from './projectIpc'
 import { detectFfmpegStatus, detectManagedFfmpeg, installManagedFfmpeg } from './ffmpeg'
 
 /** smoke 自测模式：加载渲染页后执行一次 ping 往返，结果写入 smoke-result.txt 并退出 */
@@ -17,6 +18,8 @@ const isSmokeExport = smokeExportArg !== undefined
 
 /** smoke-bench：GPU 加速基准（硬件 vs 软件 30 帧实测）落盘 */
 const isSmokeBench = process.argv.includes('--smoke-bench')
+/** smoke-project：项目保存/加载自测 */
+const isSmokeProject = process.argv.includes('--smoke-project')
 /** smoke-detect：只做三源检测并落盘（来源矩阵测试用，配合 PATH 操控） */
 const isSmokeDetect = process.argv.includes('--smoke-detect')
 /** smoke-download：走一遍托管安装（--smoke-download=default 或完整 URL / file:// 本地镜像） */
@@ -50,7 +53,8 @@ function createWindow(): BrowserWindow {
   })
 
   mainWindow.on('ready-to-show', () => {
-    if (!isSmokeTest && !isSmokeVisual && !isSmokeExport && !isSmokeBench) mainWindow.show()
+    if (!isSmokeTest && !isSmokeVisual && !isSmokeExport && !isSmokeBench && !isSmokeProject)
+      mainWindow.show()
   })
 
   mainWindow.webContents.setWindowOpenHandler((details) => {
@@ -63,6 +67,8 @@ function createWindow(): BrowserWindow {
     mainWindow.loadFile(join(__dirname, '../renderer/index.html'), { query: { smokeVisual: '1' } })
   } else if (isSmokeExport) {
     mainWindow.loadFile(join(__dirname, '../renderer/index.html'), { query: { smokeExport: '1' } })
+  } else if (isSmokeProject) {
+    mainWindow.loadFile(join(__dirname, '../renderer/index.html'), { query: { smokeProject: '1' } })
   } else if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
     mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL'])
   } else {
@@ -108,6 +114,24 @@ async function runSmokeVisual(win: BrowserWindow): Promise<void> {
     app.exit(staticOk && audioOk ? 0 : 1)
   } catch (error) {
     console.error('[smoke-visual] 截图失败:', error)
+    app.exit(1)
+  }
+}
+
+async function runSmokeProject(win: BrowserWindow): Promise<void> {
+  try {
+    const report: unknown = await win.webContents.executeJavaScript('window.__runProjectSmoke()')
+    await writeFile(
+      join(process.cwd(), 'smoke-project-report.json'),
+      JSON.stringify(report, null, 2),
+      'utf-8'
+    )
+    const ok = (report as { ok?: boolean })?.ok === true
+    console.log('[smoke-project]', ok ? '全部通过' : '存在失败')
+    console.log(JSON.stringify(report, null, 2))
+    app.exit(ok ? 0 : 1)
+  } catch (error) {
+    console.error('[smoke-project] 失败:', error)
     app.exit(1)
   }
 }
@@ -240,6 +264,7 @@ app.whenReady().then(async () => {
 
   registerIpcHandlers()
   registerFfmpegIpc()
+  registerProjectIpc()
 
   const mainWindow = createWindow()
   if (isSmokeTest) {
@@ -266,6 +291,13 @@ app.whenReady().then(async () => {
     mainWindow.webContents.once('did-finish-load', () => {
       setTimeout(() => {
         void runSmokeBench(mainWindow)
+      }, 3500)
+    })
+  }
+  if (isSmokeProject) {
+    mainWindow.webContents.once('did-finish-load', () => {
+      setTimeout(() => {
+        void runSmokeProject(mainWindow)
       }, 3500)
     })
   }

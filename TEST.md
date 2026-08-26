@@ -99,6 +99,14 @@ npx electron . --smoke-bench   # 1080p：prefer-hardware 与 prefer-software 各
 - smoke-visual：静态像素 5/5 + 音频频谱 6/6（含「播放中 seek 不中断」回归）；
 - 性能回归：隐藏窗口编码曾因 Chromium 定时器节流从 13ms/帧劣化到分钟级——已用 MessageChannel 让出事件循环 + backgroundThrottling:false 修复（720p 恢复 4ms/帧）。
 
+## 6.5 项目保存/加载（M5）
+
+```powershell
+npx electron . --smoke-project   # 保存 → 篡改 → 加载 → 恢复验证
+```
+
+结果 5/5 通过：保存项目（.niko.json 落盘）✓ 布局恢复（歌名/柱数/模糊全还原）✓ 封面恢复（内嵌 dataURL）✓ 音频恢复（按路径读回并解码 3.00s）✓ 音频就绪 ✓。
+
 ## 7. 打包自测（§5.6）
 
 见 M6 完成后追加记录（无 Node 干净目录 portable 实测 + 体积）。
