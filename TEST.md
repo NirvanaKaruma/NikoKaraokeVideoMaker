@@ -142,6 +142,10 @@ Start-Process -FilePath '.\NikoKaraokeVideoMaker.exe' -Wait -PassThru
 - 三源检测：系统 PATH 无 ffmpeg → **自动回退托管版**（userData ffmpeg 8.1.1，aac+libx264+nvenc/qsv/amf+全硬件加速器）✅；
 - 端到端导出 720p@8：**done，4.3s，产物 smoke-720p.mp4（299,713 字节）** ✅。
 
+### 最终重打包（性能优化版）
+
+2026-08-27：性能优化（滑块延迟提交 / 背景半分辨率缓存 / 预览频谱命令式更新 / 系统字体枚举）合入后重新打包，dist 产物已更新；新 portable 干净目录复验：720p@6 导出 2.7s 通过。
+
 ### 打包工程备注
 
 - electron-builder 二进制走 npmmirror 镜像、缓存本地化（.electron-builder-cache/）；
