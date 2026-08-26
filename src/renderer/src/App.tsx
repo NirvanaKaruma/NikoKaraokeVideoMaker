@@ -146,10 +146,26 @@ function runVisualChecks(stage: Konva.Stage): VisualCheckReport {
   }
 
   const main = sample(441, 518)
+  // 诊断：主图区域内占位文案灰蓝色像素（#7a808d 附近）——出现即说明封面未加载、显示的是占位框
+  const placeholderN = countIn(
+    0.04 * 1920,
+    0.03 * 1080,
+    0.42 * 1920,
+    0.93 * 1080,
+    (r, g, b) =>
+      r > 100 && r < 160 && g > 105 && g < 165 && b > 115 && b < 175 && Math.abs(r - b) < 30
+  )
   if (main[0] > 200 && main[1] > 200 && main[2] > 200) {
     pass('主图落位', '主图中心 rgb(' + main.slice(0, 3).join(',') + ') 为白色圆盘')
   } else {
-    fail('主图落位', '主图中心 rgb(' + main.slice(0, 3).join(',') + ') 非预期亮色')
+    fail(
+      '主图落位',
+      '主图中心 rgb(' +
+        main.slice(0, 3).join(',') +
+        ') 非预期亮色；占位灰蓝像素 ' +
+        placeholderN +
+        '（>50 说明封面未加载）'
+    )
   }
 
   const textN = countIn(
@@ -383,7 +399,8 @@ function App(): React.JSX.Element {
   useEffect(() => {
     projectRef.current = project
   }, [project])
-  const pb = useAudioPlayback(project.assets.audioFile, project.layout.visualizer)
+  const barsHandleRef = useRef<((bars: number[]) => void) | null>(null)
+  const pb = useAudioPlayback(project.assets.audioFile, project.layout.visualizer, barsHandleRef)
   const pbRef = useRef<PlaybackApi>(pb)
 
   const ffmpeg = useFfmpegStatus()
@@ -420,6 +437,20 @@ function App(): React.JSX.Element {
     window.__captureStage = () => stageRef.current?.toDataURL({ pixelRatio: 1 }) ?? ''
     window.__runVisualChecks = () =>
       stageRef.current ? runVisualChecks(stageRef.current) : { ok: false, checks: [] }
+    window.__getAssetDebug = () => {
+      const ce = projectRef.current.assets.coverElement
+      const st = stageRef.current
+      const mainLayer = st ? st.getLayers()[1] : null
+      return {
+        coverFile: projectRef.current.assets.coverFile?.name ?? null,
+        coverUrl: projectRef.current.assets.coverUrl,
+        coverElement: ce != null,
+        naturalSize: ce ? ce.naturalWidth + 'x' + ce.naturalHeight : null,
+        mainImageNodes: mainLayer ? mainLayer.find('Image').length : -1,
+        fillMode: projectRef.current.layout.mainImage.fillMode,
+        mainRect: JSON.stringify(projectRef.current.layout.mainImage.rect)
+      }
+    }
     window.__runAudioSmoke = () =>
       stageRef.current
         ? runAudioSmoke(project, pbRef, stageRef.current)
@@ -430,6 +461,7 @@ function App(): React.JSX.Element {
       delete window.__runVisualChecks
       delete window.__runAudioSmoke
       delete window.__runEncodeBenchmark
+      delete window.__getAssetDebug
     }
     // 仅无头自测模式生效，project 引用稳定
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -728,6 +760,7 @@ function App(): React.JSX.Element {
             onTextRectChange={(kind, rect) => project.updateText(kind, { rect })}
             onVisualizerRectChange={(rect) => project.updateVisualizer({ rect })}
             bars={pb.bars}
+            barsHandleRef={barsHandleRef}
             onStageReady={(s) => {
               stageRef.current = s
             }}

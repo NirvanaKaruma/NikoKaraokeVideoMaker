@@ -1,6 +1,8 @@
 import type { TextLayerConfig } from '@shared/layout'
+import { DeferredSlider } from '../DeferredSlider'
+import { useSystemFonts } from '../../hooks/useSystemFonts'
 
-const FONT_OPTIONS: { label: string; value: string }[] = [
+const BUILTIN_FONTS: { label: string; value: string }[] = [
   {
     label: '系统默认',
     value: '"Segoe UI", "Microsoft YaHei", "PingFang SC", "Noto Sans CJK SC", sans-serif'
@@ -14,13 +16,21 @@ const FONT_OPTIONS: { label: string; value: string }[] = [
   { label: '幼圆', value: '"YouYuan", "Microsoft YaHei", sans-serif' }
 ]
 
+const systemFontValue = (family: string): string => '"' + family.replace(/"/g, '') + '", sans-serif'
+
 interface StyleControlsProps {
   title: string
   cfg: TextLayerConfig
+  systemFonts: string[]
   onChange: (patch: Partial<TextLayerConfig>) => void
 }
 
-function StyleControls({ title, cfg, onChange }: StyleControlsProps): React.JSX.Element {
+function StyleControls({
+  title,
+  cfg,
+  systemFonts,
+  onChange
+}: StyleControlsProps): React.JSX.Element {
   const s = cfg.style
   const setStyle = (patch: Partial<TextLayerConfig['style']>): void =>
     onChange({ style: { ...s, ...patch } })
@@ -30,23 +40,32 @@ function StyleControls({ title, cfg, onChange }: StyleControlsProps): React.JSX.
       <label className="field">
         <span>字体</span>
         <select value={s.fontFamily} onChange={(e) => setStyle({ fontFamily: e.target.value })}>
-          {FONT_OPTIONS.map((f) => (
-            <option key={f.label} value={f.value}>
-              {f.label}
-            </option>
-          ))}
+          <optgroup label="常用字体">
+            {BUILTIN_FONTS.map((f) => (
+              <option key={f.label} value={f.value}>
+                {f.label}
+              </option>
+            ))}
+          </optgroup>
+          {systemFonts.length > 0 && (
+            <optgroup label="系统字体（全部）">
+              {systemFonts.map((f) => (
+                <option key={f} value={systemFontValue(f)}>
+                  {f}
+                </option>
+              ))}
+            </optgroup>
+          )}
         </select>
       </label>
-      <label className="field">
-        <span>字号：{Math.round(s.fontSize * 100)}%（相对画布高）</span>
-        <input
-          type="range"
-          min={2}
-          max={20}
-          value={Math.round(s.fontSize * 100)}
-          onChange={(e) => setStyle({ fontSize: Number(e.target.value) / 100 })}
-        />
-      </label>
+      <DeferredSlider
+        label={(v) => '字号：' + Math.round(v * 100) + '%（相对画布高）'}
+        value={s.fontSize}
+        min={0.02}
+        max={0.2}
+        step={0.005}
+        onCommit={(v) => setStyle({ fontSize: v })}
+      />
       <label className="check-row">
         <input
           type="checkbox"
@@ -67,16 +86,14 @@ function StyleControls({ title, cfg, onChange }: StyleControlsProps): React.JSX.
           onChange={(e) => setStyle({ strokeColor: e.target.value })}
         />
       </label>
-      <label className="field">
-        <span>描边宽度：{(s.strokeWidth * 100).toFixed(2)}%（0 = 无描边）</span>
-        <input
-          type="range"
-          min={0}
-          max={40}
-          value={Math.round(s.strokeWidth * 2000)}
-          onChange={(e) => setStyle({ strokeWidth: Number(e.target.value) / 2000 })}
-        />
-      </label>
+      <DeferredSlider
+        label={(v) => '描边宽度：' + (v * 100).toFixed(2) + '%（0 = 无描边）'}
+        value={s.strokeWidth}
+        min={0}
+        max={0.02}
+        step={0.0005}
+        onCommit={(v) => setStyle({ strokeWidth: v })}
+      />
       <label className="check-row">
         <input
           type="checkbox"
@@ -93,16 +110,14 @@ function StyleControls({ title, cfg, onChange }: StyleControlsProps): React.JSX.
           onChange={(e) => setStyle({ glowColor: e.target.value })}
         />
       </label>
-      <label className="field">
-        <span>发光强度：{Math.round(s.glowBlur * 2000)}</span>
-        <input
-          type="range"
-          min={0}
-          max={100}
-          value={Math.round(s.glowBlur * 2000)}
-          onChange={(e) => setStyle({ glowBlur: Number(e.target.value) / 2000 })}
-        />
-      </label>
+      <DeferredSlider
+        label={(v) => '发光强度：' + Math.round(v * 2000)}
+        value={s.glowBlur}
+        min={0}
+        max={0.05}
+        step={0.0005}
+        onCommit={(v) => setStyle({ glowBlur: v })}
+      />
     </div>
   )
 }
@@ -114,13 +129,36 @@ interface TextPanelProps {
   onArtistChange: (patch: Partial<TextLayerConfig>) => void
 }
 
-/** 文本样式面板：歌曲名 / 作者分别独立可调（T11） */
+/** 文本样式面板：歌曲名 / 作者分别独立可调（T11）；支持扫描系统全部字体 */
 export function TextPanel(props: TextPanelProps): React.JSX.Element {
+  const sys = useSystemFonts()
   return (
     <section className="panel-section">
       <h2>文本样式</h2>
-      <StyleControls title="歌曲名" cfg={props.songTitle} onChange={props.onSongTitleChange} />
-      <StyleControls title="作者" cfg={props.artist} onChange={props.onArtistChange} />
+      <div className="gradient-row">
+        <button type="button" className="mini-btn" onClick={() => void sys.scan()}>
+          {sys.loading ? '扫描中…' : '重新扫描系统字体'}
+        </button>
+        <span className="panel-note">
+          {sys.scanned && !sys.error
+            ? '已载入 ' + sys.fonts.length + ' 个系统字体（含日文等特殊字体）'
+            : sys.error
+              ? '字体枚举不可用（保持常用字体）'
+              : '首次自动扫描中…'}
+        </span>
+      </div>
+      <StyleControls
+        title="歌曲名"
+        cfg={props.songTitle}
+        systemFonts={sys.fonts}
+        onChange={props.onSongTitleChange}
+      />
+      <StyleControls
+        title="作者"
+        cfg={props.artist}
+        systemFonts={sys.fonts}
+        onChange={props.onArtistChange}
+      />
     </section>
   )
 }

@@ -1,4 +1,5 @@
 import type { BackgroundConfig } from '@shared/layout'
+import { DeferredSlider } from '../DeferredSlider'
 
 interface BackgroundPanelProps {
   background: BackgroundConfig
@@ -25,27 +26,22 @@ export function BackgroundPanel({ background, onChange }: BackgroundPanelProps):
           onChange={(e) => onChange({ color: e.target.value })}
         />
       </label>
-      <label className="field">
-        <span>高斯模糊：{background.blur}</span>
-        <input
-          type="range"
-          min={0}
-          max={100}
-          value={background.blur}
-          disabled={!background.useImage}
-          onChange={(e) => onChange({ blur: Number(e.target.value) })}
-        />
-      </label>
-      <label className="field">
-        <span>压暗：{Math.round(background.dimOpacity * 100)}%</span>
-        <input
-          type="range"
-          min={0}
-          max={100}
-          value={Math.round(background.dimOpacity * 100)}
-          onChange={(e) => onChange({ dimOpacity: Number(e.target.value) / 100 })}
-        />
-      </label>
+      <DeferredSlider
+        label={(v) => '高斯模糊：' + v}
+        value={background.blur}
+        min={0}
+        max={100}
+        disabled={!background.useImage}
+        onCommit={(v) => onChange({ blur: v })}
+      />
+      <DeferredSlider
+        label={(v) => '压暗：' + Math.round(v * 100) + '%'}
+        value={background.dimOpacity}
+        min={0}
+        max={1}
+        step={0.01}
+        onCommit={(v) => onChange({ dimOpacity: v })}
+      />
       <p className="panel-note">
         提示：点选主图后可拖动、拖角缩放（等比锁定）；拖入下半区（y&gt;55%，预留字幕区）仅提醒不禁止。
       </p>

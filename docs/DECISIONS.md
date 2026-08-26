@@ -103,6 +103,14 @@
 - **electron-builder 工程**：二进制走 npmmirror 镜像 + 缓存本地化（.electron-builder-cache/，已 gitignore 与 eslint ignore）；开发文件（docs/nikokaraoke.md/TEST.md/TEST-ARTIFACTS 等）从安装包排除。
 - **portable 启动器限制**（实测发现）：不转发命令行参数、cwd 改为临时解压目录（退出即删）→ smoke 自测通道改为环境变量 NIKO_SMOKE / NIKO_SMOKE_DIR（同时兼容 argv 与 env 两种触发方式）。
 - **未签名**：无代码签名证书，SmartScreen 提示写入 FAQ；后续可加签名。
+
+## 11. 性能优化（M6 后用户反馈）
+
+- **滑块延迟提交**：所有参数滑块（模糊/压暗/字号/描边/发光/柱参数等）改为 DeferredSlider——拖动中仅更新本地草稿，松开/失焦才提交触发画布重绘（用户明确要求）。
+- **背景模糊半分辨率**：背景层使用私有 0.5 倍画布副本 + cache({pixelRatio:0.5})，模糊半径同步缩放——视觉几乎无差、性能约 4 倍。
+- **Konva 共享图片缓存污染**（实测踩坑）：背景组 cache 与主图共用同一 HTMLImageElement 时，主图会绘制到背景的缓存纹理（画面只剩灰背景），复现于 smoke 像素校验。修复：背景永远使用私有半分辨率画布副本（useMemo 绘制），主图保留原图。
+- **预览频谱命令式更新**：播放中 rAF 直接调用 Konva 矩形更新（barsHandleRef，与导出同一机制），绕过 React 每帧重渲染 128 节点；seek/暂停/解码时仍走 state 同步。
+- **系统字体枚举**：queryLocalFonts（Local Font Access API，Electron 默认授权）扫描系统全部字体（含日文等特殊字体），进入「文本样式」自动扫描一次 + 手动重扫按钮，下拉分组显示（常用/系统字体）。
 - **GitHub 同步**（用户要求）：私有仓库 github.com/NirvanaKaruma/NikoKaraokeVideoMaker，默认分支 main，通过本机 SSH 密钥（gh CLI 未安装）推送；每个里程碑提交后同步。
 
 ## 6. 依赖与安全决策（M1 期间追加）

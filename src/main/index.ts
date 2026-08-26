@@ -117,9 +117,16 @@ async function runSmokeVisual(win: BrowserWindow): Promise<void> {
     const audioOk = (audioReport as { ok?: boolean })?.ok === true
     console.log('[smoke-visual] 音频频谱校验:', audioOk ? '全部通过' : '存在失败项')
 
+    const assetDebug: unknown = await win.webContents
+      .executeJavaScript('window.__getAssetDebug()')
+      .catch(() => null)
     await writeFile(
-      join(process.cwd(), 'smoke-visual-report.json'),
-      JSON.stringify({ static: report, audio: audioReport, ok: staticOk && audioOk }, null, 2),
+      join(smokeDir, 'smoke-visual-report.json'),
+      JSON.stringify(
+        { static: report, audio: audioReport, assets: assetDebug, ok: staticOk && audioOk },
+        null,
+        2
+      ),
       'utf-8'
     )
     app.exit(staticOk && audioOk ? 0 : 1)

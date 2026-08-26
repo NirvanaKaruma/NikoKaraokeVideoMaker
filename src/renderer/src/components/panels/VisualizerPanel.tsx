@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type { VisualizerConfig } from '@shared/layout'
+import { DeferredSlider } from '../DeferredSlider'
 
 const BUILTIN_PRESETS: { label: string; colors: string[] }[] = [
   { label: '粉→青（默认）', colors: ['#ff5f9e', '#7ce3ff'] },
@@ -17,7 +18,6 @@ function isValidHex(c: string): boolean {
   return /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(c)
 }
 
-/** 解析逗号分隔的色表（1–8 个 hex），非法返回 null */
 function parseGradient(text: string): string[] | null {
   const parts = text
     .split(/[,，]/)
@@ -99,66 +99,54 @@ export function VisualizerPanel({ config, onChange }: VisualizerPanelProps): Rea
   return (
     <section className="panel-section">
       <h2>音频可视化</h2>
-      <label className="field">
-        <span>柱数：{config.barCount}（100–160）</span>
-        <input
-          type="range"
-          min={100}
-          max={160}
-          value={config.barCount}
-          onChange={(e) => onChange({ barCount: Number(e.target.value) })}
-        />
-      </label>
-      <label className="field">
-        <span>柱宽：{Math.round(config.barWidthRatio * 100)}%</span>
-        <input
-          type="range"
-          min={10}
-          max={90}
-          value={Math.round(config.barWidthRatio * 100)}
-          onChange={(e) => onChange({ barWidthRatio: Number(e.target.value) / 100 })}
-        />
-      </label>
-      <label className="field">
-        <span>柱最大高度：{Math.round(config.heightRatio * 100)}%</span>
-        <input
-          type="range"
-          min={20}
-          max={100}
-          value={Math.round(config.heightRatio * 100)}
-          onChange={(e) => onChange({ heightRatio: Number(e.target.value) / 100 })}
-        />
-      </label>
-      <label className="field">
-        <span>柱顶圆角：{config.roundness}px</span>
-        <input
-          type="range"
-          min={0}
-          max={24}
-          value={config.roundness}
-          onChange={(e) => onChange({ roundness: Number(e.target.value) })}
-        />
-      </label>
-      <label className="field">
-        <span>平滑：{Math.round(config.smoothing * 100)}%（0 = 最灵敏，默认 20%）</span>
-        <input
-          type="range"
-          min={0}
-          max={90}
-          value={Math.round(config.smoothing * 100)}
-          onChange={(e) => onChange({ smoothing: Number(e.target.value) / 100 })}
-        />
-      </label>
-      <label className="field">
-        <span>灵敏度：{config.sensitivity}（越大柱越高越灵敏）</span>
-        <input
-          type="range"
-          min={1}
-          max={15}
-          value={config.sensitivity}
-          onChange={(e) => onChange({ sensitivity: Number(e.target.value) })}
-        />
-      </label>
+      <DeferredSlider
+        label={(v) => '柱数：' + v + '（100–160）'}
+        value={config.barCount}
+        min={100}
+        max={160}
+        step={1}
+        onCommit={(v) => onChange({ barCount: v })}
+      />
+      <DeferredSlider
+        label={(v) => '柱宽：' + Math.round(v * 100) + '%'}
+        value={config.barWidthRatio}
+        min={0.1}
+        max={0.9}
+        step={0.01}
+        onCommit={(v) => onChange({ barWidthRatio: v })}
+      />
+      <DeferredSlider
+        label={(v) => '柱最大高度：' + Math.round(v * 100) + '%'}
+        value={config.heightRatio}
+        min={0.2}
+        max={1}
+        step={0.01}
+        onCommit={(v) => onChange({ heightRatio: v })}
+      />
+      <DeferredSlider
+        label={(v) => '柱顶圆角：' + v + 'px'}
+        value={config.roundness}
+        min={0}
+        max={24}
+        step={1}
+        onCommit={(v) => onChange({ roundness: v })}
+      />
+      <DeferredSlider
+        label={(v) => '平滑：' + Math.round(v * 100) + '%（0 = 最灵敏，默认 20%）'}
+        value={config.smoothing}
+        min={0}
+        max={0.9}
+        step={0.01}
+        onCommit={(v) => onChange({ smoothing: v })}
+      />
+      <DeferredSlider
+        label={(v) => '灵敏度：' + v + '（越大柱越高越灵敏）'}
+        value={config.sensitivity}
+        min={1}
+        max={15}
+        step={1}
+        onCommit={(v) => onChange({ sensitivity: v })}
+      />
       <label className="field">
         <span>配色方案</span>
         <select

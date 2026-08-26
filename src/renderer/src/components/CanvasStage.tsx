@@ -13,6 +13,8 @@ export interface CanvasStageProps {
   onTextRectChange: (kind: 'songTitle' | 'artist', rect: NormRect) => void
   onVisualizerRectChange: (rect: NormRect) => void
   bars: number[]
+  /** 播放中命令式更新频谱柱（性能优化：绕过 React 每帧重渲染） */
+  barsHandleRef?: { current: ((bars: number[]) => void) | null }
   onStageReady?: (stage: Konva.Stage | null) => void
 }
 
@@ -27,6 +29,7 @@ export function CanvasStage(props: CanvasStageProps): React.JSX.Element {
     onTextRectChange,
     onVisualizerRectChange,
     bars,
+    barsHandleRef,
     onStageReady
   } = props
   const containerRef = useRef<HTMLDivElement>(null)
@@ -88,6 +91,7 @@ export function CanvasStage(props: CanvasStageProps): React.JSX.Element {
           onTextRectChange={onTextRectChange}
           onVisualizerRectChange={onVisualizerRectChange}
           bars={bars}
+          barsHandleRef={barsHandleRef}
         />
       </Stage>
     </div>

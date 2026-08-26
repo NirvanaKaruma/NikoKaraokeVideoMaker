@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import {
   Group,
   Image as KonvaImage,
@@ -73,18 +73,35 @@ function BackgroundLayer({
   canvas: CanvasSize
 }): React.JSX.Element {
   const bgRef = useRef<Konva.Group>(null)
-  const blurRadius = (background.blur / 100) * 60
+  /** 半分辨率缓存：模糊是低频效果，0.5 倍像素比视觉几乎无差、性能约 4 倍（模糊半径同步缩放） */
+  const CACHE_RATIO = 0.5
+  const blurRadius = (background.blur / 100) * 60 * CACHE_RATIO
   const showBlur = background.blur > 0
 
-  let cover: React.JSX.Element | null = null
-  if (background.useImage && coverElement) {
+  // 背景专用半分辨率画布副本：Konva 缓存会污染共享图片元素的纹理（主图会被画成背景缓存内容），
+  // 因此背景永远使用自己的私有副本，主图继续用原始图片（性能与正确性兼得）
+  const bgSource = useMemo(() => {
+    if (!coverElement) return null
     const iw = coverElement.naturalWidth || coverElement.width
     const ih = coverElement.naturalHeight || coverElement.height
+    if (iw === 0 || ih === 0) return null
+    const c = document.createElement('canvas')
+    c.width = Math.max(1, Math.round(iw * 0.5))
+    c.height = Math.max(1, Math.round(ih * 0.5))
+    const ctx = c.getContext('2d')
+    if (ctx) ctx.drawImage(coverElement, 0, 0, c.width, c.height)
+    return c
+  }, [coverElement])
+
+  let cover: React.JSX.Element | null = null
+  if (background.useImage && bgSource) {
+    const iw = bgSource.width
+    const ih = bgSource.height
     if (iw > 0 && ih > 0) {
       const s = Math.max(canvas.width / iw, canvas.height / ih)
       cover = (
         <KonvaImage
-          image={coverElement}
+          image={bgSource}
           x={(canvas.width - iw * s) / 2}
           y={(canvas.height - ih * s) / 2}
           width={iw * s}
@@ -99,14 +116,14 @@ function BackgroundLayer({
   useEffect(() => {
     const node = bgRef.current
     if (node) {
-      node.cache()
+      node.cache({ pixelRatio: CACHE_RATIO })
       node.getLayer()?.batchDraw()
     }
   }, [
     background.useImage,
     background.color,
     background.blur,
-    coverElement,
+    bgSource,
     canvas.width,
     canvas.height
   ])

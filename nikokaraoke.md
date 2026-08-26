@@ -53,6 +53,7 @@
 - [x] T28: README 完整版（用户/开发/FAQ/扩展分辨率）+ 文档收尾 + 最终提交
 
 ## 执行记录
+- M6 后性能优化（用户反馈）：① 参数滑块延迟提交（DeferredSlider，松开才重绘）；② 背景模糊半分辨率私有副本缓存（约 4 倍性能）；③ 修复 Konva 共享图片缓存污染（背景私有副本）；④ 预览频谱播放中命令式更新（绕过 React 每帧重渲染）；⑤ 系统字体全量枚举（queryLocalFonts，含日文字体）。smoke-visual 11/11 + 导出回归通过。
 
 - M6 完成（打包交付）。T26 electron-builder（NSIS+portable、不捆 ffmpeg 工具链、占位图标、开发文件排除）✓；T27 无 Node 干净目录 portable 实测（自动回退托管版 + 720p 导出 4.3s）✓ 体积记录 TEST.md §7；T28 README 完整版（用户/开发/FAQ/扩展分辨率/已知限制）✓。发现并绕过：portable 启动器不转发 argv → smoke 增加 NIKO_SMOKE/NIKO_SMOKE_DIR 环境变量通道。
 - M5 完成（P1 + 打磨）。T23 项目保存/加载 .niko.json（布局全量 + 封面内嵌 dataURL + 音频路径引用，缺失时提示重拖；smoke 自测 5/5：保存→篡改→加载→布局/封面/音频全恢复）✓；T24 内置使用帮助对话框（基本流程/三源说明/导出/FAQ）✓；T25 UI 打磨（头部保存/打开/帮助按钮、通知条、模态框）✓。

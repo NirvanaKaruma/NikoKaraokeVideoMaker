@@ -32,7 +32,12 @@ export interface PlaybackApi {
  * - 播放：AudioBufferSourceNode 手动控制（offset 记录实现暂停/续播/seek），播完停止
  * - 频谱：rAF 每帧 spectrumAt(currentTime) + 时间平滑；seek 后立即刷新
  */
-export function useAudioPlayback(audioFile: File | null, config: VisualizerConfig): PlaybackApi {
+export function useAudioPlayback(
+  audioFile: File | null,
+  config: VisualizerConfig,
+  /** 播放中走命令式更新（绕过 React 每帧重渲染）；缺省回退 setBars */
+  barsSink?: { current: ((bars: number[]) => void) | null }
+): PlaybackApi {
   const ctxRef = useRef<AudioContext | null>(null)
   const bufferRef = useRef<AudioBuffer | null>(null)
   const analyzerRef = useRef<SpectrumAnalyzer | null>(null)
@@ -42,7 +47,13 @@ export function useAudioPlayback(audioFile: File | null, config: VisualizerConfi
   const playingRef = useRef(false)
   const manualStopRef = useRef(false)
   const prevBarsRef = useRef<Float32Array | null>(null)
+  const lastBarsRef = useRef<Float32Array | null>(null)
   const configRef = useRef(config)
+  const sinkRef = useRef(barsSink)
+
+  useEffect(() => {
+    sinkRef.current = barsSink
+  }, [barsSink])
 
   const [status, setStatus] = useState<AudioStatus>('empty')
   const [error, setError] = useState<string | null>(null)
@@ -67,14 +78,19 @@ export function useAudioPlayback(audioFile: File | null, config: VisualizerConfi
     return ctxRef.current
   }
 
-  const computeBars = useCallback((t: number) => {
+  const computeBars = useCallback((t: number, viaState: boolean) => {
     const an = analyzerRef.current
     if (!an) return
     const cfg = configRef.current
     const target = spectrumAt(an, t, cfg.barCount, null, cfg.sensitivity)
     const smoothed = smoothBars(prevBarsRef.current, target, cfg.smoothing)
     prevBarsRef.current = smoothed
-    setBars(Array.from(smoothed))
+    lastBarsRef.current = smoothed
+    if (viaState) {
+      setBars(Array.from(smoothed))
+    } else {
+      sinkRef.current?.current?.(Array.from(smoothed))
+    }
   }, [])
 
   const startSource = useCallback((ctx: AudioContext, offset: number): void => {
@@ -144,16 +160,7 @@ export function useAudioPlayback(audioFile: File | null, config: VisualizerConfi
         setError(null)
         setCurrentTime(0)
         // 立即显示 t=0 频谱
-        const target = spectrumAt(
-          analyzerRef.current,
-          0,
-          configRef.current.barCount,
-          null,
-          configRef.current.sensitivity
-        )
-        const smoothed = smoothBars(prevBarsRef.current, target, configRef.current.smoothing)
-        prevBarsRef.current = smoothed
-        setBars(Array.from(smoothed))
+        computeBars(0, true)
       } catch (e) {
         if (!cancelled) {
           setStatus('error')
@@ -164,7 +171,7 @@ export function useAudioPlayback(audioFile: File | null, config: VisualizerConfi
     return () => {
       cancelled = true
     }
-  }, [audioFile])
+  }, [audioFile, computeBars])
 
   const play = useCallback(() => {
     const ctx = ensureCtx()
@@ -186,6 +193,8 @@ export function useAudioPlayback(audioFile: File | null, config: VisualizerConfi
     playingRef.current = false
     setIsPlaying(false)
     setCurrentTime(offsetRef.current)
+    // 命令式路径下把最后一帧谱同步回 state，避免后续声明式重渲染回退到旧值
+    if (lastBarsRef.current) setBars(Array.from(lastBarsRef.current))
   }, [])
 
   const seek = useCallback(
@@ -204,7 +213,7 @@ export function useAudioPlayback(audioFile: File | null, config: VisualizerConfi
       }
       offsetRef.current = clamped
       setCurrentTime(clamped)
-      computeBars(clamped)
+      computeBars(clamped, true)
     },
     [computeBars, startSource]
   )
@@ -219,7 +228,7 @@ export function useAudioPlayback(audioFile: File | null, config: VisualizerConfi
       const t = offsetRef.current + (ctx.currentTime - startedAtRef.current)
       const dur = bufferRef.current?.duration ?? t
       setCurrentTime(Math.min(t, dur))
-      computeBars(t)
+      computeBars(t, false)
       raf = requestAnimationFrame(tick)
     }
     raf = requestAnimationFrame(tick)
