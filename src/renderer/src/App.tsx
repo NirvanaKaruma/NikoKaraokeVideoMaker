@@ -589,6 +589,21 @@ function App(): React.JSX.Element {
         pbRef.current.status === 'ready' && Math.abs(pbRef.current.duration - 3) < 0.5,
         'status=' + pbRef.current.status + ' 时长=' + pbRef.current.duration.toFixed(2) + 's'
       )
+      // 新建项目：应回到默认布局并清空素材
+      project.resetProject()
+      await sleep(300)
+      const nl = projectRef.current.layout
+      const na = projectRef.current.assets
+      add(
+        '新建重置',
+        nl.texts.songTitle.text === '歌曲名' && na.coverUrl == null && na.audioFile == null,
+        '歌名=' +
+          nl.texts.songTitle.text +
+          ' 封面=' +
+          na.coverUrl +
+          ' 音频=' +
+          (na.audioFile?.name ?? 'null')
+      )
       return { ok: checks.every((c) => c.pass), checks }
     }
     return () => {
@@ -604,6 +619,18 @@ function App(): React.JSX.Element {
         <div className="header-actions">
           <button type="button" className="mini-btn" onClick={() => void project.saveProject()}>
             💾 保存项目
+          </button>
+          <button
+            type="button"
+            className="mini-btn"
+            onClick={() => {
+              if (window.confirm('新建项目将清空当前编辑内容（布局与素材），确定继续？')) {
+                project.resetProject()
+                setSelectedId(null)
+              }
+            }}
+          >
+            🆕 新建项目
           </button>
           <button type="button" className="mini-btn" onClick={() => void project.loadProject()}>
             📂 打开项目

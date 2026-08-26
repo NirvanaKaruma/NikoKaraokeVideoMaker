@@ -75,10 +75,14 @@ export function HelpDialog({ open, onClose }: HelpDialogProps): React.JSX.Elemen
             </ul>
           </Section>
 
-          <Section title="项目保存 / 打开">
+          <Section title="项目保存 / 打开 / 新建">
             <ul className="help-list">
-              <li>「保存项目」把布局、样式、封面全部存入 .niko.json（音频只记路径）；</li>
-              <li>「打开项目」一键恢复；音频文件被移动后会提示重新拖入。</li>
+              <li>
+                「保存项目」把布局、样式、封面存入专有后缀的 .niko
+                项目文件（内容已加密混淆，防直接查看/篡改；音频只记路径）；
+              </li>
+              <li>「打开项目」一键恢复；音频文件被移动后会提示重新拖入；</li>
+              <li>「新建项目」清空当前内容，恢复默认布局。</li>
             </ul>
           </Section>
 

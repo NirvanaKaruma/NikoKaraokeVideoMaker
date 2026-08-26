@@ -85,6 +85,8 @@
 
 - **项目文件格式 .niko.json**：{version, app, savedAt, layout 全量, cover 内嵌 dataURL（图片体积可控）, audio 只存磁盘路径}。音频过大不入 JSON；加载时按路径读回字节重建 File（IPC project:read-file），路径失效/无路径时提示重新拖入（其余内容照常恢复）。
 - **保存/加载对话框**由 main 负责（save/open dialog + 原子写 tmp→rename）；smoke 模式免对话框落盘 TEST-ARTIFACTS。
+- **存档格式（用户反馈）**：扩展名改为专有 .niko（对话框过滤器同步，兼容打开旧 .json）；内容 AES-256-GCM 加密混淆（魔数 NIKO1 + 随机 IV + authTag，密钥内置），定位为防直接查看/手改的混淆层而非强加密（应用不承载敏感数据）；旧明文存档自动兼容读取。
+- **新建项目**（用户反馈）：头部按钮 + confirm 确认后重置默认布局并清空素材（释放对象 URL）。
 - **GitHub 同步**（用户要求）：私有仓库 github.com/NirvanaKaruma/NikoKaraokeVideoMaker，默认分支 main，通过本机 SSH 密钥（gh CLI 未安装）推送；每个里程碑提交后同步。
 
 ## 6. 依赖与安全决策（M1 期间追加）

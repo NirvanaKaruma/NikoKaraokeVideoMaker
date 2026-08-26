@@ -52,6 +52,7 @@ export function useProject(): {
   setAudioFile: (file: File | null) => void
   saveProject: () => Promise<void>
   loadProject: () => Promise<void>
+  resetProject: () => void
   clearNotice: () => void
   buildProjectFile: () => Promise<ProjectFile>
   applyProjectFile: (pf: ProjectFile) => Promise<string[]>
@@ -290,6 +291,18 @@ export function useProject(): {
     }
   }, [applyProjectFile])
 
+  /** 新建项目：恢复默认布局并清空素材（释放对象 URL） */
+  const resetProject = useCallback(() => {
+    setLayout(structuredClone(DEFAULT_LAYOUT))
+    setAssets((prev) => {
+      if (prev.coverUrl) URL.revokeObjectURL(prev.coverUrl)
+      if (prev.audioUrl) URL.revokeObjectURL(prev.audioUrl)
+      return EMPTY_ASSETS
+    })
+    setFileError(null)
+    setNotice(null)
+  }, [])
+
   return {
     layout,
     assets,
@@ -306,6 +319,7 @@ export function useProject(): {
     setAudioFile,
     saveProject,
     loadProject,
+    resetProject,
     clearNotice: () => setNotice(null),
     buildProjectFile,
     applyProjectFile
