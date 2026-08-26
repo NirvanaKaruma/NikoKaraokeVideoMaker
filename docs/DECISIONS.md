@@ -62,6 +62,7 @@
 - ffmpeg spawn 一律参数数组（兼容空格/中文路径），不用 shell 字符串。
 - 参考图本会话不可见：默认布局按 §4 数值坐标实现（主图左 40% 宽、垂直居中、高 90%；歌名 x≈54% y≈15%；作者 y≈26%；可视化横向 [49%,97%]、中心 y≈49%），M3 截图后用户目视比对定稿。
 - 计划实施 slug：nikokaraoke；任务清单文件 nikokaraoke.md（勾选行 = 进度真相）。
+- **GitHub 同步**（用户要求）：私有仓库 github.com/NirvanaKaruma/NikoKaraokeVideoMaker，默认分支 main，通过本机 SSH 密钥（gh CLI 未安装）推送；每个里程碑提交后同步。
 
 ## 6. 依赖与安全决策（M1 期间追加）
 
