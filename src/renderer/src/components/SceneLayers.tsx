@@ -21,7 +21,7 @@ import {
   pixelToNorm,
   relToPixel
 } from '@shared/layout'
-import { colorAt, placeholderBars } from '@shared/color'
+import { colorAt } from '@shared/color'
 
 const CANVAS = { width: LOGICAL_WIDTH, height: LOGICAL_HEIGHT }
 
@@ -36,6 +36,8 @@ export interface SceneLayersProps {
   onMainRectChange: (rect: NormRect) => void
   onTextRectChange: (kind: 'songTitle' | 'artist', rect: NormRect) => void
   onVisualizerRectChange: (rect: NormRect) => void
+  /** 可视化柱高数组（0–1），长度 = layout.visualizer.barCount */
+  bars: number[]
 }
 
 const SELECT_BORDER = '#ff5f9e'
@@ -347,11 +349,14 @@ function MainImageLayer({
 /** 可视化层：可拖动选择位置（选中显示虚线框）；M3 接入真实频谱数据 */
 function VisualizerLayer({
   config,
+  bars,
   selected,
   onSelect,
   onRectChange
 }: {
   config: VisualizerConfig
+  /** 0–1 柱高数组（长度 = barCount）；预览=实时频谱，导出=逐帧频谱 */
+  bars: number[]
   selected: boolean
   onSelect: (id: SelectableId) => void
   onRectChange: (rect: NormRect) => void
@@ -359,7 +364,6 @@ function VisualizerLayer({
   const groupRef = useRef<Konva.Group>(null)
   const trRef = useRef<Konva.Transformer>(null)
   const px = normToPixel(config.rect, CANVAS)
-  const bars = placeholderBars(config.barCount)
   const slot = px.w / config.barCount
   const barW = slot * config.barWidthRatio
   const maxH = px.h * config.heightRatio
@@ -438,7 +442,8 @@ export function SceneLayers(props: SceneLayersProps): React.JSX.Element {
     onSelect,
     onMainRectChange,
     onTextRectChange,
-    onVisualizerRectChange
+    onVisualizerRectChange,
+    bars
   } = props
   return (
     <>
@@ -473,6 +478,7 @@ export function SceneLayers(props: SceneLayersProps): React.JSX.Element {
       <Layer name="visualizer">
         <VisualizerLayer
           config={layout.visualizer}
+          bars={bars}
           selected={selectedId === 'visualizer'}
           onSelect={onSelect}
           onRectChange={onVisualizerRectChange}

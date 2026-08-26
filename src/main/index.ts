@@ -67,14 +67,20 @@ async function runSmokeVisual(win: BrowserWindow): Promise<void> {
       return
     }
     const report: unknown = await win.webContents.executeJavaScript('window.__runVisualChecks()')
+    const staticOk = (report as { ok?: boolean })?.ok === true
+    console.log('[smoke-visual] 像素校验:', staticOk ? '全部通过' : '存在失败项')
+
+    // M3：音频链路校验（WAV File → 解码 → FFT → 频谱渲染动态变化）
+    const audioReport: unknown = await win.webContents.executeJavaScript('window.__runAudioSmoke()')
+    const audioOk = (audioReport as { ok?: boolean })?.ok === true
+    console.log('[smoke-visual] 音频频谱校验:', audioOk ? '全部通过' : '存在失败项')
+
     await writeFile(
       join(process.cwd(), 'smoke-visual-report.json'),
-      JSON.stringify(report, null, 2),
+      JSON.stringify({ static: report, audio: audioReport, ok: staticOk && audioOk }, null, 2),
       'utf-8'
     )
-    const ok = (report as { ok?: boolean })?.ok === true
-    console.log('[smoke-visual] 像素校验:', ok ? '全部通过' : '存在失败项')
-    app.exit(ok ? 0 : 1)
+    app.exit(staticOk && audioOk ? 0 : 1)
   } catch (error) {
     console.error('[smoke-visual] 截图失败:', error)
     app.exit(1)
@@ -92,6 +98,11 @@ async function runSmokeTest(win: BrowserWindow): Promise<void> {
     console.error('[smoke] IPC 往返失败:', error)
     app.exit(1)
   }
+}
+
+if (isSmokeVisual) {
+  // 无头自测：无用户手势也允许音频上下文运行
+  app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required')
 }
 
 app.whenReady().then(() => {

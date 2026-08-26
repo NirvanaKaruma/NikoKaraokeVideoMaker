@@ -15,4 +15,5 @@ interface Window {
   /** 仅 --smoke-visual 无头自测模式注入 */
   __captureStage?: () => string
   __runVisualChecks?: () => VisualCheckReport
+  __runAudioSmoke?: () => Promise<VisualCheckReport>
 }

@@ -33,7 +33,8 @@
 - **技术栈**：Electron + electron-vite；renderer = React + TypeScript + react-konva（拖拽/缩放手柄）；main 负责 ffmpeg 调用与进程管理、文件路径、打包相关。
 - **核心约束 A**：预览与导出共用同一份布局数据与同一套绘制代码（单一渲染源，所见即所得）。
 - **核心约束 B**：布局数据一律归一化坐标（x/y/w 相对画布宽、h 相对画布高，0–1）；分辨率用 RESOLUTIONS 配置数组（720p/1080p/2K/4K），未来扩展其他比例 = 加数组项。
-- **音频可视化**（Q8 修正，替代原峰值波形）：FFT 频谱柱。预览用 AudioBufferSourceNode 手动播放 + rAF 取 currentTime，导出按帧时刻 t 计算；两者调用同一频谱函数与同一 Konva painter。数据管线：IPC 读文件字节 → decodeAudioData → AudioBuffer → 窗口化 Hann + radix-2 FFT → 对数频率分桶 → 柱高数组（含时间平滑，静音段为 0）。
+- **音频可视化**（Q8 修正，替代原峰值波形）：FFT 频谱柱。预览用 AudioBufferSourceNode 手动播放 + rAF 取 currentTime，导出按帧时刻 t 计算；两者调用同一频谱函数与同一 Konva painter。数据管线：File.arrayBuffer（无需 IPC，拖放文件在渲染进程可直接读）→ decodeAudioData → AudioBuffer → 混单声道 → 窗口化 Hann + radix-2 FFT → 对数频率分桶 → 柱高数组（含时间平滑，静音段为 0）。
+- **FFT 参数**（M3 实测确定）：fftSize 2048；freqMin 30Hz；freqMax = min(16000, sampleRate/2)。注意 decodeAudioData 会把音频重采样到 AudioContext 采样率（本机 48kHz → freqMax 16kHz），预览与导出走同一条解码路径，天然一致。
 - **导出管线**：静态层（背景/主图/文本）一次渲染缓存 → 每帧 = 缓存 + 频谱 painter(t) → VideoFrame → VideoEncoder H.264（yuv420p，优先 quantizer 高质量，不支持则分档码率）→ mp4-muxer 仅视频 mp4 → main 用当前选中 ffmpeg 执行 -c:v copy -c:a aac -b:a 192k -shortest -movflags +faststart 合并。
 - fps 默认 30；导出默认分辨率 1080p；4K 失败提示降 1080p（不自动降）。
 - 预览播放结束：停止不循环（Q5）。
