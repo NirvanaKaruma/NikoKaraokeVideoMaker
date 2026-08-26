@@ -32,13 +32,13 @@
 
 ### M4 ffmpeg 管理 + 导出管线
 
-- [ ] T16: ffmpeg 三源管理（PATH 检测/校验 aac/切换/持久化/重新检测/banner）
-- [ ] T17: 托管版一键下载安装（进度/重试/只解压 ffmpeg.exe/装后校验）
-- [ ] T18: 导出管线（静态缓存 + 逐帧频谱 + VideoEncoder H.264 + mp4-muxer）
-- [ ] T19: ffmpeg 合并阶段（copy + aac 192k + shortest + faststart）+ 进度/取消/可读错误
-- [ ] T20: RESOLUTIONS 四档 + 无可用来源时禁用导出
-- [ ] T21: M4 自测：720p/1080p 端到端 + ffprobe 校验 + 抽帧动态验证 + 4K 冒烟
-- [ ] T22: ffmpeg 来源矩阵测试 + 托管安装实测（真下载或本地镜像）→ 写入 TEST.md
+- [x] T16: ffmpeg 三源管理（PATH 检测/校验 aac/切换/持久化/重新检测/banner）
+- [x] T17: 托管版一键下载安装（进度/重试/只解压 ffmpeg.exe/装后校验）
+- [x] T18: 导出管线（静态缓存 + 逐帧频谱 + VideoEncoder H.264 + mp4-muxer）
+- [x] T19: ffmpeg 合并阶段（copy + aac 192k + shortest + faststart）+ 进度/取消/可读错误
+- [x] T20: RESOLUTIONS 四档 + 无可用来源时禁用导出
+- [x] T21: M4 自测：720p/1080p 端到端 + ffprobe 校验 + 抽帧动态验证 + 4K 冒烟
+- [x] T22: ffmpeg 来源矩阵测试 + 托管安装实测（真下载或本地镜像）→ 写入 TEST.md
 
 ### M5 P1 + 打磨
 
@@ -53,6 +53,8 @@
 - [ ] T28: README 完整版（用户/开发/FAQ/扩展分辨率）+ 文档收尾 + 最终提交
 
 ## 执行记录
+
+- M4 完成（ffmpeg 三源 + 导出管线）。T16 三源管理（PATH 检测/校验 aac/切换/持久化/重新检测/banner）✓；T17 托管下载安装（进度/取消/只解压 ffmpeg.exe/真实下载 9.0.1 + file:// 本地镜像）✓；T18 导出管线（SceneLayers canvasSize 化 + 图层过滤 + 命令式 bars + WebCodecs H.264 + mp4-muxer）✓；T19 合并（copy+aac 192k+shortest+faststart + 进度/取消/可读错误）✓；T20 四档分辨率 + 无来源禁用导出 ✓；T21 720p/1080p 端到端 + ffprobe + 抽帧动态验证 + 4K 冒烟 ✓；T22 来源矩阵 + 托管安装实测 ✓。全部结果见 TEST.md。
 - 用户改进建议实施：① 导出配置模型（RESOLUTIONS 四档 + fps 30/60，默认 1080p@30）+ 导出设置面板；默认平滑 0.35→0.2（预览本就走 rAF 60Hz，观感由平滑主导）；② 可视化自定义渐变配色（1–8 hex 逗号分隔 + 存为预置 localStorage + 删除预置）。
 - M3 验收反馈修复：① 音频输入支持视频文件（mp4/m4v/mov/webm 取音轨）；② 修复播放中点击进度条 seek 被旧音源 onended 误判为播完（音源身份守卫 + smoke 回归项「播放中 seek 不中断」）；③ 新增频谱灵敏度滑块（1–15，默认 7）。
 - M3 验收反馈修复：① 音频输入支持视频文件（mp4/m4v/mov/webm 取音轨）；② 修复播放中点击进度条 seek 被旧音源 onended 误判为播完（音源身份守卫 + smoke 回归项「播放中 seek 不中断」）；③ 新增频谱灵敏度滑块（1–15，默认 7）。

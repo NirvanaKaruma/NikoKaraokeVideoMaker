@@ -290,6 +290,87 @@ body {
   min-width: 0;
 }
 
+.ffmpeg-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 20px;
+  background: #4a3a10;
+  color: #ffe08a;
+  font-size: 13px;
+  flex-shrink: 0;
+}
+
+.banner-btn {
+  background: #c2416e;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 5px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.banner-btn:hover {
+  background: #d14d7d;
+}
+
+.ffmpeg-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 8px;
+  border: 1px solid var(--ev-c-gray-2);
+  border-radius: 6px;
+  margin-bottom: 4px;
+}
+
+.ffmpeg-badge {
+  font-weight: 700;
+}
+
+.ffmpeg-badge.ok {
+  color: #7be3a5;
+}
+
+.ffmpeg-badge.bad {
+  color: #ff9b9b;
+}
+
+.ffmpeg-desc {
+  font-size: 12px;
+  color: var(--ev-c-text-2);
+}
+
+.ffmpeg-path {
+  font-size: 11px;
+  color: var(--ev-c-text-3);
+  word-break: break-all;
+}
+
+.dl-row,
+.export-progress,
+.export-done {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.dl-bar {
+  height: 8px;
+  border-radius: 999px;
+  background: var(--ev-c-gray-3);
+  overflow: hidden;
+}
+
+.dl-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #ff5f9e, #7ce3ff);
+  transition: width 200ms;
+}
+
 .warn-banner {
   position: absolute;
   top: 12px;

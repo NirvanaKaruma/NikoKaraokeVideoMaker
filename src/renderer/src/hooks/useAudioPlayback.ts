@@ -19,6 +19,8 @@ export interface PlaybackApi {
   isPlaying: boolean
   /** 0–1 频谱柱高度（长度 = config.barCount）；无音频时为占位柱 */
   bars: number[]
+  /** 共享频谱分析器（导出编码使用）；无音频时为 null */
+  analyzer: SpectrumAnalyzer | null
   play: () => void
   pause: () => void
   seek: (t: number) => void
@@ -48,6 +50,7 @@ export function useAudioPlayback(audioFile: File | null, config: VisualizerConfi
   const [currentTime, setCurrentTime] = useState(0)
   const [isPlaying, setIsPlaying] = useState(false)
   const [bars, setBars] = useState<number[]>(() => placeholderBars(config.barCount))
+  const [analyzer, setAnalyzer] = useState<SpectrumAnalyzer | null>(null)
 
   useEffect(() => {
     configRef.current = config
@@ -113,6 +116,7 @@ export function useAudioPlayback(audioFile: File | null, config: VisualizerConfi
         setStatus('empty')
         setDuration(0)
         setCurrentTime(0)
+        setAnalyzer(null)
         setBars(placeholderBars(configRef.current.barCount))
         return
       }
@@ -131,7 +135,9 @@ export function useAudioPlayback(audioFile: File | null, config: VisualizerConfi
         }
         const mono = mixToMono(channels, decoded.length)
         bufferRef.current = decoded
-        analyzerRef.current = createSpectrumAnalyzer(mono, decoded.sampleRate)
+        const an = createSpectrumAnalyzer(mono, decoded.sampleRate)
+        analyzerRef.current = an
+        setAnalyzer(an)
         offsetRef.current = 0
         setDuration(decoded.duration)
         setStatus('ready')
@@ -227,5 +233,16 @@ export function useAudioPlayback(audioFile: File | null, config: VisualizerConfi
     }
   }, [config.barCount, status])
 
-  return { status, error, duration, currentTime, isPlaying, bars, play, pause, seek }
+  return {
+    status,
+    error,
+    duration,
+    currentTime,
+    isPlaying,
+    bars,
+    analyzer,
+    play,
+    pause,
+    seek
+  }
 }

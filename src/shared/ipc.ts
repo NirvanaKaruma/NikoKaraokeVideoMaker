@@ -4,5 +4,24 @@
  */
 export const IPC = {
   /** M1 hello：ping → 'pong'，验证 renderer→main 往返链路 */
-  appPing: 'app:ping'
+  appPing: 'app:ping',
+
+  /** ffmpeg 三源管理 */
+  ffmpegDetect: 'ffmpeg:detect',
+  ffmpegConfigGet: 'ffmpeg:config:get',
+  ffmpegConfigSet: 'ffmpeg:config:set',
+  ffmpegValidate: 'ffmpeg:validate',
+  ffmpegPickCustom: 'ffmpeg:pick-custom',
+  ffmpegDownload: 'ffmpeg:download',
+  ffmpegDownloadCancel: 'ffmpeg:download:cancel',
+  /** main → renderer 进度事件 */
+  ffmpegDownloadProgress: 'ffmpeg:download:progress',
+
+  /** 导出 */
+  exportPickOutput: 'export:pick-output',
+  exportSaveVideo: 'export:save-video',
+  exportSaveAudio: 'export:save-audio',
+  exportMerge: 'export:merge',
+  exportMergeCancel: 'export:merge:cancel',
+  exportMergeProgress: 'export:merge:progress'
 } as const

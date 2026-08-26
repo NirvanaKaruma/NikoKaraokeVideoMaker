@@ -19,14 +19,15 @@ import {
   VisualizerConfig,
   normToPixel,
   pixelToNorm,
-  relToPixel
+  relToPixel,
+  type CanvasSize
 } from '@shared/layout'
 import { colorAt } from '@shared/color'
 
-const CANVAS = { width: LOGICAL_WIDTH, height: LOGICAL_HEIGHT }
-
 /** 可选中元素：主图 / 歌名 / 作者 / 可视化 */
 export type SelectableId = 'mainImage' | 'songTitle' | 'artist' | 'visualizer' | null
+
+export type SceneLayerName = 'background' | 'main' | 'text' | 'visualizer'
 
 export interface SceneLayersProps {
   layout: ProjectLayout
@@ -38,25 +39,38 @@ export interface SceneLayersProps {
   onVisualizerRectChange: (rect: NormRect) => void
   /** 可视化柱高数组（0–1），长度 = layout.visualizer.barCount */
   bars: number[]
+  /** 渲染画布尺寸：预览 = 1920×1080 逻辑，导出 = 目标分辨率（核心约束 B） */
+  canvasSize?: CanvasSize
+  /** 只渲染指定图层（导出拆分静态/动态用）；缺省 = 全部 */
+  layers?: SceneLayerName[]
+  /** 导出专用：命令式更新频谱柱（绕过 React 每帧渲染，绘制代码仍是本组件） */
+  barsHandleRef?: { current: ((bars: number[]) => void) | null }
 }
 
 const SELECT_BORDER = '#ff5f9e'
 
 /** 拖动时限制在画布内 */
-function clampPos(pos: { x: number; y: number }, w: number, h: number): { x: number; y: number } {
+function clampPos(
+  pos: { x: number; y: number },
+  w: number,
+  h: number,
+  canvas: CanvasSize
+): { x: number; y: number } {
   return {
-    x: Math.min(Math.max(pos.x, 0), LOGICAL_WIDTH - w),
-    y: Math.min(Math.max(pos.y, 0), LOGICAL_HEIGHT - h)
+    x: Math.min(Math.max(pos.x, 0), canvas.width - w),
+    y: Math.min(Math.max(pos.y, 0), canvas.height - h)
   }
 }
 
 /** 背景层：背景色（透明图合成基底）+ 封面铺满 + 高斯模糊 + 压暗遮罩 */
 function BackgroundLayer({
   background,
-  coverElement
+  coverElement,
+  canvas
 }: {
   background: ProjectLayout['background']
   coverElement: HTMLImageElement | null
+  canvas: CanvasSize
 }): React.JSX.Element {
   const bgRef = useRef<Konva.Group>(null)
   const blurRadius = (background.blur / 100) * 60
@@ -67,12 +81,12 @@ function BackgroundLayer({
     const iw = coverElement.naturalWidth || coverElement.width
     const ih = coverElement.naturalHeight || coverElement.height
     if (iw > 0 && ih > 0) {
-      const s = Math.max(LOGICAL_WIDTH / iw, LOGICAL_HEIGHT / ih)
+      const s = Math.max(canvas.width / iw, canvas.height / ih)
       cover = (
         <KonvaImage
           image={coverElement}
-          x={(LOGICAL_WIDTH - iw * s) / 2}
-          y={(LOGICAL_HEIGHT - ih * s) / 2}
+          x={(canvas.width - iw * s) / 2}
+          y={(canvas.height - ih * s) / 2}
           width={iw * s}
           height={ih * s}
           listening={false}
@@ -88,7 +102,14 @@ function BackgroundLayer({
       node.cache()
       node.getLayer()?.batchDraw()
     }
-  }, [background.useImage, background.color, background.blur, coverElement])
+  }, [
+    background.useImage,
+    background.color,
+    background.blur,
+    coverElement,
+    canvas.width,
+    canvas.height
+  ])
 
   return (
     <>
@@ -96,8 +117,8 @@ function BackgroundLayer({
         <Rect
           x={0}
           y={0}
-          width={LOGICAL_WIDTH}
-          height={LOGICAL_HEIGHT}
+          width={canvas.width}
+          height={canvas.height}
           fill={background.color}
           listening={false}
         />
@@ -107,8 +128,8 @@ function BackgroundLayer({
         <Rect
           x={0}
           y={0}
-          width={LOGICAL_WIDTH}
-          height={LOGICAL_HEIGHT}
+          width={canvas.width}
+          height={canvas.height}
           fill="#000000"
           opacity={background.dimOpacity}
           listening={false}
@@ -122,19 +143,21 @@ function BackgroundLayer({
 function TextNode({
   kind,
   cfg,
+  canvas,
   selected,
   onSelect,
   onRectChange
 }: {
   kind: 'songTitle' | 'artist'
   cfg: TextLayerConfig
+  canvas: CanvasSize
   selected: boolean
   onSelect: (id: SelectableId) => void
   onRectChange: (rect: NormRect) => void
 }): React.JSX.Element {
   const textRef = useRef<Konva.Text>(null)
   const trRef = useRef<Konva.Transformer>(null)
-  const px = normToPixel(cfg.rect, CANVAS)
+  const px = normToPixel(cfg.rect, canvas)
   const { style } = cfg
 
   useEffect(() => {
@@ -155,14 +178,14 @@ function TextNode({
         width={px.w}
         text={cfg.text}
         fontFamily={style.fontFamily}
-        fontSize={relToPixel(style.fontSize, CANVAS)}
+        fontSize={relToPixel(style.fontSize, canvas)}
         fontStyle={style.bold ? 'bold' : 'normal'}
         fill={style.color}
         stroke={style.strokeColor}
-        strokeWidth={relToPixel(style.strokeWidth, CANVAS)}
+        strokeWidth={relToPixel(style.strokeWidth, canvas)}
         shadowEnabled={style.glowEnabled}
         shadowColor={style.glowColor}
-        shadowBlur={relToPixel(style.glowBlur, CANVAS)}
+        shadowBlur={relToPixel(style.glowBlur, canvas)}
         shadowOpacity={1}
         align={style.align}
         draggable
@@ -171,12 +194,12 @@ function TextNode({
         onDragStart={() => onSelect(kind)}
         onDragEnd={(e: KonvaEventObject<DragEvent>) => {
           const node = e.target as Konva.Text
-          onRectChange(pixelToNorm({ x: node.x(), y: node.y(), w: px.w, h: node.height() }, CANVAS))
+          onRectChange(pixelToNorm({ x: node.x(), y: node.y(), w: px.w, h: node.height() }, canvas))
         }}
         dragBoundFunc={(pos) => {
           const node = textRef.current
           if (!node) return pos
-          return clampPos(pos, node.width(), node.height())
+          return clampPos(pos, node.width(), node.height(), canvas)
         }}
       />
       {selected && (
@@ -196,6 +219,7 @@ function TextNode({
 interface MainImageLayerProps {
   layout: ProjectLayout
   coverElement: HTMLImageElement | null
+  canvas: CanvasSize
   selectedId: SelectableId
   onSelect: (id: SelectableId) => void
   onMainRectChange: (rect: NormRect) => void
@@ -205,13 +229,14 @@ interface MainImageLayerProps {
 function MainImageLayer({
   layout,
   coverElement,
+  canvas,
   selectedId,
   onSelect,
   onMainRectChange
 }: MainImageLayerProps): React.JSX.Element {
   const groupRef = useRef<Konva.Group>(null)
   const trRef = useRef<Konva.Transformer>(null)
-  const px = normToPixel(layout.mainImage.rect, CANVAS)
+  const px = normToPixel(layout.mainImage.rect, canvas)
   const fillMode = layout.mainImage.fillMode
 
   useEffect(() => {
@@ -230,7 +255,7 @@ function MainImageLayer({
       w: node.width() * node.scaleX(),
       h: node.height() * node.scaleY()
     }
-    onMainRectChange(pixelToNorm(rect, CANVAS))
+    onMainRectChange(pixelToNorm(rect, canvas))
   }
 
   let imageNode: React.JSX.Element | null = null
@@ -286,7 +311,7 @@ function MainImageLayer({
         dragBoundFunc={(pos) => {
           const node = groupRef.current
           if (!node) return pos
-          return clampPos(pos, node.width() * node.scaleX(), node.height() * node.scaleY())
+          return clampPos(pos, node.width() * node.scaleX(), node.height() * node.scaleY(), canvas)
         }}
         clipX={isCover ? 0 : undefined}
         clipY={isCover ? 0 : undefined}
@@ -333,8 +358,8 @@ function MainImageLayer({
             if (
               newBox.x < 0 ||
               newBox.y < 0 ||
-              newBox.x + newBox.width > LOGICAL_WIDTH ||
-              newBox.y + newBox.height > LOGICAL_HEIGHT
+              newBox.x + newBox.width > canvas.width ||
+              newBox.y + newBox.height > canvas.height
             ) {
               return oldBox
             }
@@ -346,24 +371,31 @@ function MainImageLayer({
   )
 }
 
-/** 可视化层：可拖动选择位置（选中显示虚线框）；M3 接入真实频谱数据 */
-function VisualizerLayer({
-  config,
-  bars,
-  selected,
-  onSelect,
-  onRectChange
-}: {
+interface VisualizerLayerProps {
   config: VisualizerConfig
   /** 0–1 柱高数组（长度 = barCount）；预览=实时频谱，导出=逐帧频谱 */
   bars: number[]
+  canvas: CanvasSize
   selected: boolean
   onSelect: (id: SelectableId) => void
   onRectChange: (rect: NormRect) => void
-}): React.JSX.Element {
+  barsHandleRef?: { current: ((bars: number[]) => void) | null }
+}
+
+/** 可视化层：可拖动选择位置；支持命令式逐帧更新（导出） */
+function VisualizerLayer({
+  config,
+  bars,
+  canvas,
+  selected,
+  onSelect,
+  onRectChange,
+  barsHandleRef
+}: VisualizerLayerProps): React.JSX.Element {
   const groupRef = useRef<Konva.Group>(null)
   const trRef = useRef<Konva.Transformer>(null)
-  const px = normToPixel(config.rect, CANVAS)
+  const barNodes = useRef<(Konva.Rect | null)[]>([])
+  const px = normToPixel(config.rect, canvas)
   const slot = px.w / config.barCount
   const barW = slot * config.barWidthRatio
   const maxH = px.h * config.heightRatio
@@ -377,6 +409,34 @@ function VisualizerLayer({
       tr.getLayer()?.batchDraw()
     }
   }, [selected, config.rect])
+
+  // 导出专用：命令式更新柱高（同一批 Konva 节点 = 同一绘制代码）
+  useEffect(() => {
+    if (!barsHandleRef) return
+    barsHandleRef.current = (next: number[]) => {
+      barNodes.current.forEach((node, i) => {
+        if (!node) return
+        const v = Math.min(Math.max(next[i] ?? 0, 0), 1)
+        const h = Math.max(4, v * maxH)
+        node.y(baseY - h)
+        node.height(h)
+      })
+      groupRef.current?.getLayer()?.batchDraw()
+    }
+    return () => {
+      barsHandleRef.current = null
+    }
+  }, [
+    barsHandleRef,
+    config.rect,
+    config.barCount,
+    config.barWidthRatio,
+    config.heightRatio,
+    px.w,
+    px.h,
+    maxH,
+    baseY
+  ])
 
   return (
     <>
@@ -392,12 +452,12 @@ function VisualizerLayer({
         onDragStart={() => onSelect('visualizer')}
         onDragEnd={(e: KonvaEventObject<DragEvent>) => {
           const node = e.target as Konva.Group
-          onRectChange(pixelToNorm({ x: node.x(), y: node.y(), w: px.w, h: px.h }, CANVAS))
+          onRectChange(pixelToNorm({ x: node.x(), y: node.y(), w: px.w, h: px.h }, canvas))
         }}
         dragBoundFunc={(pos) => {
           const node = groupRef.current
           if (!node) return pos
-          return clampPos(pos, node.width(), node.height())
+          return clampPos(pos, node.width(), node.height(), canvas)
         }}
       >
         {/* 透明命中区：整个矩形（含柱子间空隙）都可拖动/选中 */}
@@ -408,6 +468,9 @@ function VisualizerLayer({
           return (
             <Rect
               key={i}
+              ref={(el) => {
+                barNodes.current[i] = el
+              }}
               x={x}
               y={baseY - h}
               width={barW}
@@ -443,47 +506,69 @@ export function SceneLayers(props: SceneLayersProps): React.JSX.Element {
     onMainRectChange,
     onTextRectChange,
     onVisualizerRectChange,
-    bars
+    bars,
+    canvasSize,
+    layers,
+    barsHandleRef
   } = props
+  const canvas = canvasSize ?? { width: LOGICAL_WIDTH, height: LOGICAL_HEIGHT }
+  const show = (name: SceneLayerName): boolean => !layers || layers.includes(name)
   return (
     <>
-      <Layer name="background" listening={false}>
-        <BackgroundLayer background={layout.background} coverElement={coverElement} />
-      </Layer>
-      <Layer name="main">
-        <MainImageLayer
-          layout={layout}
-          coverElement={coverElement}
-          selectedId={selectedId}
-          onSelect={onSelect}
-          onMainRectChange={onMainRectChange}
-        />
-      </Layer>
-      <Layer name="text">
-        <TextNode
-          kind="songTitle"
-          cfg={layout.texts.songTitle}
-          selected={selectedId === 'songTitle'}
-          onSelect={onSelect}
-          onRectChange={(rect) => onTextRectChange('songTitle', rect)}
-        />
-        <TextNode
-          kind="artist"
-          cfg={layout.texts.artist}
-          selected={selectedId === 'artist'}
-          onSelect={onSelect}
-          onRectChange={(rect) => onTextRectChange('artist', rect)}
-        />
-      </Layer>
-      <Layer name="visualizer">
-        <VisualizerLayer
-          config={layout.visualizer}
-          bars={bars}
-          selected={selectedId === 'visualizer'}
-          onSelect={onSelect}
-          onRectChange={onVisualizerRectChange}
-        />
-      </Layer>
+      {show('background') && (
+        <Layer name="background" listening={false}>
+          <BackgroundLayer
+            background={layout.background}
+            coverElement={coverElement}
+            canvas={canvas}
+          />
+        </Layer>
+      )}
+      {show('main') && (
+        <Layer name="main">
+          <MainImageLayer
+            layout={layout}
+            coverElement={coverElement}
+            canvas={canvas}
+            selectedId={selectedId}
+            onSelect={onSelect}
+            onMainRectChange={onMainRectChange}
+          />
+        </Layer>
+      )}
+      {show('text') && (
+        <Layer name="text">
+          <TextNode
+            kind="songTitle"
+            cfg={layout.texts.songTitle}
+            canvas={canvas}
+            selected={selectedId === 'songTitle'}
+            onSelect={onSelect}
+            onRectChange={(rect) => onTextRectChange('songTitle', rect)}
+          />
+          <TextNode
+            kind="artist"
+            cfg={layout.texts.artist}
+            canvas={canvas}
+            selected={selectedId === 'artist'}
+            onSelect={onSelect}
+            onRectChange={(rect) => onTextRectChange('artist', rect)}
+          />
+        </Layer>
+      )}
+      {show('visualizer') && (
+        <Layer name="visualizer">
+          <VisualizerLayer
+            config={layout.visualizer}
+            bars={bars}
+            canvas={canvas}
+            selected={selectedId === 'visualizer'}
+            onSelect={onSelect}
+            onRectChange={onVisualizerRectChange}
+            barsHandleRef={barsHandleRef}
+          />
+        </Layer>
+      )}
     </>
   )
 }

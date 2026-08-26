@@ -3,7 +3,10 @@ import type Konva from 'konva'
 import { SUBTITLE_ZONE_Y } from '@shared/layout'
 import { useProject } from './hooks/useProject'
 import { useAudioPlayback, type PlaybackApi } from './hooks/useAudioPlayback'
+import { useFfmpegDownload, useFfmpegStatus } from './hooks/useFfmpeg'
+import { useExporter } from './hooks/useExporter'
 import { CanvasStage } from './components/CanvasStage'
+import { ExportStageHost } from './components/ExportStageHost'
 import type { SelectableId } from './components/SceneLayers'
 import { InputPanel } from './components/panels/InputPanel'
 import { MainImagePanel } from './components/panels/MainImagePanel'
@@ -11,9 +14,11 @@ import { BackgroundPanel } from './components/panels/BackgroundPanel'
 import { TextPanel } from './components/panels/TextPanel'
 import { VisualizerPanel } from './components/panels/VisualizerPanel'
 import { ExportPanel } from './components/panels/ExportPanel'
+import { SettingsPanel } from './components/panels/SettingsPanel'
 import { AudioPanel } from './components/panels/AudioPanel'
 
 const IS_VISUAL_SMOKE = new URLSearchParams(window.location.search).has('smokeVisual')
+const IS_SMOKE_EXPORT = new URLSearchParams(window.location.search).has('smokeExport')
 
 /* ================= 无头自测工具 ================= */
 
@@ -28,7 +33,24 @@ interface VisualCheckReport {
   checks: VisualCheckItem[]
 }
 
-const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms))
+/** 无头自测用 sleep：MessageChannel 版（隐藏窗口 setTimeout 会被 Chromium 节流到分钟级） */
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    const mc = new MessageChannel()
+    const start = performance.now()
+    const tick = (): void => {
+      if (performance.now() - start >= ms) {
+        resolve()
+        return
+      }
+      const next = new MessageChannel()
+      next.port1.onmessage = () => tick()
+      next.port2.postMessage(0)
+    }
+    mc.port1.onmessage = () => tick()
+    mc.port2.postMessage(0)
+  })
+}
 
 function stageGeometry(stage: Konva.Stage): {
   ctx: CanvasRenderingContext2D | null
@@ -201,14 +223,14 @@ function makeSyntheticCoverFile(): Promise<File | null> {
   })
 }
 
-/** 双音调 WAV：前 1s 440Hz、后 1s 1200Hz（用于验证频谱随音频内容变化） */
-function makeTwoToneWavFile(): File {
-  const sr = 8000
-  const n = sr * 2
+/** 双音调 WAV：前半 440Hz、后半 1200Hz（验证频谱随音频内容变化 / 导出测试素材） */
+function makeTwoToneWavFile(durationSec = 2, sampleRate = 8000): File {
+  const sr = sampleRate
+  const n = Math.round(sr * durationSec)
   const pcm = new Int16Array(n)
   for (let i = 0; i < n; i++) {
     const t = i / sr
-    const freq = t < 1 ? 440 : 1200
+    const freq = t < durationSec / 2 ? 440 : 1200
     pcm[i] = Math.round(Math.sin(2 * Math.PI * freq * t) * 0.7 * 32767)
   }
   const buffer = new ArrayBuffer(44 + pcm.length * 2)
@@ -358,9 +380,27 @@ function App(): React.JSX.Element {
   const pb = useAudioPlayback(project.assets.audioFile, project.layout.visualizer)
   const pbRef = useRef<PlaybackApi>(pb)
 
+  const ffmpeg = useFfmpegStatus()
+  const ffmpegDl = useFfmpegDownload(() => void ffmpeg.refresh())
+  const outputPathRef = useRef('')
+  const exporter = useExporter({
+    layout: project.layout,
+    coverElement: project.assets.coverElement,
+    analyzer: pb.analyzer,
+    audioFile: project.assets.audioFile,
+    durationMs: Math.round(pb.duration * 1000),
+    defaultName: project.layout.texts.songTitle.text,
+    ffmpegAvailable: ffmpeg.report?.effective.available === true,
+    outputPathRef
+  })
+  const exporterRef = useRef(exporter)
+  const exporterStateRef = useRef(exporter.state)
+
   useEffect(() => {
     pbRef.current = pb
-  }, [pb])
+    exporterRef.current = exporter
+    exporterStateRef.current = exporter.state
+  }, [pb, exporter])
 
   // 渲染期直接派生：主图是否进入下半区（y>55% 仅警告）
   const subzoneWarning = project.layout.mainImage.rect.y > SUBTITLE_ZONE_Y
@@ -387,12 +427,120 @@ function App(): React.JSX.Element {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // 导出自测（M4/T21）：真实 File → 解码 → WebCodecs 编码 → ffmpeg 合并，落盘 TEST-ARTIFACTS
+  useEffect(() => {
+    if (!IS_SMOKE_EXPORT) return
+    window.__runExportSmoke = async (resolutions: string[], durationSec: number) => {
+      const results: {
+        resolution: string
+        phase: string
+        seconds: number
+        error: string | null
+        message: string
+      }[] = []
+      const cover = await makeSyntheticCoverFile()
+      if (cover) project.setCoverFile(cover)
+      project.setAudioFile(makeTwoToneWavFile(durationSec, 44100))
+      const t0 = Date.now()
+      while (pbRef.current.status !== 'ready' && Date.now() - t0 < 15000) {
+        await sleep(150)
+      }
+      if (pbRef.current.status !== 'ready') {
+        return {
+          ok: false,
+          results: [
+            {
+              resolution: 'audio',
+              phase: pbRef.current.status,
+              seconds: 0,
+              error: pbRef.current.error,
+              message: ''
+            }
+          ]
+        }
+      }
+      for (const rid of resolutions) {
+        project.updateText('songTitle', { text: 'smoke-' + rid })
+        project.updateExport({ resolutionId: rid, fps: 30 })
+        await sleep(400)
+        exporterRef.current.reset()
+        // 等状态真正回到 idle（React 异步更新，否则读到上一轮的 done）
+        const idleStart = Date.now()
+        while (exporterStateRef.current.phase !== 'idle' && Date.now() - idleStart < 5000) {
+          await sleep(100)
+        }
+        const started = performance.now()
+        await exporterRef.current.start()
+        const pollStart = Date.now()
+        let phase = exporterStateRef.current.phase
+        while (
+          phase !== 'done' &&
+          phase !== 'error' &&
+          phase !== 'cancelled' &&
+          Date.now() - pollStart < 900000
+        ) {
+          await sleep(500)
+          phase = exporterStateRef.current.phase
+        }
+        const st = exporterStateRef.current
+        results.push({
+          resolution: rid,
+          phase: st.phase,
+          seconds: Math.round((performance.now() - started) / 100) / 10,
+          error: st.error,
+          message: st.encodeInfo ?? st.message
+        })
+        if (st.phase !== 'done') break
+      }
+      return { ok: results.every((r) => r.phase === 'done'), results }
+    }
+    return () => {
+      delete window.__runExportSmoke
+    }
+    // 仅无头自测模式生效
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   return (
     <div className="app-shell">
       <header className="app-header">
         <h1 className="app-title">NikoKaraokeVideoMaker</h1>
-        <span className="app-stage-tag">M3 · 文本样式 + 频谱可视化 + 预览播放</span>
+        <span className="app-stage-tag">M4 · ffmpeg 管理 + 导出</span>
       </header>
+      {!ffmpeg.loading && ffmpeg.report && !ffmpeg.report.effective.available && (
+        <div className="ffmpeg-banner">
+          <span>⚠ 未检测到 ffmpeg —— 导出已禁用。</span>
+          <button type="button" className="banner-btn" onClick={() => void ffmpegDl.start()}>
+            一键下载托管版
+          </button>
+          <button
+            type="button"
+            className="banner-btn"
+            onClick={() => {
+              void (async () => {
+                const p = await window.api.ffmpeg.pickCustom()
+                if (p) {
+                  await window.api.ffmpeg.setConfig({ customPath: p, source: 'custom' })
+                  await ffmpeg.refresh()
+                }
+              })()
+            }}
+          >
+            手动指定 ffmpeg.exe
+          </button>
+        </div>
+      )}
+      {ffmpegDl.state && ffmpegDl.state.phase !== 'done' && (
+        <div className="ffmpeg-banner">
+          <span>
+            {ffmpegDl.state.message}
+            {ffmpegDl.state.percent != null ? ' ' + ffmpegDl.state.percent + '%' : ''}
+          </span>
+          <button type="button" className="banner-btn" onClick={ffmpegDl.cancel}>
+            取消下载
+          </button>
+        </div>
+      )}
       <div className="app-body">
         <aside className="side-panel">
           <InputPanel
@@ -430,7 +578,21 @@ function App(): React.JSX.Element {
             onArtistChange={(p) => project.updateText('artist', p)}
           />
           <VisualizerPanel config={project.layout.visualizer} onChange={project.updateVisualizer} />
-          <ExportPanel config={project.layout.export} onChange={project.updateExport} />
+          <ExportPanel
+            config={project.layout.export}
+            onChange={project.updateExport}
+            state={exporter.state}
+            ffmpegAvailable={ffmpeg.report?.effective.available === true}
+            audioReady={pb.status === 'ready'}
+            onExport={() => void exporter.start()}
+            onCancel={exporter.cancel}
+            onClose={exporter.reset}
+          />
+          <SettingsPanel
+            status={ffmpeg.report}
+            loading={ffmpeg.loading}
+            onRefresh={() => void ffmpeg.refresh()}
+          />
         </aside>
         <main className="canvas-wrap">
           <CanvasStage
@@ -453,6 +615,15 @@ function App(): React.JSX.Element {
           )}
         </main>
       </div>
+      {exporter.stageRequest && (
+        <ExportStageHost
+          layout={project.layout}
+          coverElement={project.assets.coverElement}
+          width={exporter.stageRequest.width}
+          height={exporter.stageRequest.height}
+          onReady={exporter.onStageReady}
+        />
+      )}
     </div>
   )
 }

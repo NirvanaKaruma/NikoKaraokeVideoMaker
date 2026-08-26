@@ -3,8 +3,8 @@
 KTV 字幕底视频生成器：输入歌曲名、作者、一张封面图与一个音频，一键生成带音频与音频频谱可视化的 16:9 MP4。
 Windows exe 交付，双击即用，目标机器无需安装 Node.js（ffmpeg 由应用引导安装，不捆绑进 exe）。
 
-> 状态：M3 完成——文本样式全套（含字体选择）、真实频谱可视化（FFT，随音乐实时跳动）、预览播放（播放/暂停/进度/seek）。
-> 预览截图：docs/screenshots/m3-preview.png（无头 smoke 自测生成）。
+> 状态：M4 完成——ffmpeg 三源管理（PATH 检测/托管一键下载/手动指定）+ 导出管线（WebCodecs H.264 → ffmpeg 混流 AAC，720p/1080p/2K/4K，进度/取消）。
+> 验收记录：TEST.md ｜ 预览截图：docs/screenshots/m3-preview.png（无头 smoke 自测生成）。
 
 ## 功能特性（目标）
 

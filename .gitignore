@@ -8,7 +8,7 @@ out
 .electron-cache/
 smoke-result.txt
 smoke-stage.png
-smoke-visual-report.json
+smoke-*-report.json
 .electron-builder-cache/
 TEST-ARTIFACTS/
 .plan/
