@@ -33,6 +33,10 @@ describe('归一化布局模型', () => {
     expect(DEFAULT_LAYOUT.visualizer.barCount).toBeLessThanOrEqual(160)
   })
 
+  it('主图默认填充模式为等比适配 contain（用户确认）', () => {
+    expect(DEFAULT_LAYOUT.mainImage.fillMode).toBe('contain')
+  })
+
   it('主图默认高≈90%、宽≈40%，左侧垂直居中', () => {
     const r = DEFAULT_LAYOUT.mainImage.rect
     expect(r.h).toBeCloseTo(0.9, 5)

@@ -53,6 +53,8 @@ export interface BackgroundConfig {
 
 export interface MainImageConfig {
   rect: NormRect
+  /** contain=等比适配留透明边（默认，永不变形）/ cover=等比铺满裁切 / stretch=拉伸填满（可能变形） */
+  fillMode: 'contain' | 'cover' | 'stretch'
 }
 
 export interface VisualizerConfig {
@@ -111,7 +113,9 @@ export const DEFAULT_LAYOUT: ProjectLayout = {
   },
   mainImage: {
     // 主图：左侧、垂直居中、高度≈画布 90%、宽≈画布 40%
-    rect: { x: 0.04, y: 0.05, w: 0.38, h: 0.9 }
+    rect: { x: 0.04, y: 0.05, w: 0.38, h: 0.9 },
+    // 用户确认：等比适配，图片完整显示、永不变形（矩形内留透明边）
+    fillMode: 'contain'
   },
   texts: {
     songTitle: {

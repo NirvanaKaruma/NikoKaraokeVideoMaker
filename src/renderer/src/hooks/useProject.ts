@@ -2,6 +2,7 @@ import { useCallback, useState } from 'react'
 import {
   BackgroundConfig,
   DEFAULT_LAYOUT,
+  MainImageConfig,
   NormRect,
   ProjectLayout,
   TextLayerConfig,
@@ -38,6 +39,7 @@ export function useProject(): {
   fileError: string | null
   updateBackground: (patch: Partial<BackgroundConfig>) => void
   updateMainRect: (rect: NormRect) => void
+  updateMainImage: (patch: Partial<MainImageConfig>) => void
   updateText: (kind: 'songTitle' | 'artist', patch: Partial<TextLayerConfig>) => void
   updateVisualizer: (patch: Partial<VisualizerConfig>) => void
   setCoverFile: (file: File | null) => void
@@ -53,7 +55,11 @@ export function useProject(): {
   }, [])
 
   const updateMainRect = useCallback((rect: NormRect) => {
-    setLayout((l) => ({ ...l, mainImage: { rect } }))
+    setLayout((l) => ({ ...l, mainImage: { ...l.mainImage, rect } }))
+  }, [])
+
+  const updateMainImage = useCallback((patch: Partial<MainImageConfig>) => {
+    setLayout((l) => ({ ...l, mainImage: { ...l.mainImage, ...patch } }))
   }, [])
 
   const updateText = useCallback(
@@ -123,6 +129,7 @@ export function useProject(): {
     fileError,
     updateBackground,
     updateMainRect,
+    updateMainImage,
     updateText,
     updateVisualizer,
     setCoverFile,

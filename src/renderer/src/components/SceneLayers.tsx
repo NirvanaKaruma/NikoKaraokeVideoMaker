@@ -127,7 +127,7 @@ function TextNode({ cfg }: { cfg: TextLayerConfig }): React.JSX.Element {
   )
 }
 
-/** 主图层：可拖拽 + 等比缩放手柄；未加载封面时显示占位框 */
+/** 主图层：Group 承载拖拽 + 等比缩放手柄；图片按 fillMode 填充 */
 function MainImageLayer({
   layout,
   coverElement,
@@ -135,20 +135,21 @@ function MainImageLayer({
   onSelect,
   onMainRectChange
 }: SceneLayersProps): React.JSX.Element {
-  const mainRef = useRef<Konva.Image>(null)
+  const groupRef = useRef<Konva.Group>(null)
   const trRef = useRef<Konva.Transformer>(null)
   const px = normToPixel(layout.mainImage.rect, CANVAS)
+  const fillMode = layout.mainImage.fillMode
 
   useEffect(() => {
     const tr = trRef.current
-    const node = mainRef.current
+    const node = groupRef.current
     if (tr && node && selectedId === 'mainImage') {
       tr.nodes([node])
       tr.getLayer()?.batchDraw()
     }
-  }, [selectedId, coverElement])
+  }, [selectedId, coverElement, fillMode])
 
-  const commitFromNode = (node: Konva.Image): void => {
+  const commitFromGroup = (node: Konva.Group): void => {
     const rect = {
       x: node.x(),
       y: node.y(),
@@ -158,64 +159,97 @@ function MainImageLayer({
     onMainRectChange(pixelToNorm(rect, CANVAS))
   }
 
+  let imageNode: React.JSX.Element | null = null
+  if (coverElement) {
+    const iw = coverElement.naturalWidth || coverElement.width
+    const ih = coverElement.naturalHeight || coverElement.height
+    if (iw > 0 && ih > 0) {
+      if (fillMode === 'stretch') {
+        imageNode = <KonvaImage image={coverElement} width={px.w} height={px.h} listening={false} />
+      } else {
+        const s =
+          fillMode === 'contain' ? Math.min(px.w / iw, px.h / ih) : Math.max(px.w / iw, px.h / ih)
+        const dw = iw * s
+        const dh = ih * s
+        imageNode = (
+          <KonvaImage
+            image={coverElement}
+            x={(px.w - dw) / 2}
+            y={(px.h - dh) / 2}
+            width={dw}
+            height={dh}
+            listening={false}
+          />
+        )
+      }
+    }
+  }
+
+  const isCover = fillMode === 'cover'
+
   return (
     <>
-      {coverElement ? (
-        <KonvaImage
-          ref={mainRef}
-          image={coverElement}
-          x={px.x}
-          y={px.y}
-          width={px.w}
-          height={px.h}
-          draggable
-          onClick={() => onSelect('mainImage')}
-          onTap={() => onSelect('mainImage')}
-          onDragStart={() => onSelect('mainImage')}
-          onDragEnd={(e: KonvaEventObject<DragEvent>) => commitFromNode(e.target as Konva.Image)}
-          onTransformEnd={(e: KonvaEventObject<Event>) => {
-            const node = e.target as Konva.Image
-            const sx = node.scaleX()
-            const sy = node.scaleY()
-            node.scale({ x: 1, y: 1 })
-            node.width(node.width() * sx)
-            node.height(node.height() * sy)
-            commitFromNode(node)
-          }}
-          dragBoundFunc={(pos) => {
-            const node = mainRef.current
-            if (!node) return pos
-            const w = node.width() * node.scaleX()
-            const h = node.height() * node.scaleY()
-            return {
-              x: Math.min(Math.max(pos.x, 0), LOGICAL_WIDTH - w),
-              y: Math.min(Math.max(pos.y, 0), LOGICAL_HEIGHT - h)
-            }
-          }}
-        />
-      ) : (
-        <Group x={px.x} y={px.y}>
-          <Rect
-            width={px.w}
-            height={px.h}
-            stroke="#5a5f6a"
-            strokeWidth={2}
-            dash={[12, 8]}
-            cornerRadius={10}
-            listening={false}
-          />
-          <KonvaText
-            text="拖入封面图"
-            x={0}
-            y={px.h / 2 - 26}
-            width={px.w}
-            fontSize={44}
-            fill="#7a808d"
-            align="center"
-            listening={false}
-          />
-        </Group>
-      )}
+      <Group
+        ref={groupRef}
+        x={px.x}
+        y={px.y}
+        width={px.w}
+        height={px.h}
+        draggable
+        onClick={() => onSelect('mainImage')}
+        onTap={() => onSelect('mainImage')}
+        onDragStart={() => onSelect('mainImage')}
+        onDragEnd={(e: KonvaEventObject<DragEvent>) => commitFromGroup(e.target as Konva.Group)}
+        onTransformEnd={(e: KonvaEventObject<Event>) => {
+          const node = e.target as Konva.Group
+          const sx = node.scaleX()
+          const sy = node.scaleY()
+          node.scale({ x: 1, y: 1 })
+          node.width(node.width() * sx)
+          node.height(node.height() * sy)
+          commitFromGroup(node)
+        }}
+        dragBoundFunc={(pos) => {
+          const node = groupRef.current
+          if (!node) return pos
+          const w = node.width() * node.scaleX()
+          const h = node.height() * node.scaleY()
+          return {
+            x: Math.min(Math.max(pos.x, 0), LOGICAL_WIDTH - w),
+            y: Math.min(Math.max(pos.y, 0), LOGICAL_HEIGHT - h)
+          }
+        }}
+        clipX={isCover ? 0 : undefined}
+        clipY={isCover ? 0 : undefined}
+        clipWidth={isCover ? px.w : undefined}
+        clipHeight={isCover ? px.h : undefined}
+      >
+        {/* 透明命中区：让整个矩形（含透明留白）都可拖动/选中 */}
+        <Rect width={px.w} height={px.h} fill="rgba(0,0,0,0.01)" />
+        {imageNode ?? (
+          <>
+            <Rect
+              width={px.w}
+              height={px.h}
+              stroke="#5a5f6a"
+              strokeWidth={2}
+              dash={[12, 8]}
+              cornerRadius={10}
+              listening={false}
+            />
+            <KonvaText
+              text="拖入封面图"
+              x={0}
+              y={px.h / 2 - 26}
+              width={px.w}
+              fontSize={44}
+              fill="#7a808d"
+              align="center"
+              listening={false}
+            />
+          </>
+        )}
+      </Group>
       {selectedId === 'mainImage' && coverElement && (
         <Transformer
           ref={trRef}

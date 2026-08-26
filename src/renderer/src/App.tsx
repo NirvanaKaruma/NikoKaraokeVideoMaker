@@ -5,6 +5,7 @@ import { useProject } from './hooks/useProject'
 import { CanvasStage } from './components/CanvasStage'
 import { InputPanel } from './components/panels/InputPanel'
 import { BackgroundPanel } from './components/panels/BackgroundPanel'
+import { MainImagePanel } from './components/panels/MainImagePanel'
 
 const IS_VISUAL_SMOKE = new URLSearchParams(window.location.search).has('smokeVisual')
 
@@ -74,7 +75,7 @@ function runVisualChecks(stage: Konva.Stage): VisualCheckReport {
   }
 
   // 2) 主图中心：合成封面白色圆盘处应为亮色
-  const main = sample(441, 419)
+  const main = sample(441, 540)
   if (main[0] > 200 && main[1] > 200 && main[2] > 200) {
     pass('主图落位', '主图中心 rgb(' + main.slice(0, 3).join(',') + ') 为白色圆盘')
   } else {
@@ -189,6 +190,7 @@ function App(): React.JSX.Element {
             onCoverFile={(f) => void project.setCoverFile(f)}
             onAudioFile={(f) => void project.setAudioFile(f)}
           />
+          <MainImagePanel mainImage={project.layout.mainImage} onChange={project.updateMainImage} />
           <BackgroundPanel
             background={project.layout.background}
             onChange={project.updateBackground}

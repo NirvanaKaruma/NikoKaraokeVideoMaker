@@ -106,6 +106,16 @@ body {
   accent-color: #ff5f9e;
 }
 
+.field select {
+  background: var(--ev-c-black-mute);
+  border: 1px solid var(--ev-c-gray-2);
+  border-radius: 6px;
+  color: var(--ev-c-text-1);
+  padding: 7px 10px;
+  font-size: 13px;
+  outline: none;
+}
+
 .check-row {
   display: flex;
   align-items: center;
