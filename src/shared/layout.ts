@@ -112,8 +112,8 @@ export const DEFAULT_LAYOUT: ProjectLayout = {
     dimOpacity: 0.3
   },
   mainImage: {
-    // 主图：左侧、垂直居中、高度≈画布 90%、宽≈画布 40%
-    rect: { x: 0.04, y: 0.05, w: 0.38, h: 0.9 },
+    // 主图：左侧、垂直居中、高度≈画布 90%、宽≈画布 40%（用户目视反馈：整体上移 2%）
+    rect: { x: 0.04, y: 0.03, w: 0.38, h: 0.9 },
     // 用户确认：等比适配，图片完整显示、永不变形（矩形内留透明边）
     fillMode: 'contain'
   },
@@ -132,8 +132,8 @@ export const DEFAULT_LAYOUT: ProjectLayout = {
         bold: true,
         align: 'left'
       },
-      // §4：x≈54%、y≈15%
-      rect: { x: 0.54, y: 0.15, w: 0.4, h: 0.12 }
+      // §4：x≈54%、y≈15%（用户目视反馈后上移至 13%）
+      rect: { x: 0.54, y: 0.13, w: 0.4, h: 0.12 }
     },
     artist: {
       text: '作者',
@@ -149,14 +149,14 @@ export const DEFAULT_LAYOUT: ProjectLayout = {
         bold: false,
         align: 'left'
       },
-      // §4：作者在歌名下方，y≈26%
-      rect: { x: 0.54, y: 0.265, w: 0.4, h: 0.07 }
+      // §4：作者在歌名下方，y≈26%（上移后 24.5%）
+      rect: { x: 0.54, y: 0.245, w: 0.4, h: 0.07 }
     }
   },
   visualizer: {
     style: 'spectrum',
-    // §4：横向 [49%, 97%]、中心 y≈49%
-    rect: { x: 0.49, y: 0.4, w: 0.48, h: 0.18 },
+    // §4：横向 [49%, 97%]、中心 y≈49%（用户目视反馈后上移，中心 47%）
+    rect: { x: 0.49, y: 0.38, w: 0.48, h: 0.18 },
     barCount: 128,
     barWidthRatio: 0.55,
     gapRatio: 0.45,

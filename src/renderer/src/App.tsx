@@ -75,7 +75,7 @@ function runVisualChecks(stage: Konva.Stage): VisualCheckReport {
   }
 
   // 2) 主图中心：合成封面白色圆盘处应为亮色
-  const main = sample(441, 540)
+  const main = sample(441, 518)
   if (main[0] > 200 && main[1] > 200 && main[2] > 200) {
     pass('主图落位', '主图中心 rgb(' + main.slice(0, 3).join(',') + ') 为白色圆盘')
   } else {
@@ -85,9 +85,9 @@ function runVisualChecks(stage: Konva.Stage): VisualCheckReport {
   // 3) 文本区：歌名+作者区域应有白色文字像素
   const textN = countIn(
     0.54 * 1920,
-    0.15 * 1080,
+    0.12 * 1080,
     0.94 * 1920,
-    0.34 * 1080,
+    0.36 * 1080,
     (r, g, b) => r > 200 && g > 200 && b > 200
   )
   if (textN > 60) {
@@ -99,9 +99,9 @@ function runVisualChecks(stage: Konva.Stage): VisualCheckReport {
   // 4) 可视化区：粉/青色频谱柱像素
   const vizN = countIn(
     0.49 * 1920,
-    0.4 * 1080,
+    0.38 * 1080,
     0.97 * 1920,
-    0.58 * 1080,
+    0.56 * 1080,
     (r, g, b) => (r > 180 && g < 170 && b > 110) || (g > 170 && b > 170 && r < 170)
   )
   if (vizN > 80) {

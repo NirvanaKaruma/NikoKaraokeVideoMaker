@@ -18,7 +18,7 @@ Windows exe 交付，双击即用，目标机器无需安装 Node.js（ffmpeg �
 
 ```bash
 npm install        # 安装依赖（electron 走 npmmirror 镜像，缓存重定向到 .npm-cache/）
-npm run dev        # 开发模式（HMR）
+npm run dev        # 开发模式（HMR）；或直接双击 dev.bat 启动
 npm run typecheck  # 类型检查
 npm run lint       # ESLint
 npm run build      # typecheck + 打包 out/

@@ -37,24 +37,24 @@ describe('归一化布局模型', () => {
     expect(DEFAULT_LAYOUT.mainImage.fillMode).toBe('contain')
   })
 
-  it('主图默认高≈90%、宽≈40%，左侧垂直居中', () => {
+  it('主图默认高≈90%、宽≈40%，左侧垂直居中（上移后 y=3%）', () => {
     const r = DEFAULT_LAYOUT.mainImage.rect
     expect(r.h).toBeCloseTo(0.9, 5)
     expect(r.w).toBeCloseTo(0.38, 5)
-    expect(r.y).toBeCloseTo(0.05, 5)
+    expect(r.y).toBeCloseTo(0.03, 5)
     expect(r.x).toBeLessThan(0.1)
   })
 
-  it('文本与可视化区域符合 §4 数值', () => {
+  it('文本与可视化区域符合默认坐标（§4 基础上整体上移 2%）', () => {
     expect(DEFAULT_LAYOUT.texts.songTitle.rect.x).toBeCloseTo(0.54, 5)
-    expect(DEFAULT_LAYOUT.texts.songTitle.rect.y).toBeCloseTo(0.15, 5)
+    expect(DEFAULT_LAYOUT.texts.songTitle.rect.y).toBeCloseTo(0.13, 5)
     expect(DEFAULT_LAYOUT.texts.artist.rect.y).toBeGreaterThan(
       DEFAULT_LAYOUT.texts.songTitle.rect.y
     )
     const v = DEFAULT_LAYOUT.visualizer.rect
     expect(v.x).toBeCloseTo(0.49, 5)
     expect(v.x + v.w).toBeCloseTo(0.97, 5)
-    expect(v.y + v.h / 2).toBeCloseTo(0.49, 5)
+    expect(v.y + v.h / 2).toBeCloseTo(0.47, 5)
   })
 
   it('normToPixel / pixelToNorm 往返一致', () => {
