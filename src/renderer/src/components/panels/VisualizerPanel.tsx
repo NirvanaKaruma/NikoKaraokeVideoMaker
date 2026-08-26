@@ -72,6 +72,16 @@ export function VisualizerPanel({ config, onChange }: VisualizerPanelProps): Rea
         />
       </label>
       <label className="field">
+        <span>灵敏度：{config.sensitivity}（越大柱越高越灵敏）</span>
+        <input
+          type="range"
+          min={1}
+          max={15}
+          value={config.sensitivity}
+          onChange={(e) => onChange({ sensitivity: Number(e.target.value) })}
+        />
+      </label>
+      <label className="field">
         <span>配色方案</span>
         <select
           value={preset ? keyOf(preset.colors) : '__custom__'}

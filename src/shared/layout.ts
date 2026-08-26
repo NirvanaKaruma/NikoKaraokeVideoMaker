@@ -74,6 +74,8 @@ export interface VisualizerConfig {
   roundness: number
   /** 时间平滑 0–1（0=无平滑） */
   smoothing: number
+  /** 灵敏度增益 1–15，越大柱越高越灵敏（默认 7；原固定增益 4 经用户反馈偏低） */
+  sensitivity: number
 }
 
 export interface TextLayerConfig {
@@ -163,7 +165,8 @@ export const DEFAULT_LAYOUT: ProjectLayout = {
     heightRatio: 0.92,
     colors: ['#ff5f9e', '#7ce3ff'],
     roundness: 2,
-    smoothing: 0.35
+    smoothing: 0.35,
+    sensitivity: 7
   }
 }
 

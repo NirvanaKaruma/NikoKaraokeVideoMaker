@@ -55,6 +55,21 @@ describe('共享频谱分析器', () => {
     expect(mono[0]).toBeCloseTo(0.3, 5)
   })
 
+  it('灵敏度增益：gain 翻倍 → 未饱和柱高度翻倍', () => {
+    const analyzer = createSpectrumAnalyzer(makeSine(440, 8000, 2), 8000, {
+      fftSize: 2048,
+      freqMin: 30,
+      freqMax: 4000
+    })
+    const low = spectrumAt(analyzer, 1.0, 128, null, 2)
+    const high = spectrumAt(analyzer, 1.0, 128, null, 4)
+    for (let i = 0; i < low.length; i++) {
+      if (high[i] < 0.99) {
+        expect(high[i]).toBeCloseTo(low[i] * 2, 4)
+      }
+    }
+  })
+
   it('时刻越界按边缘钳制，不抛异常', () => {
     const analyzer = createSpectrumAnalyzer(makeSine(440, 8000, 1), 8000)
     expect(spectrumAt(analyzer, -1, 64).length).toBe(64)

@@ -10,7 +10,8 @@ import {
 } from '@shared/layout'
 
 export const COVER_EXTENSIONS = ['png', 'jpg', 'jpeg', 'webp']
-export const AUDIO_EXTENSIONS = ['mp3', 'wav', 'flac', 'm4a']
+/** 音频 + 可提取音轨的视频（预览解码由 Chromium 支持，导出由 ffmpeg 提取音轨） */
+export const AUDIO_EXTENSIONS = ['mp3', 'wav', 'flac', 'm4a', 'ogg', 'mp4', 'm4v', 'mov', 'webm']
 
 export interface ProjectAssets {
   coverUrl: string | null
@@ -113,7 +114,7 @@ export function useProject(): {
     if (!file) return
     const ext = (file.name.split('.').pop() ?? '').toLowerCase()
     if (!AUDIO_EXTENSIONS.includes(ext)) {
-      setFileError(`音频仅支持 mp3/wav/flac/m4a（收到 .${ext}）`)
+      setFileError(`仅支持 mp3/wav/flac/m4a/ogg/mp4/m4v/mov/webm（收到 .${ext}）`)
       return
     }
     setFileError(null)

@@ -143,12 +143,14 @@ function binFreq(analyzer: SpectrumAnalyzer, i: number, barCount: number): [numb
 /**
  * 计算时刻 t 的频谱柱（0–1 高度数组，长度 barCount）。
  * @param bars 复用缓冲（长度须 = barCount），传 null 则新建
+ * @param gain 灵敏度增益（越大柱越高越灵敏），默认 4；由布局的 sensitivity 驱动
  */
 export function spectrumAt(
   analyzer: SpectrumAnalyzer,
   t: number,
   barCount: number,
-  bars: Float32Array | null = null
+  bars: Float32Array | null = null,
+  gain = 4
 ): Float32Array {
   const n = analyzer.fftSize
   const out = bars && bars.length === barCount ? bars : new Float32Array(barCount)
@@ -184,8 +186,8 @@ export function spectrumAt(
       count++
     }
     const avg = count > 0 ? sum / count / norm : 0
-    // 增益 + 软限幅；静音段为 0
-    out[i] = Math.min(1, avg * 4)
+    // 灵敏度增益 + 软限幅；静音段为 0
+    out[i] = Math.min(1, avg * gain)
   }
   return out
 }

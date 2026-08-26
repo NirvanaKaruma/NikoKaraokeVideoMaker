@@ -68,7 +68,7 @@ export function useAudioPlayback(audioFile: File | null, config: VisualizerConfi
     const an = analyzerRef.current
     if (!an) return
     const cfg = configRef.current
-    const target = spectrumAt(an, t, cfg.barCount)
+    const target = spectrumAt(an, t, cfg.barCount, null, cfg.sensitivity)
     const smoothed = smoothBars(prevBarsRef.current, target, cfg.smoothing)
     prevBarsRef.current = smoothed
     setBars(Array.from(smoothed))
@@ -82,7 +82,9 @@ export function useAudioPlayback(audioFile: File | null, config: VisualizerConfi
     src.connect(ctx.destination)
     manualStopRef.current = false
     src.onended = () => {
-      if (sourceRef.current === src) sourceRef.current = null
+      // 身份守卫：seek/暂停替换过的旧音源的事件一律忽略（曾误判为自然播完）
+      if (src !== sourceRef.current) return
+      sourceRef.current = null
       if (!manualStopRef.current) {
         // 自然播完：停止，指针停在结尾（Q5：播完停止不循环）
         playingRef.current = false
@@ -136,7 +138,13 @@ export function useAudioPlayback(audioFile: File | null, config: VisualizerConfi
         setError(null)
         setCurrentTime(0)
         // 立即显示 t=0 频谱
-        const target = spectrumAt(analyzerRef.current, 0, configRef.current.barCount)
+        const target = spectrumAt(
+          analyzerRef.current,
+          0,
+          configRef.current.barCount,
+          null,
+          configRef.current.sensitivity
+        )
         const smoothed = smoothBars(prevBarsRef.current, target, configRef.current.smoothing)
         prevBarsRef.current = smoothed
         setBars(Array.from(smoothed))

@@ -99,13 +99,13 @@ export function InputPanel(props: InputPanelProps): React.JSX.Element {
         />
       </div>
       <div className="field">
-        <span>音频（mp3 / wav / flac / m4a）</span>
+        <span>音频 / 视频（mp3 / wav / flac / m4a / mp4 / mov / webm，视频取音轨）</span>
         <DropZone
-          label="点击或拖入音频"
+          label="点击或拖入音频或视频"
           hint="♪ 音频"
           file={props.audioFile}
           previewUrl={null}
-          accept=".mp3,.wav,.flac,.m4a,audio/*"
+          accept=".mp3,.wav,.flac,.m4a,.ogg,.mp4,.m4v,.mov,.webm,audio/*,video/*"
           onFile={props.onAudioFile}
         />
       </div>

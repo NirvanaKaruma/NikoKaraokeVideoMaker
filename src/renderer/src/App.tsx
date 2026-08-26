@@ -320,6 +320,31 @@ async function runAudioSmoke(
     fail('可视化动态渲染', '两时刻频谱区域仅 ' + diffPx + ' 个差异像素（预期 >150）')
   }
 
+  // 回归：播放中 seek 不得被旧音源 onended 误判为播完（曾跳到结尾并停止）
+  pbRef.current.seek(0.2)
+  pbRef.current.play()
+  await sleep(400)
+  const tBeforeSeek = pbRef.current.currentTime
+  pbRef.current.seek(1.1)
+  await sleep(400)
+  const tAfterSeek = pbRef.current.currentTime
+  const stillPlaying = pbRef.current.isPlaying
+  pbRef.current.pause()
+  if (stillPlaying && tAfterSeek >= 1.05 && tAfterSeek < 1.6) {
+    pass('播放中 seek 不中断', 'seek 后继续播放，currentTime=' + tAfterSeek.toFixed(2) + 's')
+  } else {
+    fail(
+      '播放中 seek 不中断',
+      'isPlaying=' +
+        stillPlaying +
+        ' currentTime=' +
+        tAfterSeek.toFixed(2) +
+        's（seek 前 ' +
+        tBeforeSeek.toFixed(2) +
+        's）'
+    )
+  }
+
   return { ok: checks.every((c) => c.pass), checks }
 }
 

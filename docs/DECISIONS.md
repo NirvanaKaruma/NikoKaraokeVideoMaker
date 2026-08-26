@@ -67,6 +67,7 @@
 - **首次目视反馈（M2 截图）**：主题元素整体上移 2%——主图 y 5%→3%、歌名 y 15%→13%、作者 y 26.5%→24.5%、可视化中心 y 49%→47%。
 - 计划实施 slug：nikokaraoke；任务清单文件 nikokaraoke.md（勾选行 = 进度真相）。
 - **交互反馈（M2 验收期）**：① 封面加载失败根因 = 渲染页 CSP 未放行 blob:，已修复（img-src/media-src 增加 blob:；smoke 自测改用 File→objectURL 路径防回归）；② 歌名/作者/可视化与主图一样支持点选 + 拖动换位（选中显示粉色虚线框，主图保留缩放手柄）；③ 字体选择（作者/歌曲名）列入 M3 范围。
+- **M3 验收期反馈**：① 音频输入扩展为音频+视频（mp4/m4v/mov/webm，预览由 Chromium 解码音轨、导出由 ffmpeg 提取音轨；mkv 等 Chromium 无法预览解码的容器暂不收）；② 修复播放中 seek 被旧音源 onended 误判为播完的 bug（音源身份守卫 + smoke 回归项）；③ 频谱灵敏度可调（VisualizerConfig.sensitivity 1–15，默认 7，替代原固定增益 4）。
 - **GitHub 同步**（用户要求）：私有仓库 github.com/NirvanaKaruma/NikoKaraokeVideoMaker，默认分支 main，通过本机 SSH 密钥（gh CLI 未安装）推送；每个里程碑提交后同步。
 
 ## 6. 依赖与安全决策（M1 期间追加）
