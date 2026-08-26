@@ -25,12 +25,27 @@ import { colorAt, placeholderBars } from '@shared/color'
 
 const CANVAS = { width: LOGICAL_WIDTH, height: LOGICAL_HEIGHT }
 
+/** 可选中元素：主图 / 歌名 / 作者 / 可视化 */
+export type SelectableId = 'mainImage' | 'songTitle' | 'artist' | 'visualizer' | null
+
 export interface SceneLayersProps {
   layout: ProjectLayout
   coverElement: HTMLImageElement | null
-  selectedId: 'mainImage' | null
-  onSelect: (id: 'mainImage' | null) => void
+  selectedId: SelectableId
+  onSelect: (id: SelectableId) => void
   onMainRectChange: (rect: NormRect) => void
+  onTextRectChange: (kind: 'songTitle' | 'artist', rect: NormRect) => void
+  onVisualizerRectChange: (rect: NormRect) => void
+}
+
+const SELECT_BORDER = '#ff5f9e'
+
+/** 拖动时限制在画布内 */
+function clampPos(pos: { x: number; y: number }, w: number, h: number): { x: number; y: number } {
+  return {
+    x: Math.min(Math.max(pos.x, 0), LOGICAL_WIDTH - w),
+    y: Math.min(Math.max(pos.y, 0), LOGICAL_HEIGHT - h)
+  }
 }
 
 /** 背景层：背景色（透明图合成基底）+ 封面铺满 + 高斯模糊 + 压暗遮罩 */
@@ -101,30 +116,87 @@ function BackgroundLayer({
   )
 }
 
-/** 文本层：歌曲名/作者，字号等相对画布高 */
-function TextNode({ cfg }: { cfg: TextLayerConfig }): React.JSX.Element {
+/** 文本层：歌曲名/作者，可拖动选择位置（选中显示虚线框，无缩放手柄） */
+function TextNode({
+  kind,
+  cfg,
+  selected,
+  onSelect,
+  onRectChange
+}: {
+  kind: 'songTitle' | 'artist'
+  cfg: TextLayerConfig
+  selected: boolean
+  onSelect: (id: SelectableId) => void
+  onRectChange: (rect: NormRect) => void
+}): React.JSX.Element {
+  const textRef = useRef<Konva.Text>(null)
+  const trRef = useRef<Konva.Transformer>(null)
   const px = normToPixel(cfg.rect, CANVAS)
   const { style } = cfg
+
+  useEffect(() => {
+    const tr = trRef.current
+    const node = textRef.current
+    if (tr && node && selected) {
+      tr.nodes([node])
+      tr.getLayer()?.batchDraw()
+    }
+  }, [selected, cfg.rect])
+
   return (
-    <KonvaText
-      x={px.x}
-      y={px.y}
-      width={px.w}
-      text={cfg.text}
-      fontFamily={style.fontFamily}
-      fontSize={relToPixel(style.fontSize, CANVAS)}
-      fontStyle={style.bold ? 'bold' : 'normal'}
-      fill={style.color}
-      stroke={style.strokeColor}
-      strokeWidth={relToPixel(style.strokeWidth, CANVAS)}
-      shadowEnabled={style.glowEnabled}
-      shadowColor={style.glowColor}
-      shadowBlur={relToPixel(style.glowBlur, CANVAS)}
-      shadowOpacity={1}
-      align={style.align}
-      listening={false}
-    />
+    <>
+      <KonvaText
+        ref={textRef}
+        x={px.x}
+        y={px.y}
+        width={px.w}
+        text={cfg.text}
+        fontFamily={style.fontFamily}
+        fontSize={relToPixel(style.fontSize, CANVAS)}
+        fontStyle={style.bold ? 'bold' : 'normal'}
+        fill={style.color}
+        stroke={style.strokeColor}
+        strokeWidth={relToPixel(style.strokeWidth, CANVAS)}
+        shadowEnabled={style.glowEnabled}
+        shadowColor={style.glowColor}
+        shadowBlur={relToPixel(style.glowBlur, CANVAS)}
+        shadowOpacity={1}
+        align={style.align}
+        draggable
+        onClick={() => onSelect(kind)}
+        onTap={() => onSelect(kind)}
+        onDragStart={() => onSelect(kind)}
+        onDragEnd={(e: KonvaEventObject<DragEvent>) => {
+          const node = e.target as Konva.Text
+          onRectChange(pixelToNorm({ x: node.x(), y: node.y(), w: px.w, h: node.height() }, CANVAS))
+        }}
+        dragBoundFunc={(pos) => {
+          const node = textRef.current
+          if (!node) return pos
+          return clampPos(pos, node.width(), node.height())
+        }}
+      />
+      {selected && (
+        <Transformer
+          ref={trRef}
+          enabledAnchors={[]}
+          rotateEnabled={false}
+          resizeEnabled={false}
+          borderStroke={SELECT_BORDER}
+          borderDash={[6, 4]}
+        />
+      )}
+    </>
   )
+}
+
+interface MainImageLayerProps {
+  layout: ProjectLayout
+  coverElement: HTMLImageElement | null
+  selectedId: SelectableId
+  onSelect: (id: SelectableId) => void
+  onMainRectChange: (rect: NormRect) => void
 }
 
 /** 主图层：Group 承载拖拽 + 等比缩放手柄；图片按 fillMode 填充 */
@@ -134,7 +206,7 @@ function MainImageLayer({
   selectedId,
   onSelect,
   onMainRectChange
-}: SceneLayersProps): React.JSX.Element {
+}: MainImageLayerProps): React.JSX.Element {
   const groupRef = useRef<Konva.Group>(null)
   const trRef = useRef<Konva.Transformer>(null)
   const px = normToPixel(layout.mainImage.rect, CANVAS)
@@ -212,12 +284,7 @@ function MainImageLayer({
         dragBoundFunc={(pos) => {
           const node = groupRef.current
           if (!node) return pos
-          const w = node.width() * node.scaleX()
-          const h = node.height() * node.scaleY()
-          return {
-            x: Math.min(Math.max(pos.x, 0), LOGICAL_WIDTH - w),
-            y: Math.min(Math.max(pos.y, 0), LOGICAL_HEIGHT - h)
-          }
+          return clampPos(pos, node.width() * node.scaleX(), node.height() * node.scaleY())
         }}
         clipX={isCover ? 0 : undefined}
         clipY={isCover ? 0 : undefined}
@@ -255,8 +322,8 @@ function MainImageLayer({
           ref={trRef}
           keepRatio
           rotateEnabled={false}
-          borderStroke="#ff5f9e"
-          anchorStroke="#ff5f9e"
+          borderStroke={SELECT_BORDER}
+          anchorStroke={SELECT_BORDER}
           anchorFill="#ffffff"
           anchorSize={12}
           boundBoxFunc={(oldBox, newBox) => {
@@ -277,39 +344,102 @@ function MainImageLayer({
   )
 }
 
-/** 可视化层：M2 为静态占位柱，M3 接入真实频谱数据 */
-function VisualizerLayer({ config }: { config: VisualizerConfig }): React.JSX.Element {
+/** 可视化层：可拖动选择位置（选中显示虚线框）；M3 接入真实频谱数据 */
+function VisualizerLayer({
+  config,
+  selected,
+  onSelect,
+  onRectChange
+}: {
+  config: VisualizerConfig
+  selected: boolean
+  onSelect: (id: SelectableId) => void
+  onRectChange: (rect: NormRect) => void
+}): React.JSX.Element {
+  const groupRef = useRef<Konva.Group>(null)
+  const trRef = useRef<Konva.Transformer>(null)
   const px = normToPixel(config.rect, CANVAS)
   const bars = placeholderBars(config.barCount)
   const slot = px.w / config.barCount
   const barW = slot * config.barWidthRatio
   const maxH = px.h * config.heightRatio
-  const baseY = px.y + px.h
+  const baseY = px.h
+
+  useEffect(() => {
+    const tr = trRef.current
+    const node = groupRef.current
+    if (tr && node && selected) {
+      tr.nodes([node])
+      tr.getLayer()?.batchDraw()
+    }
+  }, [selected, config.rect])
+
   return (
-    <Group>
-      {bars.map((v, i) => {
-        const h = Math.max(4, v * maxH)
-        const x = px.x + i * slot + (slot - barW) / 2
-        return (
-          <Rect
-            key={i}
-            x={x}
-            y={baseY - h}
-            width={barW}
-            height={h}
-            fill={colorAt(config.colors, i / Math.max(1, config.barCount - 1))}
-            cornerRadius={config.roundness}
-            listening={false}
-          />
-        )
-      })}
-    </Group>
+    <>
+      <Group
+        ref={groupRef}
+        x={px.x}
+        y={px.y}
+        width={px.w}
+        height={px.h}
+        draggable
+        onClick={() => onSelect('visualizer')}
+        onTap={() => onSelect('visualizer')}
+        onDragStart={() => onSelect('visualizer')}
+        onDragEnd={(e: KonvaEventObject<DragEvent>) => {
+          const node = e.target as Konva.Group
+          onRectChange(pixelToNorm({ x: node.x(), y: node.y(), w: px.w, h: px.h }, CANVAS))
+        }}
+        dragBoundFunc={(pos) => {
+          const node = groupRef.current
+          if (!node) return pos
+          return clampPos(pos, node.width(), node.height())
+        }}
+      >
+        {/* 透明命中区：整个矩形（含柱子间空隙）都可拖动/选中 */}
+        <Rect width={px.w} height={px.h} fill="rgba(0,0,0,0.01)" />
+        {bars.map((v, i) => {
+          const h = Math.max(4, v * maxH)
+          const x = i * slot + (slot - barW) / 2
+          return (
+            <Rect
+              key={i}
+              x={x}
+              y={baseY - h}
+              width={barW}
+              height={h}
+              fill={colorAt(config.colors, i / Math.max(1, config.barCount - 1))}
+              cornerRadius={config.roundness}
+              listening={false}
+            />
+          )
+        })}
+      </Group>
+      {selected && (
+        <Transformer
+          ref={trRef}
+          enabledAnchors={[]}
+          rotateEnabled={false}
+          resizeEnabled={false}
+          borderStroke={SELECT_BORDER}
+          borderDash={[6, 4]}
+        />
+      )}
+    </>
   )
 }
 
 /** 四层场景（从下到上）：背景 → 主图 → 文本 → 可视化。预览与导出共用本组件。 */
 export function SceneLayers(props: SceneLayersProps): React.JSX.Element {
-  const { layout, coverElement, selectedId, onSelect, onMainRectChange } = props
+  const {
+    layout,
+    coverElement,
+    selectedId,
+    onSelect,
+    onMainRectChange,
+    onTextRectChange,
+    onVisualizerRectChange
+  } = props
   return (
     <>
       <Layer name="background" listening={false}>
@@ -324,12 +454,29 @@ export function SceneLayers(props: SceneLayersProps): React.JSX.Element {
           onMainRectChange={onMainRectChange}
         />
       </Layer>
-      <Layer name="text" listening={false}>
-        <TextNode cfg={layout.texts.songTitle} />
-        <TextNode cfg={layout.texts.artist} />
+      <Layer name="text">
+        <TextNode
+          kind="songTitle"
+          cfg={layout.texts.songTitle}
+          selected={selectedId === 'songTitle'}
+          onSelect={onSelect}
+          onRectChange={(rect) => onTextRectChange('songTitle', rect)}
+        />
+        <TextNode
+          kind="artist"
+          cfg={layout.texts.artist}
+          selected={selectedId === 'artist'}
+          onSelect={onSelect}
+          onRectChange={(rect) => onTextRectChange('artist', rect)}
+        />
       </Layer>
-      <Layer name="visualizer" listening={false}>
-        <VisualizerLayer config={layout.visualizer} />
+      <Layer name="visualizer">
+        <VisualizerLayer
+          config={layout.visualizer}
+          selected={selectedId === 'visualizer'}
+          onSelect={onSelect}
+          onRectChange={onVisualizerRectChange}
+        />
       </Layer>
     </>
   )

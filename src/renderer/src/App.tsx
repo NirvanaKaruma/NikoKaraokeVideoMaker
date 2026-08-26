@@ -3,6 +3,7 @@ import type Konva from 'konva'
 import { SUBTITLE_ZONE_Y } from '@shared/layout'
 import { useProject } from './hooks/useProject'
 import { CanvasStage } from './components/CanvasStage'
+import type { SelectableId } from './components/SceneLayers'
 import { InputPanel } from './components/panels/InputPanel'
 import { BackgroundPanel } from './components/panels/BackgroundPanel'
 import { MainImagePanel } from './components/panels/MainImagePanel'
@@ -122,34 +123,41 @@ function runVisualChecks(stage: Konva.Stage): VisualCheckReport {
   return { ok: checks.every((c) => c.pass), checks }
 }
 
-/** 无头截图自测用合成封面（800×800 渐变 + 图形 + 文字） */
-function makeSyntheticCover(): string {
-  const c = document.createElement('canvas')
-  c.width = 800
-  c.height = 800
-  const ctx = c.getContext('2d')
-  if (!ctx) return ''
-  const g = ctx.createLinearGradient(0, 0, 800, 800)
-  g.addColorStop(0, '#ff5f9e')
-  g.addColorStop(1, '#7c3aed')
-  ctx.fillStyle = g
-  ctx.fillRect(0, 0, 800, 800)
-  ctx.fillStyle = '#ffffff'
-  ctx.beginPath()
-  ctx.arc(400, 400, 220, 0, Math.PI * 2)
-  ctx.fill()
-  ctx.fillStyle = '#111827'
-  ctx.textAlign = 'center'
-  ctx.font = 'bold 64px "Microsoft YaHei", sans-serif'
-  ctx.fillText('NIKO 封面', 400, 384)
-  ctx.font = '36px sans-serif'
-  ctx.fillText('SMOKE TEST', 400, 452)
-  return c.toDataURL('image/png')
+/** 无头截图自测用合成封面：经「真实 File → blob URL」路径加载，与用户手动选封面同一条代码路径 */
+function makeSyntheticCoverFile(): Promise<File | null> {
+  return new Promise((resolve) => {
+    const c = document.createElement('canvas')
+    c.width = 800
+    c.height = 800
+    const ctx = c.getContext('2d')
+    if (!ctx) {
+      resolve(null)
+      return
+    }
+    const g = ctx.createLinearGradient(0, 0, 800, 800)
+    g.addColorStop(0, '#ff5f9e')
+    g.addColorStop(1, '#7c3aed')
+    ctx.fillStyle = g
+    ctx.fillRect(0, 0, 800, 800)
+    ctx.fillStyle = '#ffffff'
+    ctx.beginPath()
+    ctx.arc(400, 400, 220, 0, Math.PI * 2)
+    ctx.fill()
+    ctx.fillStyle = '#111827'
+    ctx.textAlign = 'center'
+    ctx.font = 'bold 64px "Microsoft YaHei", sans-serif'
+    ctx.fillText('NIKO 封面', 400, 384)
+    ctx.font = '36px sans-serif'
+    ctx.fillText('SMOKE TEST', 400, 452)
+    c.toBlob((blob) => {
+      resolve(blob ? new File([blob], 'synthetic-cover.png', { type: 'image/png' }) : null)
+    }, 'image/png')
+  })
 }
 
 function App(): React.JSX.Element {
   const project = useProject()
-  const [selectedId, setSelectedId] = useState<'mainImage' | null>(null)
+  const [selectedId, setSelectedId] = useState<SelectableId>(null)
   const stageRef = useRef<Konva.Stage | null>(null)
 
   // 渲染期直接派生：主图是否进入下半区（y>55% 仅警告）
@@ -157,8 +165,10 @@ function App(): React.JSX.Element {
 
   useEffect(() => {
     if (!IS_VISUAL_SMOKE) return
-    const url = makeSyntheticCover()
-    if (url) project.setCoverFromUrl(url)
+    void (async () => {
+      const file = await makeSyntheticCoverFile()
+      if (file) project.setCoverFile(file)
+    })()
     window.__captureStage = () => stageRef.current?.toDataURL({ pixelRatio: 1 }) ?? ''
     window.__runVisualChecks = () =>
       stageRef.current ? runVisualChecks(stageRef.current) : { ok: false, checks: [] }
@@ -203,6 +213,8 @@ function App(): React.JSX.Element {
             selectedId={selectedId}
             onSelect={setSelectedId}
             onMainRectChange={project.updateMainRect}
+            onTextRectChange={(kind, rect) => project.updateText(kind, { rect })}
+            onVisualizerRectChange={(rect) => project.updateVisualizer({ rect })}
             onStageReady={(s) => {
               stageRef.current = s
             }}

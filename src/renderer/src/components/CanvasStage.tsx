@@ -2,20 +2,31 @@ import { useEffect, useRef, useState } from 'react'
 import { Layer, Rect, Stage } from 'react-konva'
 import type Konva from 'konva'
 import { LOGICAL_HEIGHT, LOGICAL_WIDTH, NormRect, ProjectLayout } from '@shared/layout'
-import { SceneLayers } from './SceneLayers'
+import { SceneLayers, SelectableId } from './SceneLayers'
 
 export interface CanvasStageProps {
   layout: ProjectLayout
   coverElement: HTMLImageElement | null
-  selectedId: 'mainImage' | null
-  onSelect: (id: 'mainImage' | null) => void
+  selectedId: SelectableId
+  onSelect: (id: SelectableId) => void
   onMainRectChange: (rect: NormRect) => void
+  onTextRectChange: (kind: 'songTitle' | 'artist', rect: NormRect) => void
+  onVisualizerRectChange: (rect: NormRect) => void
   onStageReady?: (stage: Konva.Stage | null) => void
 }
 
 /** 1920×1080 逻辑画布按容器自适应缩放并居中显示 */
 export function CanvasStage(props: CanvasStageProps): React.JSX.Element {
-  const { layout, coverElement, selectedId, onSelect, onMainRectChange, onStageReady } = props
+  const {
+    layout,
+    coverElement,
+    selectedId,
+    onSelect,
+    onMainRectChange,
+    onTextRectChange,
+    onVisualizerRectChange,
+    onStageReady
+  } = props
   const containerRef = useRef<HTMLDivElement>(null)
   const stageRef = useRef<Konva.Stage>(null)
   const [box, setBox] = useState({ w: 960, h: 540 })
@@ -72,6 +83,8 @@ export function CanvasStage(props: CanvasStageProps): React.JSX.Element {
           selectedId={selectedId}
           onSelect={onSelect}
           onMainRectChange={onMainRectChange}
+          onTextRectChange={onTextRectChange}
+          onVisualizerRectChange={onVisualizerRectChange}
         />
       </Stage>
     </div>

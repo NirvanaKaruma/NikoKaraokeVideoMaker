@@ -55,5 +55,5 @@
 ## 执行记录
 
 - GitHub 已同步：github.com/NirvanaKaruma/NikoKaraokeVideoMaker（私有，main 分支，SSH 推送）。
-- M2 补充（用户问答）：主图填充模式改为默认「等比适配 contain」（完整显示不变形，面板可切换 cover/stretch）；主图承载改为 Group + 透明命中区。T6 输入三件套（点选+拖放+格式校验）✓；T7 Konva 1920×1080 逻辑画布自适应缩放 + 四层体系 ✓；T8 归一化布局模型 + 7 项单测 ✓；T9 主图拖拽 + 等比缩放手柄 + 下半区警告 ✓；T10 背景层（模糊/压暗/背景色/纯色开关，透明图先合成再模糊）✓。自测：typecheck/lint/test/build 全绿；smoke-visual 像素校验 5/5 通过（背景铺满/主图落位/文本层/可视化层/下半区留白）。
+- M2 补充2（用户验收反馈）：修复封面选择加载失败（CSP 放行 blob:）；歌名/作者/可视化支持点选+拖动换位（选中虚线框）；整体上移 2%。字体选择列入 M3。T6 输入三件套（点选+拖放+格式校验）✓；T7 Konva 1920×1080 逻辑画布自适应缩放 + 四层体系 ✓；T8 归一化布局模型 + 7 项单测 ✓；T9 主图拖拽 + 等比缩放手柄 + 下半区警告 ✓；T10 背景层（模糊/压暗/背景色/纯色开关，透明图先合成再模糊）✓。自测：typecheck/lint/test/build 全绿；smoke-visual 像素校验 5/5 通过（背景铺满/主图落位/文本层/可视化层/下半区留白）。
 - M1 完成（用户已装依赖；electron 升级 ^44.0.0 修复 2 高危）。T1 脚手架+npm 依赖 ✓；T2 IPC ping/pong（shared/ipc.ts 白名单 + main handle + preload 暴露 + renderer 显示）✓；T3 README 骨架 + DECISIONS.md ✓；T4 git init + 首次提交 ccc54a4 ✓；T5 自测：typecheck ✓ / lint ✓ / build ✓ / smoke 结果 PING_OK:pong ✓。
