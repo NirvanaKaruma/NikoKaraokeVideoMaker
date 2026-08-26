@@ -2,6 +2,7 @@ import { useCallback, useState } from 'react'
 import {
   BackgroundConfig,
   DEFAULT_LAYOUT,
+  ExportConfig,
   MainImageConfig,
   NormRect,
   ProjectLayout,
@@ -43,6 +44,7 @@ export function useProject(): {
   updateMainImage: (patch: Partial<MainImageConfig>) => void
   updateText: (kind: 'songTitle' | 'artist', patch: Partial<TextLayerConfig>) => void
   updateVisualizer: (patch: Partial<VisualizerConfig>) => void
+  updateExport: (patch: Partial<ExportConfig>) => void
   setCoverFile: (file: File | null) => void
   setCoverFromUrl: (url: string) => void
   setAudioFile: (file: File | null) => void
@@ -75,6 +77,10 @@ export function useProject(): {
 
   const updateVisualizer = useCallback((patch: Partial<VisualizerConfig>) => {
     setLayout((l) => ({ ...l, visualizer: { ...l.visualizer, ...patch } }))
+  }, [])
+
+  const updateExport = useCallback((patch: Partial<ExportConfig>) => {
+    setLayout((l) => ({ ...l, export: { ...l.export, ...patch } }))
   }, [])
 
   const loadCoverUrl = useCallback((url: string, file: File | null) => {
@@ -133,6 +139,7 @@ export function useProject(): {
     updateMainImage,
     updateText,
     updateVisualizer,
+    updateExport,
     setCoverFile,
     setCoverFromUrl,
     setAudioFile

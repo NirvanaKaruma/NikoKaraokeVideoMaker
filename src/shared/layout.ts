@@ -84,6 +84,28 @@ export interface TextLayerConfig {
   rect: NormRect
 }
 
+/** 可选分辨率（16:9）；未来扩展其他比例 = 在数组里加项即可 */
+export interface ResolutionOption {
+  id: string
+  label: string
+  width: number
+  height: number
+}
+
+export const RESOLUTIONS: ResolutionOption[] = [
+  { id: '720p', label: '1280×720', width: 1280, height: 720 },
+  { id: '1080p', label: '1920×1080', width: 1920, height: 1080 },
+  { id: '2k', label: '2560×1440', width: 2560, height: 1440 },
+  { id: '4k', label: '3840×2160', width: 3840, height: 2160 }
+]
+
+export interface ExportConfig {
+  /** RESOLUTIONS 中的 id，默认 1080p（Q6） */
+  resolutionId: string
+  /** 30 或 60，默认 30（规格）；60 更丝滑但编码耗时约翻倍 */
+  fps: number
+}
+
 export interface ProjectLayout {
   version: 1
   canvas: CanvasSize
@@ -94,6 +116,7 @@ export interface ProjectLayout {
     artist: TextLayerConfig
   }
   visualizer: VisualizerConfig
+  export: ExportConfig
 }
 
 export const LOGICAL_WIDTH = 1920
@@ -165,8 +188,12 @@ export const DEFAULT_LAYOUT: ProjectLayout = {
     heightRatio: 0.92,
     colors: ['#ff5f9e', '#7ce3ff'],
     roundness: 2,
-    smoothing: 0.35,
+    smoothing: 0.2,
     sensitivity: 7
+  },
+  export: {
+    resolutionId: '1080p',
+    fps: 30
   }
 }
 

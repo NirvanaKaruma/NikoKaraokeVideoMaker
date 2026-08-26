@@ -10,6 +10,7 @@ import { MainImagePanel } from './components/panels/MainImagePanel'
 import { BackgroundPanel } from './components/panels/BackgroundPanel'
 import { TextPanel } from './components/panels/TextPanel'
 import { VisualizerPanel } from './components/panels/VisualizerPanel'
+import { ExportPanel } from './components/panels/ExportPanel'
 import { AudioPanel } from './components/panels/AudioPanel'
 
 const IS_VISUAL_SMOKE = new URLSearchParams(window.location.search).has('smokeVisual')
@@ -429,6 +430,7 @@ function App(): React.JSX.Element {
             onArtistChange={(p) => project.updateText('artist', p)}
           />
           <VisualizerPanel config={project.layout.visualizer} onChange={project.updateVisualizer} />
+          <ExportPanel config={project.layout.export} onChange={project.updateExport} />
         </aside>
         <main className="canvas-wrap">
           <CanvasStage

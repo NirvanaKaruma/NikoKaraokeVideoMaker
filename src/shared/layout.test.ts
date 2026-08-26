@@ -3,6 +3,7 @@ import {
   DEFAULT_LAYOUT,
   LOGICAL_HEIGHT,
   LOGICAL_WIDTH,
+  RESOLUTIONS,
   clampNormRect,
   normToPixel,
   pixelToNorm,
@@ -35,6 +36,16 @@ describe('归一化布局模型', () => {
 
   it('可视化灵敏度默认 7（用户反馈原增益偏低）', () => {
     expect(DEFAULT_LAYOUT.visualizer.sensitivity).toBe(7)
+  })
+
+  it('导出默认 1080p@30fps，RESOLUTIONS 提供 4 档 16:9', () => {
+    expect(DEFAULT_LAYOUT.export.resolutionId).toBe('1080p')
+    expect(DEFAULT_LAYOUT.export.fps).toBe(30)
+    expect(RESOLUTIONS).toHaveLength(4)
+    for (const r of RESOLUTIONS) {
+      expect(r.width / r.height).toBeCloseTo(16 / 9, 5)
+    }
+    expect(RESOLUTIONS.some((r) => r.id === '4k' && r.width === 3840)).toBe(true)
   })
 
   it('主图默认填充模式为等比适配 contain（用户确认）', () => {

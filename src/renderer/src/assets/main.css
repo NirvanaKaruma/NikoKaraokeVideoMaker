@@ -238,6 +238,45 @@ body {
   margin-bottom: 6px;
 }
 
+.gradient-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: 6px;
+}
+
+.gradient-row input[type='text'] {
+  flex: 1;
+  min-width: 120px;
+  background: var(--ev-c-black-mute);
+  border: 1px solid var(--ev-c-gray-2);
+  border-radius: 6px;
+  color: var(--ev-c-text-1);
+  padding: 6px 8px;
+  font-size: 12px;
+  outline: none;
+}
+
+.mini-btn {
+  background: var(--ev-c-gray-3);
+  color: var(--ev-c-text-1);
+  border: 1px solid var(--ev-c-gray-2);
+  border-radius: 6px;
+  padding: 5px 10px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.mini-btn:hover {
+  border-color: #ff5f9e;
+}
+
+.mini-btn.danger {
+  color: #ff9b9b;
+  border-color: #7a3a3a;
+}
+
 .canvas-wrap {
   flex: 1;
   position: relative;
