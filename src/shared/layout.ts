@@ -1,0 +1,216 @@
+/**
+ * 归一化布局模型（核心约束 B）。
+ * 坐标约定：x / y / w 相对画布宽（0–1），h 相对画布高（0–1）。
+ * 字号、描边宽、发光半径等尺寸同样相对画布高。
+ * 预览与导出共用本模型；序列化 = JSON.stringify(ProjectLayout)。
+ */
+
+export interface NormRect {
+  x: number
+  y: number
+  w: number
+  h: number
+}
+
+export interface PixelRect {
+  x: number
+  y: number
+  w: number
+  h: number
+}
+
+export interface CanvasSize {
+  width: number
+  height: number
+}
+
+export interface TextStyle {
+  fontFamily: string
+  /** 相对画布高（0–1） */
+  fontSize: number
+  color: string
+  strokeColor: string
+  /** 相对画布高（0–1） */
+  strokeWidth: number
+  glowColor: string
+  /** 相对画布高（0–1） */
+  glowBlur: number
+  glowEnabled: boolean
+  bold: boolean
+  align: 'left' | 'center' | 'right'
+}
+
+export interface BackgroundConfig {
+  /** false = 纯色背景，不用图片 */
+  useImage: boolean
+  /** 背景色；透明封面先与此色合成再模糊 */
+  color: string
+  /** 高斯模糊强度 0–100 */
+  blur: number
+  /** 压暗不透明度 0–1 */
+  dimOpacity: number
+}
+
+export interface MainImageConfig {
+  rect: NormRect
+}
+
+export interface VisualizerConfig {
+  style: 'spectrum'
+  rect: NormRect
+  /** 柱数 100–160，默认 128 */
+  barCount: number
+  /** 柱宽占槽宽比例 0–1 */
+  barWidthRatio: number
+  /** 柱间间距占槽宽比例 0–1 */
+  gapRatio: number
+  /** 柱最大高度占 rect.h 比例 0–1 */
+  heightRatio: number
+  /** 单色=[c]；多色/渐变=[c1,c2,...] 从左到右插值 */
+  colors: string[]
+  /** 柱顶圆角（逻辑像素） */
+  roundness: number
+  /** 时间平滑 0–1（0=无平滑） */
+  smoothing: number
+}
+
+export interface TextLayerConfig {
+  text: string
+  style: TextStyle
+  rect: NormRect
+}
+
+export interface ProjectLayout {
+  version: 1
+  canvas: CanvasSize
+  background: BackgroundConfig
+  mainImage: MainImageConfig
+  texts: {
+    songTitle: TextLayerConfig
+    artist: TextLayerConfig
+  }
+  visualizer: VisualizerConfig
+}
+
+export const LOGICAL_WIDTH = 1920
+export const LOGICAL_HEIGHT = 1080
+
+/** CJK 安全字体栈：Windows 优先 Segoe UI → 微软雅黑，回退系统默认 */
+export const CJK_FONT_STACK =
+  '"Segoe UI", "Microsoft YaHei", "PingFang SC", "Noto Sans CJK SC", "Source Han Sans SC", sans-serif'
+
+/** 默认布局：对齐规格 §4 数值坐标（M3 完成后按参考图目视比对微调） */
+export const DEFAULT_LAYOUT: ProjectLayout = {
+  version: 1,
+  canvas: { width: LOGICAL_WIDTH, height: LOGICAL_HEIGHT },
+  background: {
+    useImage: true,
+    color: '#ffffff',
+    blur: 25,
+    dimOpacity: 0.3
+  },
+  mainImage: {
+    // 主图：左侧、垂直居中、高度≈画布 90%、宽≈画布 40%
+    rect: { x: 0.04, y: 0.05, w: 0.38, h: 0.9 }
+  },
+  texts: {
+    songTitle: {
+      text: '歌曲名',
+      style: {
+        fontFamily: CJK_FONT_STACK,
+        fontSize: 0.095,
+        color: '#ffffff',
+        strokeColor: '#000000',
+        strokeWidth: 0.004,
+        glowColor: '#000000',
+        glowBlur: 0.01,
+        glowEnabled: true,
+        bold: true,
+        align: 'left'
+      },
+      // §4：x≈54%、y≈15%
+      rect: { x: 0.54, y: 0.15, w: 0.4, h: 0.12 }
+    },
+    artist: {
+      text: '作者',
+      style: {
+        fontFamily: CJK_FONT_STACK,
+        fontSize: 0.05,
+        color: '#ffffff',
+        strokeColor: '#000000',
+        strokeWidth: 0.002,
+        glowColor: '#000000',
+        glowBlur: 0.008,
+        glowEnabled: true,
+        bold: false,
+        align: 'left'
+      },
+      // §4：作者在歌名下方，y≈26%
+      rect: { x: 0.54, y: 0.265, w: 0.4, h: 0.07 }
+    }
+  },
+  visualizer: {
+    style: 'spectrum',
+    // §4：横向 [49%, 97%]、中心 y≈49%
+    rect: { x: 0.49, y: 0.4, w: 0.48, h: 0.18 },
+    barCount: 128,
+    barWidthRatio: 0.55,
+    gapRatio: 0.45,
+    heightRatio: 0.92,
+    colors: ['#ff5f9e', '#7ce3ff'],
+    roundness: 2,
+    smoothing: 0.35
+  }
+}
+
+/** 归一化 → 像素 */
+export function normToPixel(rect: NormRect, canvas: CanvasSize): PixelRect {
+  return {
+    x: rect.x * canvas.width,
+    y: rect.y * canvas.height,
+    w: rect.w * canvas.width,
+    h: rect.h * canvas.height
+  }
+}
+
+/** 像素 → 归一化 */
+export function pixelToNorm(rect: PixelRect, canvas: CanvasSize): NormRect {
+  return {
+    x: rect.x / canvas.width,
+    y: rect.y / canvas.height,
+    w: rect.w / canvas.width,
+    h: rect.h / canvas.height
+  }
+}
+
+/** 相对画布高的尺寸 → 像素 */
+export function relToPixel(v: number, canvas: CanvasSize): number {
+  return v * canvas.height
+}
+
+/** 将矩形限制在画布内（保持 w/h 不变；w/h 超界时缩小并归零位置） */
+export function clampNormRect(rect: NormRect): NormRect {
+  const w = Math.min(Math.max(rect.w, 0.01), 1)
+  const h = Math.min(Math.max(rect.h, 0.01), 1)
+  return {
+    x: Math.min(Math.max(rect.x, 0), 1 - w),
+    y: Math.min(Math.max(rect.y, 0), 1 - h),
+    w,
+    h
+  }
+}
+
+/** 规范化矩形：x/y 允许 0，w/h 必须为正；非法值用兜底替换 */
+export function sanitizeNormRect(rect: NormRect): NormRect {
+  const nonNeg = (v: number): boolean => Number.isFinite(v) && v >= 0
+  const positive = (v: number): boolean => Number.isFinite(v) && v > 0
+  return {
+    x: nonNeg(rect.x) ? rect.x : 0,
+    y: nonNeg(rect.y) ? rect.y : 0,
+    w: positive(rect.w) ? rect.w : 0.1,
+    h: positive(rect.h) ? rect.h : 0.1
+  }
+}
+
+/** 下半区阈值：y > 0.55 视为字幕区（拖入仅警告） */
+export const SUBTITLE_ZONE_Y = 0.55

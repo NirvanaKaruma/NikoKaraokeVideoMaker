@@ -14,6 +14,8 @@
     "dev": "electron-vite dev",
     "build": "npm run typecheck && electron-vite build",
     "smoke": "npm run build && electron . --smoke-test",
+    "smoke:visual": "npm run build && electron . --smoke-visual",
+    "test": "vitest run",
     "postinstall": "electron-builder install-app-deps",
     "build:unpack": "npm run build && electron-builder --dir",
     "build:win": "npm run build && electron-builder --win",

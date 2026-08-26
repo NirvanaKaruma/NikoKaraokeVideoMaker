@@ -1,0 +1,82 @@
+import { describe, expect, it } from 'vitest'
+import {
+  DEFAULT_LAYOUT,
+  LOGICAL_HEIGHT,
+  LOGICAL_WIDTH,
+  clampNormRect,
+  normToPixel,
+  pixelToNorm,
+  sanitizeNormRect
+} from './layout'
+
+describe('归一化布局模型', () => {
+  it('DEFAULT_LAYOUT 所有矩形都在 0–1 范围内且尺寸为正', () => {
+    const rects = [
+      DEFAULT_LAYOUT.mainImage.rect,
+      DEFAULT_LAYOUT.texts.songTitle.rect,
+      DEFAULT_LAYOUT.texts.artist.rect,
+      DEFAULT_LAYOUT.visualizer.rect
+    ]
+    for (const r of rects) {
+      expect(r.x).toBeGreaterThanOrEqual(0)
+      expect(r.y).toBeGreaterThanOrEqual(0)
+      expect(r.x + r.w).toBeLessThanOrEqual(1.0001)
+      expect(r.y + r.h).toBeLessThanOrEqual(1.0001)
+      expect(r.w).toBeGreaterThan(0)
+      expect(r.h).toBeGreaterThan(0)
+    }
+  })
+
+  it('可视化柱数默认 128，位于规格区间 100–160', () => {
+    expect(DEFAULT_LAYOUT.visualizer.barCount).toBe(128)
+    expect(DEFAULT_LAYOUT.visualizer.barCount).toBeGreaterThanOrEqual(100)
+    expect(DEFAULT_LAYOUT.visualizer.barCount).toBeLessThanOrEqual(160)
+  })
+
+  it('主图默认高≈90%、宽≈40%，左侧垂直居中', () => {
+    const r = DEFAULT_LAYOUT.mainImage.rect
+    expect(r.h).toBeCloseTo(0.9, 5)
+    expect(r.w).toBeCloseTo(0.38, 5)
+    expect(r.y).toBeCloseTo(0.05, 5)
+    expect(r.x).toBeLessThan(0.1)
+  })
+
+  it('文本与可视化区域符合 §4 数值', () => {
+    expect(DEFAULT_LAYOUT.texts.songTitle.rect.x).toBeCloseTo(0.54, 5)
+    expect(DEFAULT_LAYOUT.texts.songTitle.rect.y).toBeCloseTo(0.15, 5)
+    expect(DEFAULT_LAYOUT.texts.artist.rect.y).toBeGreaterThan(
+      DEFAULT_LAYOUT.texts.songTitle.rect.y
+    )
+    const v = DEFAULT_LAYOUT.visualizer.rect
+    expect(v.x).toBeCloseTo(0.49, 5)
+    expect(v.x + v.w).toBeCloseTo(0.97, 5)
+    expect(v.y + v.h / 2).toBeCloseTo(0.49, 5)
+  })
+
+  it('normToPixel / pixelToNorm 往返一致', () => {
+    const rect = { x: 0.25, y: 0.3, w: 0.4, h: 0.2 }
+    const canvas = { width: LOGICAL_WIDTH, height: LOGICAL_HEIGHT }
+    const round = pixelToNorm(normToPixel(rect, canvas), canvas)
+    expect(round.x).toBeCloseTo(rect.x, 9)
+    expect(round.y).toBeCloseTo(rect.y, 9)
+    expect(round.w).toBeCloseTo(rect.w, 9)
+    expect(round.h).toBeCloseTo(rect.h, 9)
+  })
+
+  it('clampNormRect 把越界矩形拉回画布内', () => {
+    const out = clampNormRect({ x: -0.5, y: 2, w: 0.4, h: 0.3 })
+    expect(out.x).toBe(0)
+    expect(out.y).toBeCloseTo(0.7, 9)
+    const tooBig = clampNormRect({ x: 0, y: 0, w: 5, h: 3 })
+    expect(tooBig.w).toBe(1)
+    expect(tooBig.h).toBe(1)
+  })
+
+  it('sanitizeNormRect 容忍非法输入', () => {
+    const s = sanitizeNormRect({ x: NaN, y: Infinity, w: -1, h: 0 })
+    expect(s.x).toBe(0)
+    expect(s.y).toBe(0)
+    expect(s.w).toBeGreaterThan(0)
+    expect(s.h).toBeGreaterThan(0)
+  })
+})
