@@ -7,7 +7,10 @@ import { IPC } from '../shared/ipc'
 /** 项目文件扩展名（专有后缀，M5 用户反馈） */
 export const PROJECT_EXTENSION = 'niko'
 
-const isSmoke = (): boolean => process.argv.some((a) => a.startsWith('--smoke-project'))
+const isSmoke = (): boolean =>
+  process.argv.some((a) => a.startsWith('--smoke-project')) ||
+  process.env['NIKO_SMOKE'] === 'project'
+const smokeDir = (): string => process.env['NIKO_SMOKE_DIR'] ?? process.cwd()
 
 /* ---------------- 存档加密混淆（AES-256-GCM） ---------------- */
 
@@ -47,7 +50,7 @@ export function registerProjectIpc(): void {
   ipcMain.handle(IPC.projectSave, async (e, json: string, defaultName: string) => {
     let path: string
     if (isSmoke()) {
-      const dir = join(process.cwd(), 'TEST-ARTIFACTS')
+      const dir = join(smokeDir(), 'TEST-ARTIFACTS')
       await fs.mkdir(dir, { recursive: true })
       path = join(dir, (defaultName || 'smoke-project') + '.' + PROJECT_EXTENSION)
     } else {
@@ -70,7 +73,7 @@ export function registerProjectIpc(): void {
   ipcMain.handle(IPC.projectLoad, async (e) => {
     let path: string
     if (isSmoke()) {
-      path = join(process.cwd(), 'TEST-ARTIFACTS', 'smoke-project.' + PROJECT_EXTENSION)
+      path = join(smokeDir(), 'TEST-ARTIFACTS', 'smoke-project.' + PROJECT_EXTENSION)
     } else {
       const win = BrowserWindow.fromWebContents(e.sender)
       const opts = {

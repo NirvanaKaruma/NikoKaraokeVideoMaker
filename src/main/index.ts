@@ -9,22 +9,33 @@ import { registerProjectIpc } from './projectIpc'
 import { detectFfmpegStatus, detectManagedFfmpeg, installManagedFfmpeg } from './ffmpeg'
 
 /** smoke 自测模式：加载渲染页后执行一次 ping 往返，结果写入 smoke-result.txt 并退出 */
-const isSmokeTest = process.argv.includes('--smoke-test')
+/** 环境变量 smoke 通道：portable 启动器不转发 argv，env 会被继承（NIKO_SMOKE=detect|bench|project|visual|export:720p@8|download:default） */
+const smokeEnv = process.env['NIKO_SMOKE'] ?? ''
+/** smoke 报告输出目录（portable 启动器会把 cwd 改到临时解压目录，退出即删，故必须可指定） */
+const smokeDir = process.env['NIKO_SMOKE_DIR'] ?? process.cwd()
+
+const isSmokeTest = process.argv.includes('--smoke-test') || smokeEnv === 'test'
 /** smoke-visual 模式：加载渲染页后截图舞台，写入 smoke-stage.png 并退出（M2 无头目视自测） */
-const isSmokeVisual = process.argv.includes('--smoke-visual')
-/** smoke-export 模式：无头端到端导出（--smoke-export=720p,1080p@35 / --smoke-export=4k@10） */
-const smokeExportArg = process.argv.find((a) => a.startsWith('--smoke-export='))
+const isSmokeVisual = process.argv.includes('--smoke-visual') || smokeEnv === 'visual'
+/** smoke-export 模式：无头端到端导出（--smoke-export=720p,1080p@35 / NIKO_SMOKE=export:720p,1080p@35） */
+const exportArgFromEnv = smokeEnv.startsWith('export:')
+  ? '--smoke-export=' + smokeEnv.slice(7)
+  : undefined
+const smokeExportArg = process.argv.find((a) => a.startsWith('--smoke-export=')) ?? exportArgFromEnv
 const isSmokeExport = smokeExportArg !== undefined
 
 /** smoke-bench：GPU 加速基准（硬件 vs 软件 30 帧实测）落盘 */
-const isSmokeBench = process.argv.includes('--smoke-bench')
+const isSmokeBench = process.argv.includes('--smoke-bench') || smokeEnv === 'bench'
 /** smoke-project：项目保存/加载自测 */
-const isSmokeProject = process.argv.includes('--smoke-project')
+const isSmokeProject = process.argv.includes('--smoke-project') || smokeEnv === 'project'
 /** smoke-detect：只做三源检测并落盘（来源矩阵测试用，配合 PATH 操控） */
-const isSmokeDetect = process.argv.includes('--smoke-detect')
+const isSmokeDetect = process.argv.includes('--smoke-detect') || smokeEnv === 'detect'
 /** smoke-download：走一遍托管安装（--smoke-download=default 或完整 URL / file:// 本地镜像） */
-const smokeDownloadArg = process.argv.find((a) => a.startsWith('--smoke-download='))
-
+const downloadArgFromEnv = smokeEnv.startsWith('download:')
+  ? '--smoke-download=' + smokeEnv.slice(9)
+  : undefined
+const smokeDownloadArg =
+  process.argv.find((a) => a.startsWith('--smoke-download=')) ?? downloadArgFromEnv
 function parseSmokeExport(): { resolutions: string[]; durationSec: number } {
   const body = (smokeExportArg ?? '').split('=')[1] ?? ''
   const [resPart, durPart] = body.split('@')
@@ -122,7 +133,7 @@ async function runSmokeProject(win: BrowserWindow): Promise<void> {
   try {
     const report: unknown = await win.webContents.executeJavaScript('window.__runProjectSmoke()')
     await writeFile(
-      join(process.cwd(), 'smoke-project-report.json'),
+      join(smokeDir, 'smoke-project-report.json'),
       JSON.stringify(report, null, 2),
       'utf-8'
     )
@@ -140,7 +151,7 @@ async function runSmokeBench(win: BrowserWindow): Promise<void> {
   try {
     const report: unknown = await win.webContents.executeJavaScript('window.__runEncodeBenchmark()')
     await writeFile(
-      join(process.cwd(), 'smoke-bench-report.json'),
+      join(smokeDir, 'smoke-bench-report.json'),
       JSON.stringify(report, null, 2),
       'utf-8'
     )
@@ -160,7 +171,7 @@ async function runSmokeExport(win: BrowserWindow): Promise<void> {
       'window.__runExportSmoke(' + JSON.stringify(resolutions) + ', ' + durationSec + ')'
     )
     await writeFile(
-      join(process.cwd(), 'smoke-export-report.json'),
+      join(smokeDir, 'smoke-export-report.json'),
       JSON.stringify(report, null, 2),
       'utf-8'
     )
@@ -198,7 +209,7 @@ app.whenReady().then(async () => {
     try {
       const status = await detectFfmpegStatus()
       await writeFile(
-        join(process.cwd(), 'smoke-detect-report.json'),
+        join(smokeDir, 'smoke-detect-report.json'),
         JSON.stringify(status, null, 2),
         'utf-8'
       )
@@ -242,7 +253,7 @@ app.whenReady().then(async () => {
       const managed = await detectManagedFfmpeg()
       const report = { install: info, managed }
       await writeFile(
-        join(process.cwd(), 'smoke-download-report.json'),
+        join(smokeDir, 'smoke-download-report.json'),
         JSON.stringify(report, null, 2),
         'utf-8'
       )

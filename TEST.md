@@ -109,6 +109,36 @@ npx electron . --smoke-project   # 保存 → 篡改 → 加载 → 恢复验证
 
 M5 反馈追加：存档扩展名改为 .niko 且内容 AES-256-GCM 加密混淆（文件头 NIKO1，明文不再出现；旧明文档兼容读取）；新增「新建项目」重置功能。
 
-## 7. 打包自测（§5.6）
+## 7. 打包自测（§5.6，M6 完成）
 
-见 M6 完成后追加记录（无 Node 干净目录 portable 实测 + 体积）。
+### 产物与体积
+
+| 产物                                                           | 体积     |
+| -------------------------------------------------------------- | -------- |
+| portable 便携版（niko-karaoke-video-maker-0.1.0-portable.exe） | 105.7 MB |
+| NSIS 安装包（niko-karaoke-video-maker-0.1.0-setup.exe）        | 106.0 MB |
+| 解包目录 dist/win-unpacked                                     | 367.5 MB |
+
+**产物不含 ffmpeg 工具链**：全目录检索无 ffmpeg.exe / ffprobe / ffplay；仅存在 ffmpeg.dll（Electron/Chromium 运行时自带媒体库，属运行时组件而非捆绑的 ffmpeg 工具）。
+
+### 无 Node 干净目录实测
+
+环境：新目录 TEST-ARTIFACTS/clean-room/（仅 portable exe），PATH 裁剪为仅 C:\Windows\System32;C:\Windows（无 node、无 ffmpeg）。
+
+```powershell
+$env:NIKO_SMOKE = 'detect'          # 或 'export:720p@8'
+$env:NIKO_SMOKE_DIR = (Get-Location).Path
+Start-Process -FilePath '.\NikoKaraokeVideoMaker.exe' -Wait -PassThru
+```
+
+结果：
+
+- 三源检测：系统 PATH 无 ffmpeg → **自动回退托管版**（userData ffmpeg 8.1.1，aac+libx264+nvenc/qsv/amf+全硬件加速器）✅；
+- 端到端导出 720p@8：**done，4.3s，产物 smoke-720p.mp4（299,713 字节）** ✅。
+
+### 打包工程备注
+
+- electron-builder 二进制走 npmmirror 镜像、缓存本地化（.electron-builder-cache/）；
+- portable 启动器**不转发命令行参数**且会改 cwd 到临时解压目录（退出即删）——因此 smoke 模式增加环境变量通道：NIKO_SMOKE（detect|bench|project|visual|export:...|download:...）+ NIKO_SMOKE_DIR（报告输出目录）；
+- 图标为程序化生成的占位图标（build/icon.png → 自动转 ico）；
+- 未做代码签名（SmartScreen 提示见 README FAQ）。

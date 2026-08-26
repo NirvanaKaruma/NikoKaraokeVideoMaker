@@ -72,8 +72,11 @@ export function registerFfmpegIpc(): void {
 
   ipcMain.handle(IPC.exportPickOutput, async (e, defaultName: string) => {
     // 无头导出自测：直接落到 TEST-ARTIFACTS
-    if (process.argv.some((a) => a.startsWith('--smoke-export'))) {
-      const dir = join(process.cwd(), 'TEST-ARTIFACTS')
+    if (
+      process.argv.some((a) => a.startsWith('--smoke-export')) ||
+      (process.env['NIKO_SMOKE'] ?? '').startsWith('export:')
+    ) {
+      const dir = join(process.env['NIKO_SMOKE_DIR'] ?? process.cwd(), 'TEST-ARTIFACTS')
       await fs.mkdir(dir, { recursive: true })
       return join(dir, (defaultName || 'smoke') + '.mp4')
     }

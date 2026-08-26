@@ -95,6 +95,14 @@
 - **设置弹窗（系统级，与项目无关）**：ffmpeg 三源管理、语言选择（预留 i18n 接口，当前仅简体中文）、编码加速（显式 自动/强制 GPU/强制 CPU + 本机实测基准按钮）、ffmpeg 硬件能力信息（nvenc/qsv/amf + hwaccels 列表）。
 - **编码模式显式化**：localStorage niko.encode.modePref = auto|hw|sw；auto 依据基准结论 niko.encode.autoChoice。
 - **本机实测（4070 Laptop）**：WebCodecs 软件 6.1ms/帧 vs 硬件 9.2ms/帧（GPU 路径未加速）；ffmpeg 侧 nvenc/qsv/amf 全可用、hwaccels 含 cuda/d3d11va/vulkan 等——当前管线视频编码在 WebCodecs（ffmpeg 仅无损混流），若未来启用 raw 帧回退将优先用 nvenc。
+
+## 10. M6 打包决策
+
+- **产物**：NSIS 安装包（允许改安装目录）+ portable 便携版，均不捆 ffmpeg 工具链（全目录检索验证；ffmpeg.dll 为 Electron/Chromium 运行时媒体库）。体积：portable 105.7MB / setup 106MB / unpacked 367.5MB。
+- **图标**：程序化生成占位图标（build/icon.png 512×512，electron-builder 自动转 ico），后续可替换正式设计。
+- **electron-builder 工程**：二进制走 npmmirror 镜像 + 缓存本地化（.electron-builder-cache/，已 gitignore 与 eslint ignore）；开发文件（docs/nikokaraoke.md/TEST.md/TEST-ARTIFACTS 等）从安装包排除。
+- **portable 启动器限制**（实测发现）：不转发命令行参数、cwd 改为临时解压目录（退出即删）→ smoke 自测通道改为环境变量 NIKO_SMOKE / NIKO_SMOKE_DIR（同时兼容 argv 与 env 两种触发方式）。
+- **未签名**：无代码签名证书，SmartScreen 提示写入 FAQ；后续可加签名。
 - **GitHub 同步**（用户要求）：私有仓库 github.com/NirvanaKaruma/NikoKaraokeVideoMaker，默认分支 main，通过本机 SSH 密钥（gh CLI 未安装）推送；每个里程碑提交后同步。
 
 ## 6. 依赖与安全决策（M1 期间追加）
