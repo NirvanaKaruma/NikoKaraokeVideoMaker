@@ -8,16 +8,11 @@ import { useExporter } from './hooks/useExporter'
 import { benchmarkEncoder } from './export/exportVideo'
 import { CanvasStage } from './components/CanvasStage'
 import { ExportStageHost } from './components/ExportStageHost'
+import { SidePanel } from './components/SidePanel'
+import { ExportDialog } from './components/ExportDialog'
+import { SettingsDialog } from './components/SettingsDialog'
 import type { SelectableId } from './components/SceneLayers'
-import { InputPanel } from './components/panels/InputPanel'
-import { MainImagePanel } from './components/panels/MainImagePanel'
-import { BackgroundPanel } from './components/panels/BackgroundPanel'
-import { TextPanel } from './components/panels/TextPanel'
-import { VisualizerPanel } from './components/panels/VisualizerPanel'
-import { ExportPanel } from './components/panels/ExportPanel'
-import { SettingsPanel } from './components/panels/SettingsPanel'
 import { HelpDialog } from './components/HelpDialog'
-import { AudioPanel } from './components/panels/AudioPanel'
 
 const IS_VISUAL_SMOKE = new URLSearchParams(window.location.search).has('smokeVisual')
 const IS_SMOKE_EXPORT = new URLSearchParams(window.location.search).has('smokeExport')
@@ -380,6 +375,8 @@ function App(): React.JSX.Element {
   const project = useProject()
   const [selectedId, setSelectedId] = useState<SelectableId>(null)
   const [helpOpen, setHelpOpen] = useState(false)
+  const [exportOpen, setExportOpen] = useState(false)
+  const [settingsOpen, setSettingsOpen] = useState(false)
   const stageRef = useRef<Konva.Stage | null>(null)
   const projectRef = useRef(project)
 
@@ -635,8 +632,14 @@ function App(): React.JSX.Element {
           <button type="button" className="mini-btn" onClick={() => void project.loadProject()}>
             📂 打开项目
           </button>
+          <button type="button" className="mini-btn" onClick={() => setExportOpen(true)}>
+            📤 导出
+          </button>
           <button type="button" className="mini-btn" onClick={() => setHelpOpen(true)}>
             ❓ 帮助
+          </button>
+          <button type="button" className="mini-btn" onClick={() => setSettingsOpen(true)}>
+            ⚙ 设置
           </button>
           <span className="app-stage-tag">M5</span>
         </div>
@@ -684,58 +687,37 @@ function App(): React.JSX.Element {
         </div>
       )}
       <div className="app-body">
-        <aside className="side-panel">
-          <InputPanel
-            songTitle={project.layout.texts.songTitle.text}
-            artist={project.layout.texts.artist.text}
-            coverUrl={project.assets.coverUrl}
-            coverFile={project.assets.coverFile}
-            audioFile={project.assets.audioFile}
-            fileError={project.fileError}
-            onSongTitleChange={(t) => project.updateText('songTitle', { text: t })}
-            onArtistChange={(t) => project.updateText('artist', { text: t })}
-            onCoverFile={(f) => void project.setCoverFile(f)}
-            onAudioFile={(f) => void project.setAudioFile(f)}
-          />
-          <AudioPanel
-            status={pb.status}
-            error={pb.error}
-            duration={pb.duration}
-            currentTime={pb.currentTime}
-            isPlaying={pb.isPlaying}
-            fileName={project.assets.audioFile?.name ?? null}
-            onPlay={pb.play}
-            onPause={pb.pause}
-            onSeek={pb.seek}
-          />
-          <MainImagePanel mainImage={project.layout.mainImage} onChange={project.updateMainImage} />
-          <BackgroundPanel
-            background={project.layout.background}
-            onChange={project.updateBackground}
-          />
-          <TextPanel
-            songTitle={project.layout.texts.songTitle}
-            artist={project.layout.texts.artist}
-            onSongTitleChange={(p) => project.updateText('songTitle', p)}
-            onArtistChange={(p) => project.updateText('artist', p)}
-          />
-          <VisualizerPanel config={project.layout.visualizer} onChange={project.updateVisualizer} />
-          <ExportPanel
-            config={project.layout.export}
-            onChange={project.updateExport}
-            state={exporter.state}
-            ffmpegAvailable={ffmpeg.report?.effective.available === true}
-            audioReady={pb.status === 'ready'}
-            onExport={() => void exporter.start()}
-            onCancel={exporter.cancel}
-            onClose={exporter.reset}
-          />
-          <SettingsPanel
-            status={ffmpeg.report}
-            loading={ffmpeg.loading}
-            onRefresh={() => void ffmpeg.refresh()}
-          />
-        </aside>
+        <SidePanel
+          songTitle={project.layout.texts.songTitle.text}
+          artist={project.layout.texts.artist.text}
+          coverUrl={project.assets.coverUrl}
+          coverFile={project.assets.coverFile}
+          audioFile={project.assets.audioFile}
+          fileError={project.fileError}
+          onSongTitleChange={(t) => project.updateText('songTitle', { text: t })}
+          onArtistChange={(t) => project.updateText('artist', { text: t })}
+          onCoverFile={(f) => void project.setCoverFile(f)}
+          onAudioFile={(f) => void project.setAudioFile(f)}
+          audioStatus={pb.status}
+          audioError={pb.error}
+          duration={pb.duration}
+          currentTime={pb.currentTime}
+          isPlaying={pb.isPlaying}
+          audioFileName={project.assets.audioFile?.name ?? null}
+          onPlay={pb.play}
+          onPause={pb.pause}
+          onSeek={pb.seek}
+          mainImage={project.layout.mainImage}
+          onMainImageChange={project.updateMainImage}
+          background={project.layout.background}
+          onBackgroundChange={project.updateBackground}
+          songTitleCfg={project.layout.texts.songTitle}
+          artistCfg={project.layout.texts.artist}
+          onSongTitleCfgChange={(x) => project.updateText('songTitle', x)}
+          onArtistCfgChange={(x) => project.updateText('artist', x)}
+          visualizer={project.layout.visualizer}
+          onVisualizerChange={project.updateVisualizer}
+        />
         <main className="canvas-wrap">
           <CanvasStage
             layout={project.layout}
@@ -758,6 +740,33 @@ function App(): React.JSX.Element {
         </main>
       </div>
       <HelpDialog open={helpOpen} onClose={() => setHelpOpen(false)} />
+      <ExportDialog
+        open={exportOpen}
+        onClose={() => {
+          setExportOpen(false)
+          if (
+            exporter.state.phase !== 'preparing' &&
+            exporter.state.phase !== 'encoding' &&
+            exporter.state.phase !== 'merging'
+          ) {
+            exporter.reset()
+          }
+        }}
+        config={project.layout.export}
+        onChange={project.updateExport}
+        state={exporter.state}
+        ffmpegAvailable={ffmpeg.report?.effective.available === true}
+        audioReady={pb.status === 'ready'}
+        onExport={() => void exporter.start()}
+        onCancel={exporter.cancel}
+      />
+      <SettingsDialog
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        status={ffmpeg.report}
+        loading={ffmpeg.loading}
+        onRefresh={() => void ffmpeg.refresh()}
+      />
       {exporter.stageRequest && (
         <ExportStageHost
           layout={project.layout}

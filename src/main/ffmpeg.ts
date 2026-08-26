@@ -74,6 +74,10 @@ export async function validateFfmpeg(ffmpegPath: string): Promise<FfmpegDetectIn
       version: '',
       hasAac: false,
       hasLibx264: false,
+      hasNvenc: false,
+      hasQsv: false,
+      hasAmf: false,
+      hwaccels: [],
       error: '无法执行（-version 失败）：' + (versionRes.stderr || versionRes.stdout).slice(0, 300)
     }
   }
@@ -85,6 +89,17 @@ export async function validateFfmpeg(ffmpegPath: string): Promise<FfmpegDetectIn
   const encoders = encRes.stdout + encRes.stderr
   const hasAac = /(^|\s)aac\s/.test(encoders)
   const hasLibx264 = /(^|\s)libx264\s/.test(encoders)
+  const hasNvenc = /(^|\s)(h264_nvenc|hevc_nvenc|av1_nvenc)\s/.test(encoders)
+  const hasQsv = /(^|\s)(h264_qsv|hevc_qsv)\s/.test(encoders)
+  const hasAmf = /(^|\s)(h264_amf|hevc_amf)\s/.test(encoders)
+
+  // 硬件加速器列表（-hwaccels 输出）
+  const hwRun = runFfmpeg(ffmpegPath, ['-hide_banner', '-hwaccels'])
+  const hwRes = await hwRun.promise
+  const hwaccels: string[] = (hwRes.stdout + hwRes.stderr)
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter((l) => /^[a-z0-9_]+$/.test(l))
 
   return {
     status: hasAac ? 'ok' : 'error',
@@ -92,6 +107,10 @@ export async function validateFfmpeg(ffmpegPath: string): Promise<FfmpegDetectIn
     version,
     hasAac,
     hasLibx264,
+    hasNvenc,
+    hasQsv,
+    hasAmf,
+    hwaccels,
     error: hasAac ? undefined : '缺少 aac 编码器，无法用于导出'
   }
 }

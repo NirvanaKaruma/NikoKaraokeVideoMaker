@@ -87,6 +87,14 @@
 - **保存/加载对话框**由 main 负责（save/open dialog + 原子写 tmp→rename）；smoke 模式免对话框落盘 TEST-ARTIFACTS。
 - **存档格式（用户反馈）**：扩展名改为专有 .niko（对话框过滤器同步，兼容打开旧 .json）；内容 AES-256-GCM 加密混淆（魔数 NIKO1 + 随机 IV + authTag，密钥内置），定位为防直接查看/手改的混淆层而非强加密（应用不承载敏感数据）；旧明文存档自动兼容读取。
 - **新建项目**（用户反馈）：头部按钮 + confirm 确认后重置默认布局并清空素材（释放对象 URL）。
+
+## 9. M5 UI 重构（用户反馈）
+
+- **左栏改 tab**：常驻播放控制（顶部）+ 三个分类——素材与画面（输入/主图/背景）、文本样式、音频可视化，避免单列无限堆叠。
+- **导出移入右上角弹窗**：header 按钮「导出」→ 弹窗内选分辨率/帧率/编码模式并执行（进度/取消/结果都在弹窗内）。
+- **设置弹窗（系统级，与项目无关）**：ffmpeg 三源管理、语言选择（预留 i18n 接口，当前仅简体中文）、编码加速（显式 自动/强制 GPU/强制 CPU + 本机实测基准按钮）、ffmpeg 硬件能力信息（nvenc/qsv/amf + hwaccels 列表）。
+- **编码模式显式化**：localStorage niko.encode.modePref = auto|hw|sw；auto 依据基准结论 niko.encode.autoChoice。
+- **本机实测（4070 Laptop）**：WebCodecs 软件 6.1ms/帧 vs 硬件 9.2ms/帧（GPU 路径未加速）；ffmpeg 侧 nvenc/qsv/amf 全可用、hwaccels 含 cuda/d3d11va/vulkan 等——当前管线视频编码在 WebCodecs（ffmpeg 仅无损混流），若未来启用 raw 帧回退将优先用 nvenc。
 - **GitHub 同步**（用户要求）：私有仓库 github.com/NirvanaKaruma/NikoKaraokeVideoMaker，默认分支 main，通过本机 SSH 密钥（gh CLI 未安装）推送；每个里程碑提交后同步。
 
 ## 6. 依赖与安全决策（M1 期间追加）

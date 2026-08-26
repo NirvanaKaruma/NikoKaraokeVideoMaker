@@ -23,21 +23,44 @@ const BITRATE_TABLE: Record<string, number> = {
 
 const H264_CODECS = ['avc1.640033', 'avc1.640028', 'avc1.4d0028', 'avc1.42e01f', 'avc1.42001f']
 
-/** 编码模式偏好持久化键（GPU 检测结果自动写入） */
-const MODE_PREF_KEY = 'niko.encode.modePref'
+/** 用户显式编码模式：auto（按检测）/ hw（强制硬件）/ sw（强制软件） */
+export type EncodeModePref = 'auto' | 'hw' | 'sw'
 
-/** 探测顺序：默认 GPU 优先；若基准检测到本机软件更快，则自动改为软件优先 */
-function getModeOrder(): HardwareAcceleration[] {
+const MODE_PREF_KEY = 'niko.encode.modePref'
+const AUTO_CHOICE_KEY = 'niko.encode.autoChoice'
+
+export function getEncodeModePref(): EncodeModePref {
   try {
-    if (localStorage.getItem(MODE_PREF_KEY) === 'sw') {
+    const v = localStorage.getItem(MODE_PREF_KEY)
+    if (v === 'hw' || v === 'sw') return v
+  } catch {
+    /* 忽略 */
+  }
+  return 'auto'
+}
+
+export function setEncodeModePref(pref: EncodeModePref): void {
+  try {
+    localStorage.setItem(MODE_PREF_KEY, pref)
+  } catch {
+    /* 忽略 */
+  }
+}
+
+/** 探测顺序：auto → 按基准结论（默认硬件优先）；hw/sw → 强制对应模式优先 */
+function getModeOrder(): HardwareAcceleration[] {
+  const pref = getEncodeModePref()
+  if (pref === 'hw') return ['prefer-hardware', 'no-preference', 'prefer-software']
+  if (pref === 'sw') return ['prefer-software', 'no-preference', 'prefer-hardware']
+  try {
+    if (localStorage.getItem(AUTO_CHOICE_KEY) === 'sw') {
       return ['prefer-software', 'no-preference', 'prefer-hardware']
     }
   } catch {
-    /* localStorage 不可用时忽略 */
+    /* 忽略 */
   }
   return ['prefer-hardware', 'no-preference', 'prefer-software']
 }
-
 export interface EncoderChoice {
   codec: string
   mode: HardwareAcceleration
@@ -143,21 +166,21 @@ export async function benchmarkEncoder(width: number, height: number): Promise<E
   if (hardware == null) {
     verdict = '硬件编码不可用：导出将使用软件编码（速度取决于 CPU）'
     try {
-      localStorage.setItem(MODE_PREF_KEY, 'sw')
+      localStorage.setItem(AUTO_CHOICE_KEY, 'sw')
     } catch {
       /* 忽略 */
     }
   } else if (software == null) {
     verdict = '软件编码不可用，硬件编码正常：导出将使用 GPU 加速'
     try {
-      localStorage.setItem(MODE_PREF_KEY, 'hw')
+      localStorage.setItem(AUTO_CHOICE_KEY, 'hw')
     } catch {
       /* 忽略 */
     }
   } else if (hardware <= software * 0.7) {
     verdict = 'GPU 加速可用：硬件编码明显快于软件，导出已自动选用 GPU 编码'
     try {
-      localStorage.setItem(MODE_PREF_KEY, 'hw')
+      localStorage.setItem(AUTO_CHOICE_KEY, 'hw')
     } catch {
       /* 忽略 */
     }
@@ -166,7 +189,7 @@ export async function benchmarkEncoder(width: number, height: number): Promise<E
       '本机 GPU 编码未带来加速（软件反而更快）→ 导出已自动选用软件编码；' +
       '若更换显卡/驱动后可重新检测'
     try {
-      localStorage.setItem(MODE_PREF_KEY, 'sw')
+      localStorage.setItem(AUTO_CHOICE_KEY, 'sw')
     } catch {
       /* 忽略 */
     }

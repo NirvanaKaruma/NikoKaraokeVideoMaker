@@ -56,6 +56,10 @@ body {
   z-index: 100;
 }
 
+.modal-narrow {
+  width: min(460px, 92vw);
+}
+
 .modal {
   width: min(680px, 92vw);
   max-height: 86vh;
@@ -140,6 +144,40 @@ body {
   display: flex;
   flex-direction: column;
   gap: 20px;
+}
+
+.tab-bar {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.tab {
+  flex: 1;
+  background: var(--ev-c-black-mute);
+  color: var(--ev-c-text-2);
+  border: 1px solid var(--ev-c-gray-2);
+  border-radius: 8px 8px 0 0;
+  padding: 8px 6px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.tab.active {
+  background: var(--ev-c-gray-3);
+  color: #ff9ec3;
+  border-color: #ff5f9e;
+}
+
+.tab-content {
+  border: 1px solid var(--ev-c-gray-2);
+  border-top: none;
+  border-radius: 0 0 8px 8px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
 }
 
 .panel-section h2 {

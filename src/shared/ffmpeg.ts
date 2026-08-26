@@ -19,6 +19,12 @@ export interface FfmpegDetectInfo {
   hasAac: boolean
   /** libx264（可选；缺失仅警告） */
   hasLibx264: boolean
+  /** 硬件编码器（ffmpeg 侧检测，仅信息展示；当前管线视频编码在 WebCodecs，ffmpeg 只做无损混流） */
+  hasNvenc: boolean
+  hasQsv: boolean
+  hasAmf: boolean
+  /** -hwaccels 列表（cuda/d3d11va/qsv 等） */
+  hwaccels: string[]
   error?: string
 }
 
