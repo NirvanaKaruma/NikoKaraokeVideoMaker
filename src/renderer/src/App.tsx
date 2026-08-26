@@ -5,6 +5,7 @@ import { useProject } from './hooks/useProject'
 import { useAudioPlayback, type PlaybackApi } from './hooks/useAudioPlayback'
 import { useFfmpegDownload, useFfmpegStatus } from './hooks/useFfmpeg'
 import { useExporter } from './hooks/useExporter'
+import { benchmarkEncoder } from './export/exportVideo'
 import { CanvasStage } from './components/CanvasStage'
 import { ExportStageHost } from './components/ExportStageHost'
 import type { SelectableId } from './components/SceneLayers'
@@ -418,10 +419,12 @@ function App(): React.JSX.Element {
       stageRef.current
         ? runAudioSmoke(project, pbRef, stageRef.current)
         : Promise.resolve({ ok: false, checks: [] })
+    window.__runEncodeBenchmark = () => benchmarkEncoder(1920, 1080)
     return () => {
       delete window.__captureStage
       delete window.__runVisualChecks
       delete window.__runAudioSmoke
+      delete window.__runEncodeBenchmark
     }
     // 仅无头自测模式生效，project 引用稳定
     // eslint-disable-next-line react-hooks/exhaustive-deps

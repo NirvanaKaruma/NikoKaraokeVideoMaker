@@ -15,6 +15,8 @@ const isSmokeVisual = process.argv.includes('--smoke-visual')
 const smokeExportArg = process.argv.find((a) => a.startsWith('--smoke-export='))
 const isSmokeExport = smokeExportArg !== undefined
 
+/** smoke-bench：GPU 加速基准（硬件 vs 软件 30 帧实测）落盘 */
+const isSmokeBench = process.argv.includes('--smoke-bench')
 /** smoke-detect：只做三源检测并落盘（来源矩阵测试用，配合 PATH 操控） */
 const isSmokeDetect = process.argv.includes('--smoke-detect')
 /** smoke-download：走一遍托管安装（--smoke-download=default 或完整 URL / file:// 本地镜像） */
@@ -48,7 +50,7 @@ function createWindow(): BrowserWindow {
   })
 
   mainWindow.on('ready-to-show', () => {
-    if (!isSmokeTest && !isSmokeVisual && !isSmokeExport) mainWindow.show()
+    if (!isSmokeTest && !isSmokeVisual && !isSmokeExport && !isSmokeBench) mainWindow.show()
   })
 
   mainWindow.webContents.setWindowOpenHandler((details) => {
@@ -57,7 +59,7 @@ function createWindow(): BrowserWindow {
   })
 
   // HMR for renderer base on electron-vite cli.
-  if (isSmokeVisual) {
+  if (isSmokeVisual || isSmokeBench) {
     mainWindow.loadFile(join(__dirname, '../renderer/index.html'), { query: { smokeVisual: '1' } })
   } else if (isSmokeExport) {
     mainWindow.loadFile(join(__dirname, '../renderer/index.html'), { query: { smokeExport: '1' } })
@@ -106,6 +108,22 @@ async function runSmokeVisual(win: BrowserWindow): Promise<void> {
     app.exit(staticOk && audioOk ? 0 : 1)
   } catch (error) {
     console.error('[smoke-visual] 截图失败:', error)
+    app.exit(1)
+  }
+}
+
+async function runSmokeBench(win: BrowserWindow): Promise<void> {
+  try {
+    const report: unknown = await win.webContents.executeJavaScript('window.__runEncodeBenchmark()')
+    await writeFile(
+      join(process.cwd(), 'smoke-bench-report.json'),
+      JSON.stringify(report, null, 2),
+      'utf-8'
+    )
+    console.log('[smoke-bench]', JSON.stringify(report, null, 2))
+    app.exit(0)
+  } catch (error) {
+    console.error('[smoke-bench] 失败:', error)
     app.exit(1)
   }
 }
@@ -241,6 +259,13 @@ app.whenReady().then(async () => {
     mainWindow.webContents.once('did-finish-load', () => {
       setTimeout(() => {
         void runSmokeExport(mainWindow)
+      }, 3500)
+    })
+  }
+  if (isSmokeBench) {
+    mainWindow.webContents.once('did-finish-load', () => {
+      setTimeout(() => {
+        void runSmokeBench(mainWindow)
       }, 3500)
     })
   }

@@ -83,6 +83,16 @@ npx electron . --smoke-download=file:///D:/program/videomaker/TEST-ARTIFACTS/ffm
 - 本地镜像：通过。file:// 直拷 → 解压 → 校验 → ffmpeg 8.1.1-full，aac 有；
 - 两者均"只解压 ffmpeg.exe 到 userData/ffmpeg/"；下载进度事件逐条上报；取消/重试路径由 UI 提供。
 
+## 5.5 GPU 加速检测（用户反馈新增）
+
+```powershell
+npx electron . --smoke-bench   # 1080p：prefer-hardware 与 prefer-software 各编码 30 帧实测
+```
+
+本机结果：硬件 9.2ms/帧 vs 软件 6.1ms/帧 → 结论「本机 GPU 编码未带来加速（软件反而更快）」，导出自动选用软件编码（已验证：导出日志显示 avc1.640033（软件））。
+
+机制：① 导出按「硬件优先→自动→软件」顺序探测，且检测结果自动持久化（localStorage niko.encode.modePref），本机软件更快则改「软件优先」；② 「导出」面板提供「检测 GPU 加速」按钮，随时重测（换显卡/驱动后可用）。此结论为**本机实测**，用户机器各有不同——检测功能按机器自适应。
+
 ## 6. 回归项
 
 - 单测：16/16（layout 10 + spectrum 6）；

@@ -1,6 +1,8 @@
+import { useState } from 'react'
 import type { ExportConfig } from '@shared/layout'
 import { RESOLUTIONS } from '@shared/layout'
 import type { ExporterState } from '../../hooks/useExporter'
+import { benchmarkEncoder, type EncodeBenchmark } from '../../export/exportVideo'
 
 interface ExportPanelProps {
   config: ExportConfig
@@ -17,6 +19,19 @@ interface ExportPanelProps {
 export function ExportPanel(props: ExportPanelProps): React.JSX.Element {
   const { config, onChange, state, ffmpegAvailable, audioReady, onExport, onCancel, onClose } =
     props
+  const [diag, setDiag] = useState<EncodeBenchmark | null>(null)
+  const [diagRunning, setDiagRunning] = useState(false)
+
+  const runDiag = async (): Promise<void> => {
+    setDiagRunning(true)
+    try {
+      setDiag(await benchmarkEncoder(1280, 720))
+    } finally {
+      setDiagRunning(false)
+    }
+  }
+
+  const fmtMs = (v: number | null): string => (v == null ? '不可用' : Math.round(v) + ' ms/帧')
   const busy =
     state.phase === 'preparing' || state.phase === 'encoding' || state.phase === 'merging'
   const percent =
@@ -107,6 +122,29 @@ export function ExportPanel(props: ExportPanelProps): React.JSX.Element {
           </button>
         </div>
       )}
+
+      <div className="diag-section">
+        <div className="audio-row">
+          <button
+            type="button"
+            className="mini-btn"
+            onClick={() => void runDiag()}
+            disabled={diagRunning}
+          >
+            {diagRunning ? '检测中…' : '检测 GPU 加速'}
+          </button>
+        </div>
+        {diag && (
+          <div className="panel-note">
+            <p>
+              硬件编码：{fmtMs(diag.hardwareMsPerFrame)} ｜ 软件编码：
+              {fmtMs(diag.softwareMsPerFrame)}
+            </p>
+            <p>{diag.verdict}</p>
+            <p>（检测结果已自动应用：导出按推荐顺序探测编码器，也可随时重新检测）</p>
+          </div>
+        )}
+      </div>
     </section>
   )
 }

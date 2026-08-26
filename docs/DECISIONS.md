@@ -79,6 +79,7 @@
 - **隐藏窗口性能坑**（实测教训）：Chromium 对隐藏页面深度节流 setTimeout（分钟级）→ 编码循环让出事件循环改用 MessageChannel（宏任务不受节流）+ webPreferences backgroundThrottling:false；修复后 720p 4ms/帧、1080p 8ms/帧、4K 38ms/帧。
 - **托管下载实测**：本机可直连 gyan.dev（Q4 答案 = 能）；真实下载安装 ffmpeg 9.0.1-essentials 成功（aac+libx264 都有）；file:// 本地镜像路径同步实现并测通（离线兜底）。
 - **yauzl 依赖**：托管 zip 只解压 ffmpeg.exe（gyan 包内 bin/ffmpeg.exe），流式提取不落全量解压。
+- **GPU 加速检测**（用户反馈）：WebCodecs 支持 hardwareAcceleration 参数；导出按「硬件优先→自动→软件」探测 codec×mode 组合；「导出」面板提供实测基准（硬件/软件各 30 帧对比），结论自动持久化（localStorage niko.encode.modePref）并改变探测顺序。本机实测：软件 6.1ms/帧 快于硬件 9.2ms/帧（Chromium/Electron 44 在 Windows 上未暴露明显更优的 GPU H.264 编码器）→ 自动选软件；此结论随机器而异，检测按机器自适应。
 - **GitHub 同步**（用户要求）：私有仓库 github.com/NirvanaKaruma/NikoKaraokeVideoMaker，默认分支 main，通过本机 SSH 密钥（gh CLI 未安装）推送；每个里程碑提交后同步。
 
 ## 6. 依赖与安全决策（M1 期间追加）
