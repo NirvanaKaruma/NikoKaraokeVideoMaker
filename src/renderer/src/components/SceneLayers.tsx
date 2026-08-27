@@ -32,6 +32,8 @@ export type SceneLayerName = 'background' | 'main' | 'text' | 'visualizer'
 export interface SceneLayersProps {
   layout: ProjectLayout
   coverElement: HTMLImageElement | null
+  /** 独立背景图（用户额外上传）；null 时按 imageSource 回退封面图 */
+  bgElement: HTMLImageElement | null
   selectedId: SelectableId
   onSelect: (id: SelectableId) => void
   onMainRectChange: (rect: NormRect) => void
@@ -66,10 +68,12 @@ function clampPos(
 function BackgroundLayer({
   background,
   coverElement,
+  bgElement,
   canvas
 }: {
   background: ProjectLayout['background']
   coverElement: HTMLImageElement | null
+  bgElement: HTMLImageElement | null
   canvas: CanvasSize
 }): React.JSX.Element {
   const bgRef = useRef<Konva.Group>(null)
@@ -78,20 +82,23 @@ function BackgroundLayer({
   const blurRadius = (background.blur / 100) * 60 * CACHE_RATIO
   const showBlur = background.blur > 0
 
+  // 图片来源：自定义（用户额外上传）优先，否则封面图
+  const sourceImage = background.imageSource === 'custom' && bgElement ? bgElement : coverElement
+
   // 背景专用半分辨率画布副本：Konva 缓存会污染共享图片元素的纹理（主图会被画成背景缓存内容），
   // 因此背景永远使用自己的私有副本，主图继续用原始图片（性能与正确性兼得）
   const bgSource = useMemo(() => {
-    if (!coverElement) return null
-    const iw = coverElement.naturalWidth || coverElement.width
-    const ih = coverElement.naturalHeight || coverElement.height
+    if (!sourceImage) return null
+    const iw = sourceImage.naturalWidth || sourceImage.width
+    const ih = sourceImage.naturalHeight || sourceImage.height
     if (iw === 0 || ih === 0) return null
     const c = document.createElement('canvas')
     c.width = Math.max(1, Math.round(iw * 0.5))
     c.height = Math.max(1, Math.round(ih * 0.5))
     const ctx = c.getContext('2d')
-    if (ctx) ctx.drawImage(coverElement, 0, 0, c.width, c.height)
+    if (ctx) ctx.drawImage(sourceImage, 0, 0, c.width, c.height)
     return c
-  }, [coverElement])
+  }, [sourceImage])
 
   let cover: React.JSX.Element | null = null
   if (background.useImage && bgSource) {
@@ -561,6 +568,7 @@ export function SceneLayers(props: SceneLayersProps): React.JSX.Element {
   const {
     layout,
     coverElement,
+    bgElement,
     selectedId,
     onSelect,
     onMainRectChange,
@@ -580,6 +588,7 @@ export function SceneLayers(props: SceneLayersProps): React.JSX.Element {
           <BackgroundLayer
             background={layout.background}
             coverElement={coverElement}
+            bgElement={bgElement}
             canvas={canvas}
           />
         </Layer>

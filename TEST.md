@@ -93,6 +93,11 @@ npx electron . --smoke-bench   # 1080p：prefer-hardware 与 prefer-software 各
 
 机制：① 导出按「硬件优先→自动→软件」顺序探测，且检测结果自动持久化（localStorage niko.encode.modePref），本机软件更快则改「软件优先」；② 「导出」面板提供「检测 GPU 加速」按钮，随时重测（换显卡/驱动后可用）。此结论为**本机实测**，用户机器各有不同——检测功能按机器自适应。
 
+## 5.7.5 独立背景图（M6 后三轮）
+
+- 背景默认封面图；可上传独立背景图（自动切换 custom），一键清除回退默认；来源切换可 Ctrl+Z；
+- smoke-project 扩展至 9/9：背景图保存/恢复（bgUrl+bgElement+source=custom 全还原）、撤销×4/重做×4、新建重置含背景清空。
+
 ## 5.8 编辑体验回归（M6 后二轮）
 
 - smoke-project 扩展至 8 项：新增「撤销」（undo×3 回到保存点：歌名/柱数/模糊全还原）与「重做」（redo×3 恢复篡改值）✓；

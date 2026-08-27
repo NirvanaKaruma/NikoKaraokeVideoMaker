@@ -7,6 +7,7 @@ import { SceneLayers, SelectableId } from './SceneLayers'
 export interface CanvasStageProps {
   layout: ProjectLayout
   coverElement: HTMLImageElement | null
+  bgElement: HTMLImageElement | null
   selectedId: SelectableId
   onSelect: (id: SelectableId) => void
   onMainRectChange: (rect: NormRect) => void
@@ -23,6 +24,7 @@ export function CanvasStage(props: CanvasStageProps): React.JSX.Element {
   const {
     layout,
     coverElement,
+    bgElement,
     selectedId,
     onSelect,
     onMainRectChange,
@@ -85,6 +87,7 @@ export function CanvasStage(props: CanvasStageProps): React.JSX.Element {
         <SceneLayers
           layout={layout}
           coverElement={coverElement}
+          bgElement={bgElement}
           selectedId={selectedId}
           onSelect={onSelect}
           onMainRectChange={onMainRectChange}

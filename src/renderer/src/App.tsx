@@ -616,6 +616,9 @@ function App(): React.JSX.Element {
       project.updateText('songTitle', { text: '项目测试曲' })
       project.updateVisualizer({ barCount: 140 })
       project.updateBackground({ blur: 40 })
+      // 独立背景图（用户反馈：背景可额外上传图，默认用封面）
+      const bgF = await makeSyntheticCoverFile()
+      if (bgF) project.setBgFile(bgF)
       await sleep(300)
       const pf = await project.buildProjectFile()
       const audioPath = await window.api.exportApi.saveAudio(
@@ -628,8 +631,11 @@ function App(): React.JSX.Element {
       project.updateText('songTitle', { text: '已修改' })
       project.updateVisualizer({ barCount: 100 })
       project.updateBackground({ blur: 0 })
-      // 撤销/重做（用户反馈：画布操作可 Ctrl+Z；每字段修改一个历史条目 → 三次撤销回保存点）
+      project.clearBgImage()
+      // 撤销/重做（用户反馈：画布操作可 Ctrl+Z；篡改区共 4 个历史条目（文本/柱数/模糊/背景图来源））
       await sleep(200)
+      project.undo()
+      await sleep(120)
       project.undo()
       await sleep(120)
       project.undo()
@@ -642,13 +648,15 @@ function App(): React.JSX.Element {
         ul.texts.songTitle.text === '项目测试曲' &&
           ul.visualizer.barCount === 140 &&
           ul.background.blur === 40,
-        'undo×3 后: 歌名=' +
+        'undo×4 后: 歌名=' +
           ul.texts.songTitle.text +
           ' 柱数=' +
           ul.visualizer.barCount +
           ' 模糊=' +
           ul.background.blur
       )
+      project.redo()
+      await sleep(120)
       project.redo()
       await sleep(120)
       project.redo()
@@ -661,7 +669,7 @@ function App(): React.JSX.Element {
         rl.texts.songTitle.text === '已修改' &&
           rl.visualizer.barCount === 100 &&
           rl.background.blur === 0,
-        'redo×3 后: 歌名=' +
+        'redo×4 后: 歌名=' +
           rl.texts.songTitle.text +
           ' 柱数=' +
           rl.visualizer.barCount +
@@ -691,6 +699,24 @@ function App(): React.JSX.Element {
           ' 模糊=' +
           l.background.blur
       )
+      // 独立背景图恢复
+      const bgWait = Date.now()
+      while (!projectRef.current.assets.bgElement && Date.now() - bgWait < 5000) {
+        await sleep(150)
+      }
+      const ba = projectRef.current.assets
+      add(
+        '背景图恢复',
+        ba.bgUrl != null &&
+          ba.bgElement != null &&
+          projectRef.current.layout.background.imageSource === 'custom',
+        'bgUrl=' +
+          (ba.bgUrl != null) +
+          ' bgElement=' +
+          (ba.bgElement != null) +
+          ' source=' +
+          projectRef.current.layout.background.imageSource
+      )
       // 封面走 dataURL → Image 异步解码，等待就绪
       const coverWait = Date.now()
       while (!projectRef.current.assets.coverElement && Date.now() - coverWait < 5000) {
@@ -714,11 +740,14 @@ function App(): React.JSX.Element {
       const na = projectRef.current.assets
       add(
         '新建重置',
-        nl.texts.songTitle.text === '歌曲名' && na.coverUrl == null && na.audioFile == null,
+        nl.texts.songTitle.text === '歌曲名' &&
+          na.coverUrl == null &&
+          na.audioFile == null &&
+          na.bgUrl == null,
         '歌名=' +
           nl.texts.songTitle.text +
           ' 封面=' +
-          na.coverUrl +
+          (na.coverUrl != null) +
           ' 音频=' +
           (na.audioFile?.name ?? 'null')
       )
@@ -849,7 +878,11 @@ function App(): React.JSX.Element {
           mainImage={project.layout.mainImage}
           onMainImageChange={project.updateMainImage}
           background={project.layout.background}
+          bgUrl={project.assets.bgUrl}
+          bgFile={project.assets.bgFile}
           onBackgroundChange={project.updateBackground}
+          onBgFile={(f) => void project.setBgFile(f)}
+          onClearBg={project.clearBgImage}
           songTitleCfg={project.layout.texts.songTitle}
           artistCfg={project.layout.texts.artist}
           onSongTitleCfgChange={(x) => project.updateText('songTitle', x)}
@@ -861,6 +894,7 @@ function App(): React.JSX.Element {
           <CanvasStage
             layout={project.layout}
             coverElement={project.assets.coverElement}
+            bgElement={project.assets.bgElement}
             selectedId={selectedId}
             onSelect={setSelectedId}
             onMainRectChange={project.updateMainRect}
@@ -911,6 +945,7 @@ function App(): React.JSX.Element {
         <ExportStageHost
           layout={project.layout}
           coverElement={project.assets.coverElement}
+          bgElement={project.assets.bgElement}
           width={exporter.stageRequest.width}
           height={exporter.stageRequest.height}
           onReady={exporter.onStageReady}

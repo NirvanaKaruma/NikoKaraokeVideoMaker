@@ -16,6 +16,7 @@ export interface ExportStageHandle {
 interface ExportStageHostProps {
   layout: ProjectLayout
   coverElement: HTMLImageElement | null
+  bgElement: HTMLImageElement | null
   width: number
   height: number
   onReady: (handle: ExportStageHandle) => void
@@ -26,7 +27,7 @@ interface ExportStageHostProps {
  * 每帧 = 静态画布 + setBars 后的可视化画布。复用 SceneLayers（核心约束 A）。
  */
 export function ExportStageHost(props: ExportStageHostProps): React.JSX.Element {
-  const { layout, coverElement, width, height, onReady } = props
+  const { layout, coverElement, bgElement, width, height, onReady } = props
   const staticRef = useRef<Konva.Stage>(null)
   const vizRef = useRef<Konva.Stage>(null)
   const barsHandleRef = useRef<((bars: number[]) => void) | null>(null)
@@ -65,6 +66,7 @@ export function ExportStageHost(props: ExportStageHostProps): React.JSX.Element 
         <SceneLayers
           layout={layout}
           coverElement={coverElement}
+          bgElement={bgElement}
           selectedId={null}
           onSelect={noop}
           onMainRectChange={noop}
@@ -79,6 +81,7 @@ export function ExportStageHost(props: ExportStageHostProps): React.JSX.Element 
         <SceneLayers
           layout={layout}
           coverElement={coverElement}
+          bgElement={bgElement}
           selectedId={null}
           onSelect={noop}
           onMainRectChange={noop}

@@ -20,6 +20,10 @@ export interface ProjectAssets {
   coverFile: File | null
   /** 已解码的封面 Image 元素（Konva 绘制用） */
   coverElement: HTMLImageElement | null
+  /** 独立背景图（用户额外上传，替代封面做背景后处理） */
+  bgUrl: string | null
+  bgFile: File | null
+  bgElement: HTMLImageElement | null
   audioUrl: string | null
   audioFile: File | null
 }
@@ -28,6 +32,9 @@ const EMPTY_ASSETS: ProjectAssets = {
   coverUrl: null,
   coverFile: null,
   coverElement: null,
+  bgUrl: null,
+  bgFile: null,
+  bgElement: null,
   audioUrl: null,
   audioFile: null
 }
@@ -50,6 +57,8 @@ export function useProject(): {
   setCoverFile: (file: File | null) => void
   setCoverFromUrl: (url: string) => void
   setAudioFile: (file: File | null) => void
+  setBgFile: (file: File | null) => void
+  clearBgImage: () => void
   saveProject: () => Promise<boolean>
   loadProject: () => Promise<void>
   resetProject: () => void
@@ -88,6 +97,7 @@ export function useProject(): {
     JSON.stringify({
       layout,
       hasCover: assets.coverUrl != null,
+      hasBg: assets.bgUrl != null,
       hasAudio: assets.audioUrl != null
     }) !== savedSnapshot
 
@@ -216,31 +226,42 @@ export function useProject(): {
     })
   }, [])
 
-  /** 封面 → dataURL（优先原文件字节，无文件则从已解码元素转画布） */
+  /** 图片 → dataURL（优先原文件字节，无文件则从已解码元素转画布） */
+  const imageToDataUrl = useCallback(
+    async (file: File | null, el: HTMLImageElement | null): Promise<string | null> => {
+      if (file) {
+        const buf = await file.arrayBuffer()
+        const bytes = new Uint8Array(buf)
+        let bin = ''
+        for (let i = 0; i < bytes.length; i += 8192) {
+          bin += String.fromCharCode(...bytes.subarray(i, i + 8192))
+        }
+        return 'data:' + (file.type || 'image/png') + ';base64,' + btoa(bin)
+      }
+      if (el) {
+        const c = document.createElement('canvas')
+        c.width = el.naturalWidth || el.width
+        c.height = el.naturalHeight || el.height
+        const ctx = c.getContext('2d')
+        if (ctx) {
+          ctx.drawImage(el, 0, 0)
+          return c.toDataURL('image/png')
+        }
+      }
+      return null
+    },
+    []
+  )
+
   const coverToDataUrl = useCallback(async (): Promise<string | null> => {
-    const file = assetsRef.current.coverFile
-    if (file) {
-      const buf = await file.arrayBuffer()
-      const bytes = new Uint8Array(buf)
-      let bin = ''
-      for (let i = 0; i < bytes.length; i += 8192) {
-        bin += String.fromCharCode(...bytes.subarray(i, i + 8192))
-      }
-      return 'data:' + (file.type || 'image/png') + ';base64,' + btoa(bin)
-    }
-    const img = assetsRef.current.coverElement
-    if (img) {
-      const c = document.createElement('canvas')
-      c.width = img.naturalWidth || img.width
-      c.height = img.naturalHeight || img.height
-      const ctx = c.getContext('2d')
-      if (ctx) {
-        ctx.drawImage(img, 0, 0)
-        return c.toDataURL('image/png')
-      }
-    }
-    return null
-  }, [])
+    const a = assetsRef.current
+    return imageToDataUrl(a.coverFile, a.coverElement)
+  }, [imageToDataUrl])
+
+  const bgToDataUrl = useCallback(async (): Promise<string | null> => {
+    const a = assetsRef.current
+    return imageToDataUrl(a.bgFile, a.bgElement)
+  }, [imageToDataUrl])
 
   /** 组装项目文件（封面内嵌、音频只存路径） */
   const buildProjectFile = useCallback(async (): Promise<ProjectFile> => {
@@ -255,9 +276,11 @@ export function useProject(): {
         a.coverUrl && a.coverFile
           ? { name: a.coverFile.name, dataUrl: (await coverToDataUrl()) ?? '' }
           : null,
+      backgroundImage:
+        a.bgUrl && a.bgFile ? { name: a.bgFile.name, dataUrl: (await bgToDataUrl()) ?? '' } : null,
       audio: a.audioFile ? { name: a.audioFile.name, path: audioPath } : null
     }
-  }, [coverToDataUrl])
+  }, [coverToDataUrl, bgToDataUrl])
 
   /** 应用项目文件：布局全量替换 + 封面内嵌恢复 + 音频按路径还原 */
   const applyProjectFile = useCallback(
@@ -285,6 +308,23 @@ export function useProject(): {
         setAssets((prev) => {
           if (prev.coverUrl) URL.revokeObjectURL(prev.coverUrl)
           return { ...prev, coverUrl: null, coverFile: null, coverElement: null }
+        })
+      }
+
+      // 恢复独立背景图（或清空回退到封面图）
+      if (pf.backgroundImage && pf.backgroundImage.dataUrl) {
+        const url = pf.backgroundImage.dataUrl
+        setAssets((prev) => {
+          if (prev.bgUrl) URL.revokeObjectURL(prev.bgUrl)
+          return { ...prev, bgUrl: url, bgFile: null, bgElement: null }
+        })
+        const img = new Image()
+        img.onload = () => setAssets((prev) => ({ ...prev, bgElement: img }))
+        img.src = url
+      } else {
+        setAssets((prev) => {
+          if (prev.bgUrl) URL.revokeObjectURL(prev.bgUrl)
+          return { ...prev, bgUrl: null, bgFile: null, bgElement: null }
         })
       }
 
@@ -434,6 +474,48 @@ export function useProject(): {
     setNotice(null)
   }, [applyLayout, bumpHistory])
 
+  /** 上传独立背景图（自动把背景来源切到 custom；布局变化进历史栈可撤销） */
+  const setBgFile = useCallback(
+    (file: File | null) => {
+      if (!file) return
+      const ext = (file.name.split('.').pop() ?? '').toLowerCase()
+      if (!COVER_EXTENSIONS.includes(ext)) {
+        setFileError(`背景图仅支持 png/jpg/webp（收到 .${ext}）`)
+        return
+      }
+      setFileError(null)
+      const url = URL.createObjectURL(file)
+      setAssets((prev) => {
+        if (prev.bgUrl) URL.revokeObjectURL(prev.bgUrl)
+        return { ...prev, bgUrl: url, bgFile: file, bgElement: null }
+      })
+      const img = new Image()
+      img.onload = () => setAssets((prev) => ({ ...prev, bgElement: img }))
+      img.onerror = () => setFileError('背景图片加载失败，请换一张试试')
+      img.src = url
+      // 来源切换进历史栈（可 Ctrl+Z 撤销回默认封面图行为）
+      pushHistory()
+      applyLayout({
+        ...layoutRef.current,
+        background: { ...layoutRef.current.background, imageSource: 'custom' }
+      })
+    },
+    [pushHistory, applyLayout]
+  )
+
+  /** 清除独立背景图：回退到默认行为（用封面图） */
+  const clearBgImage = useCallback(() => {
+    setAssets((prev) => {
+      if (prev.bgUrl) URL.revokeObjectURL(prev.bgUrl)
+      return { ...prev, bgUrl: null, bgFile: null, bgElement: null }
+    })
+    pushHistory()
+    applyLayout({
+      ...layoutRef.current,
+      background: { ...layoutRef.current.background, imageSource: 'cover' }
+    })
+  }, [pushHistory, applyLayout])
+
   return {
     layout,
     assets,
@@ -448,6 +530,8 @@ export function useProject(): {
     setCoverFile,
     setCoverFromUrl,
     setAudioFile,
+    setBgFile,
+    clearBgImage,
     saveProject,
     loadProject,
     resetProject,

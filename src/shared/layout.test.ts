@@ -48,6 +48,10 @@ describe('归一化布局模型', () => {
     expect(RESOLUTIONS.some((r) => r.id === '4k' && r.width === 3840)).toBe(true)
   })
 
+  it('背景默认使用封面图（用户反馈：可额外上传独立背景图）', () => {
+    expect(DEFAULT_LAYOUT.background.imageSource).toBe('cover')
+  })
+
   it('主图默认填充模式为等比适配 contain（用户确认）', () => {
     expect(DEFAULT_LAYOUT.mainImage.fillMode).toBe('contain')
   })

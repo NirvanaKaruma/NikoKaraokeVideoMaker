@@ -8,6 +8,8 @@ export interface ProjectFile {
   layout: ProjectLayout
   /** 封面内嵌为 dataURL（体积可控）；无封面为 null */
   cover: { name: string; dataUrl: string } | null
+  /** 独立背景图（用户额外上传；null = 使用封面图） */
+  backgroundImage: { name: string; dataUrl: string } | null
   /** 音频只存磁盘路径（音频过大不入 JSON）；无路径来源（如内存生成）为 null */
   audio: { name: string; path: string } | null
 }

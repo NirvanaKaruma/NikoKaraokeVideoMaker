@@ -41,7 +41,11 @@ export interface SidePanelProps {
   mainImage: MainImageConfig
   onMainImageChange: (patch: Partial<MainImageConfig>) => void
   background: BackgroundConfig
+  bgUrl: string | null
+  bgFile: File | null
   onBackgroundChange: (patch: Partial<BackgroundConfig>) => void
+  onBgFile: (f: File | null) => void
+  onClearBg: () => void
   // 文本
   songTitleCfg: TextLayerConfig
   artistCfg: TextLayerConfig
@@ -102,7 +106,14 @@ export function SidePanel(props: SidePanelProps): React.JSX.Element {
               onAudioFile={props.onAudioFile}
             />
             <MainImagePanel mainImage={props.mainImage} onChange={props.onMainImageChange} />
-            <BackgroundPanel background={props.background} onChange={props.onBackgroundChange} />
+            <BackgroundPanel
+              background={props.background}
+              bgUrl={props.bgUrl}
+              bgFile={props.bgFile}
+              onChange={props.onBackgroundChange}
+              onBgFile={props.onBgFile}
+              onClearBg={props.onClearBg}
+            />
           </>
         )}
         {tab === 'text' && (

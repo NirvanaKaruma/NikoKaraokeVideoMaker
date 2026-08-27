@@ -43,6 +43,8 @@ export interface TextStyle {
 export interface BackgroundConfig {
   /** false = 纯色背景，不用图片 */
   useImage: boolean
+  /** 背景图片来源：cover = 封面图（默认）；custom = 额外上传的独立背景图 */
+  imageSource: 'cover' | 'custom'
   /** 背景色；透明封面先与此色合成再模糊 */
   color: string
   /** 高斯模糊强度 0–100 */
@@ -132,6 +134,7 @@ export const DEFAULT_LAYOUT: ProjectLayout = {
   canvas: { width: LOGICAL_WIDTH, height: LOGICAL_HEIGHT },
   background: {
     useImage: true,
+    imageSource: 'cover',
     color: '#ffffff',
     blur: 25,
     dimOpacity: 0.3

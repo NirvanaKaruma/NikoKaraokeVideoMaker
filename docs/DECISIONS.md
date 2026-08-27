@@ -118,6 +118,13 @@
 - **撤销/重做**：布局快照 JSON 栈（100 步上限），所有布局修改（拖拽/缩放/样式/文本输入）提交前压栈；Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y 全局生效（输入框聚焦时保留原生行为）；头部 ↩↪ 按钮；保存/加载/新建清栈并重置脏标记。
 - **关闭未保存确认**：main 窗口 close 事件拦截 → 查询 renderer 脏标记（布局/素材相对最近保存点）→ 弹窗三选「保存并退出 / 不保存直接退出 / 取消」；smoke 模式跳过守卫。
 - **脏标记**：渲染期派生——当前快照（layout + 是否有封面/音频）与已保存快照字符串比较，无额外 effect。
+
+## 13. 独立背景图（用户反馈）
+
+- BackgroundConfig.imageSource = cover（默认）| custom；资产增加 bgUrl/bgFile/bgElement。上传独立背景图自动切 custom，一键清除回退 cover；来源切换走布局历史栈（Ctrl+Z 可撤销）。
+- 渲染：BackgroundLayer 按 source 选图（custom 且已上传 → bgElement，否则封面图），仍走私有半分辨率副本 + 缓存模糊管线。
+- 项目文件 .niko 增加 backgroundImage 字段（dataURL 内嵌）；脏标记快照包含 hasBg。
+- smoke-project 扩展至 9 项：背景图保存/恢复、撤销×4、重做×4。
 - **GitHub 同步**（用户要求）：私有仓库 github.com/NirvanaKaruma/NikoKaraokeVideoMaker，默认分支 main，通过本机 SSH 密钥（gh CLI 未安装）推送；每个里程碑提交后同步。
 
 ## 6. 依赖与安全决策（M1 期间追加）
