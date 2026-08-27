@@ -262,6 +262,13 @@ export async function encodeVideo(opts: EncodeVideoOptions): Promise<ArrayBuffer
   const staticCanvas = stage.renderStatic()
   let prevBars: Float32Array | null = null
   const vizCfg = layout.visualizer
+  // 频率范围以布局快照为准（分析器字段为共享可变对象：防止导出中途改滑块导致前后帧不一致）
+  if (analyzer) {
+    const half = Math.max(analyzer.sampleRate / 2, 1000)
+    const lo = Math.min(Math.max(vizCfg.freqMin, 1), half - 1)
+    analyzer.freqMin = lo
+    analyzer.freqMax = Math.min(half, Math.max(vizCfg.freqMax, lo + 1))
+  }
   const frameMs: number[] = []
   const totalT0 = performance.now()
 
