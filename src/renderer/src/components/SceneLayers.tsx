@@ -156,7 +156,7 @@ function BackgroundLayer({
   )
 }
 
-/** 文本层：歌曲名/作者，可拖动选择位置（选中显示虚线框，无缩放手柄） */
+/** 文本层：歌曲名/作者——可拖动、可缩放文本框（字号不变，宽度驱动自动换行；选中显示虚线框） */
 function TextNode({
   kind,
   cfg,
@@ -172,6 +172,7 @@ function TextNode({
   onSelect: (id: SelectableId) => void
   onRectChange: (rect: NormRect) => void
 }): React.JSX.Element {
+  const groupRef = useRef<Konva.Group>(null)
   const textRef = useRef<Konva.Text>(null)
   const trRef = useRef<Konva.Transformer>(null)
   const px = normToPixel(cfg.rect, canvas)
@@ -179,60 +180,100 @@ function TextNode({
 
   useEffect(() => {
     const tr = trRef.current
-    const node = textRef.current
+    const node = groupRef.current
     if (tr && node && selected) {
       tr.nodes([node])
       tr.getLayer()?.batchDraw()
     }
   }, [selected, cfg.rect])
 
+  const commit = (node: Konva.Group): void => {
+    onRectChange(
+      pixelToNorm({ x: node.x(), y: node.y(), w: node.width(), h: node.height() }, canvas)
+    )
+  }
+
   return (
     <>
-      <KonvaText
-        ref={textRef}
+      <Group
+        ref={groupRef}
         x={px.x}
         y={px.y}
         width={px.w}
-        text={cfg.text}
-        fontFamily={style.fontFamily}
-        fontSize={relToPixel(style.fontSize, canvas)}
-        fontStyle={style.bold ? 'bold' : 'normal'}
-        fill={style.color}
-        stroke={style.strokeColor}
-        strokeWidth={relToPixel(style.strokeWidth, canvas)}
-        shadowEnabled={style.glowEnabled}
-        shadowColor={style.glowColor}
-        shadowBlur={relToPixel(style.glowBlur, canvas)}
-        shadowOpacity={1}
-        align={style.align}
+        height={px.h}
         draggable
         onClick={() => onSelect(kind)}
         onTap={() => onSelect(kind)}
         onDragStart={() => onSelect(kind)}
-        onDragEnd={(e: KonvaEventObject<DragEvent>) => {
-          const node = e.target as Konva.Text
-          onRectChange(pixelToNorm({ x: node.x(), y: node.y(), w: px.w, h: node.height() }, canvas))
+        onDragEnd={(e: KonvaEventObject<DragEvent>) => commit(e.target as Konva.Group)}
+        onTransform={() => {
+          // 文本框缩放：字号保持不变，宽度实时重排文字
+          const node = groupRef.current
+          const tNode = textRef.current
+          if (!node || !tNode) return
+          const newW = Math.max(60, node.width() * node.scaleX())
+          const newH = Math.max(20, node.height() * node.scaleY())
+          node.scale({ x: 1, y: 1 })
+          node.width(newW)
+          node.height(newH)
+          if (Math.abs(tNode.width() - newW) > 0.5) tNode.width(newW)
         }}
+        onTransformEnd={(e: KonvaEventObject<Event>) => commit(e.target as Konva.Group)}
         dragBoundFunc={(pos) => {
-          const node = textRef.current
+          const node = groupRef.current
           if (!node) return pos
           return clampPos(pos, node.width(), node.height(), canvas)
         }}
-      />
+      >
+        {selected && (
+          <Rect
+            width={px.w}
+            height={px.h}
+            stroke={SELECT_BORDER}
+            strokeWidth={1}
+            dash={[6, 4]}
+            listening={false}
+          />
+        )}
+        <KonvaText
+          ref={textRef}
+          x={0}
+          y={0}
+          width={px.w}
+          text={cfg.text}
+          wrap="word"
+          fontFamily={style.fontFamily}
+          fontSize={relToPixel(style.fontSize, canvas)}
+          fontStyle={style.bold ? 'bold' : 'normal'}
+          fill={style.color}
+          stroke={style.strokeColor}
+          strokeWidth={relToPixel(style.strokeWidth, canvas)}
+          shadowEnabled={style.glowEnabled}
+          shadowColor={style.glowColor}
+          shadowBlur={relToPixel(style.glowBlur, canvas)}
+          shadowOpacity={1}
+          align={style.align}
+          listening={false}
+        />
+      </Group>
       {selected && (
         <Transformer
           ref={trRef}
-          enabledAnchors={[]}
           rotateEnabled={false}
-          resizeEnabled={false}
+          keepRatio={false}
           borderStroke={SELECT_BORDER}
-          borderDash={[6, 4]}
+          anchorStroke={SELECT_BORDER}
+          anchorFill="#ffffff"
+          anchorSize={10}
+          boundBoxFunc={(oldBox, newBox) => {
+            if (newBox.width < 60 || newBox.height < 20) return oldBox
+            return newBox
+          }}
         />
       )}
     </>
   )
 }
-
 interface MainImageLayerProps {
   layout: ProjectLayout
   coverElement: HTMLImageElement | null

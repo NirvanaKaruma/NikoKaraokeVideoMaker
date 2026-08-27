@@ -1,4 +1,4 @@
-import { app, shell, BrowserWindow, ipcMain } from 'electron'
+import { app, dialog, shell, BrowserWindow, ipcMain } from 'electron'
 import { writeFile } from 'fs/promises'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
@@ -72,6 +72,59 @@ function createWindow(): BrowserWindow {
     shell.openExternal(details.url)
     return { action: 'deny' }
   })
+
+  // 关闭前未保存确认（用户反馈）：保存并退出 / 不保存直接退出 / 取消
+  const isSmokeMode =
+    isSmokeTest ||
+    isSmokeVisual ||
+    isSmokeExport ||
+    isSmokeBench ||
+    isSmokeProject ||
+    isSmokeDetect ||
+    smokeDownloadArg !== undefined
+  if (!isSmokeMode) {
+    let allowClose = false
+    mainWindow.on('close', (e) => {
+      if (allowClose) return
+      e.preventDefault()
+      void (async () => {
+        try {
+          const dirty: unknown =
+            await mainWindow.webContents.executeJavaScript('window.__isDirty()')
+          if (dirty !== true) {
+            allowClose = true
+            mainWindow.close()
+            return
+          }
+          const res = await dialog.showMessageBox(mainWindow, {
+            type: 'warning',
+            title: 'NikoKaraokeVideoMaker',
+            message: '项目有未保存的修改',
+            detail: '是否保存后退出？',
+            buttons: ['保存并退出', '不保存直接退出', '取消'],
+            defaultId: 0,
+            cancelId: 2,
+            noLink: true
+          })
+          if (res.response === 0) {
+            const saved: unknown =
+              await mainWindow.webContents.executeJavaScript('window.__saveAndClose()')
+            if (saved === true) {
+              allowClose = true
+              mainWindow.close()
+            }
+          } else if (res.response === 1) {
+            allowClose = true
+            mainWindow.close()
+          }
+        } catch (error) {
+          console.error('[close-guard] 失败，直接关闭:', error)
+          allowClose = true
+          mainWindow.close()
+        }
+      })()
+    })
+  }
 
   // HMR for renderer base on electron-vite cli.
   if (isSmokeVisual || isSmokeBench) {

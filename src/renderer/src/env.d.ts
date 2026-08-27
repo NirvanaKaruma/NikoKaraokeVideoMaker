@@ -20,6 +20,9 @@ interface Window {
   __captureStage?: () => string
   __runVisualChecks?: () => VisualCheckReport
   __runAudioSmoke?: () => Promise<VisualCheckReport>
+  /** 关闭前未保存确认（main 窗口 close 事件调用） */
+  __isDirty?: () => boolean
+  __saveAndClose?: () => Promise<boolean>
   /** 仅 --smoke-visual：资产加载诊断 */
   __getAssetDebug?: () => {
     coverFile: string | null

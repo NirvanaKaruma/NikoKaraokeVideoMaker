@@ -467,6 +467,37 @@ function App(): React.JSX.Element {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // 全局撤销/重做快捷键（输入框内保留原生行为）+ 关闭前未保存确认接口
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent): void => {
+      const target = e.target as HTMLElement | null
+      const typing =
+        !!target &&
+        (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)
+      if (typing) return
+      const mod = e.ctrlKey || e.metaKey
+      if (mod && e.key.toLowerCase() === 'z') {
+        e.preventDefault()
+        if (e.shiftKey) projectRef.current.redo()
+        else projectRef.current.undo()
+      } else if (mod && e.key.toLowerCase() === 'y') {
+        e.preventDefault()
+        projectRef.current.redo()
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    window.__isDirty = () => projectRef.current.dirty
+    window.__saveAndClose = async () => {
+      const ok = await projectRef.current.saveProject()
+      return ok && !projectRef.current.dirty
+    }
+    return () => {
+      window.removeEventListener('keydown', onKey)
+      delete window.__isDirty
+      delete window.__saveAndClose
+    }
+  }, [])
+
   // 导出自测（M4/T21）：真实 File → 解码 → WebCodecs 编码 → ffmpeg 合并，落盘 TEST-ARTIFACTS
   useEffect(() => {
     if (!IS_SMOKE_EXPORT) return
@@ -579,6 +610,32 @@ function App(): React.JSX.Element {
       project.updateText('songTitle', { text: '已修改' })
       project.updateVisualizer({ barCount: 100 })
       project.updateBackground({ blur: 0 })
+            // 撤销/重做（用户反馈：画布操作可 Ctrl+Z；每字段修改一个历史条目 → 三次撤销回保存点）
+      await sleep(200)
+      project.undo()
+      await sleep(120)
+      project.undo()
+      await sleep(120)
+      project.undo()
+      await sleep(200)
+      const ul = projectRef.current.layout
+      add(
+        '撤销',
+        ul.texts.songTitle.text === '项目测试曲' && ul.visualizer.barCount === 140 && ul.background.blur === 40,
+        'undo×3 后: 歌名=' + ul.texts.songTitle.text + ' 柱数=' + ul.visualizer.barCount + ' 模糊=' + ul.background.blur
+      )
+      project.redo()
+      await sleep(120)
+      project.redo()
+      await sleep(120)
+      project.redo()
+      await sleep(200)
+      const rl = projectRef.current.layout
+      add(
+        '重做',
+        rl.texts.songTitle.text === '已修改' && rl.visualizer.barCount === 100 && rl.background.blur === 0,
+        'redo×3 后: 歌名=' + rl.texts.songTitle.text + ' 柱数=' + rl.visualizer.barCount + ' 模糊=' + rl.background.blur
+      )
       await sleep(300)
       await project.loadProject()
       const waitStart = Date.now()
@@ -646,6 +703,24 @@ function App(): React.JSX.Element {
       <header className="app-header">
         <h1 className="app-title">NikoKaraokeVideoMaker</h1>
         <div className="header-actions">
+          <button
+            type="button"
+            className="mini-btn"
+            disabled={!project.canUndo}
+            title="撤销（Ctrl+Z）"
+            onClick={project.undo}
+          >
+            ↩ 撤销
+          </button>
+          <button
+            type="button"
+            className="mini-btn"
+            disabled={!project.canRedo}
+            title="重做（Ctrl+Y / Ctrl+Shift+Z）"
+            onClick={project.redo}
+          >
+            ↪ 重做
+          </button>
           <button type="button" className="mini-btn" onClick={() => void project.saveProject()}>
             💾 保存项目
           </button>

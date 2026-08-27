@@ -50,9 +50,15 @@ export function useProject(): {
   setCoverFile: (file: File | null) => void
   setCoverFromUrl: (url: string) => void
   setAudioFile: (file: File | null) => void
-  saveProject: () => Promise<void>
+  saveProject: () => Promise<boolean>
   loadProject: () => Promise<void>
   resetProject: () => void
+  undo: () => void
+  redo: () => void
+  canUndo: boolean
+  canRedo: boolean
+  /** 是否有未保存修改（布局/素材相对最近一次保存/加载/新建） */
+  dirty: boolean
   clearNotice: () => void
   buildProjectFile: () => Promise<ProjectFile>
   applyProjectFile: (pf: ProjectFile) => Promise<string[]>
@@ -63,41 +69,105 @@ export function useProject(): {
   const [notice, setNotice] = useState<string | null>(null)
   const layoutRef = useRef(layout)
   const assetsRef = useRef(assets)
+  /** 撤销/重做历史（布局快照 JSON 栈；用 ref + 版本号驱动按钮状态） */
+  const pastRef = useRef<string[]>([])
+  const futureRef = useRef<string[]>([])
+  const [histLen, setHistLen] = useState({ past: 0, future: 0 })
+  /** 最近一次保存/加载/新建时的快照（判断未保存修改） */
+  const [savedSnapshot, setSavedSnapshot] = useState<string>(() =>
+    JSON.stringify({ layout, hasCover: false, hasAudio: false })
+  )
 
   useEffect(() => {
     layoutRef.current = layout
     assetsRef.current = assets
   }, [layout, assets])
 
-  const updateBackground = useCallback((patch: Partial<BackgroundConfig>) => {
-    setLayout((l) => ({ ...l, background: { ...l.background, ...patch } }))
+  /** 脏标记：渲染期派生（快照字符串对比，不产生级联渲染） */
+  const dirty =
+    JSON.stringify({
+      layout,
+      hasCover: assets.coverUrl != null,
+      hasAudio: assets.audioUrl != null
+    }) !== savedSnapshot
+
+  const bumpHistory = useCallback(() => {
+    setHistLen({ past: pastRef.current.length, future: futureRef.current.length })
   }, [])
 
-  const updateMainRect = useCallback((rect: NormRect) => {
-    setLayout((l) => ({ ...l, mainImage: { ...l.mainImage, rect } }))
+  /** 同步应用布局并更新 ref（保证连续操作的快照准确） */
+  const applyLayout = useCallback((next: ProjectLayout) => {
+    layoutRef.current = next
+    setLayout(next)
   }, [])
 
-  const updateMainImage = useCallback((patch: Partial<MainImageConfig>) => {
-    setLayout((l) => ({ ...l, mainImage: { ...l.mainImage, ...patch } }))
-  }, [])
+  /** 提交前把当前布局压入撤销栈 */
+  const pushHistory = useCallback(() => {
+    pastRef.current.push(JSON.stringify(layoutRef.current))
+    if (pastRef.current.length > 100) pastRef.current.shift()
+    futureRef.current = []
+    bumpHistory()
+  }, [bumpHistory])
+
+  const updateBackground = useCallback(
+    (patch: Partial<BackgroundConfig>) => {
+      pushHistory()
+      applyLayout({
+        ...layoutRef.current,
+        background: { ...layoutRef.current.background, ...patch }
+      })
+    },
+    [pushHistory, applyLayout]
+  )
+
+  const updateMainRect = useCallback(
+    (rect: NormRect) => {
+      pushHistory()
+      applyLayout({ ...layoutRef.current, mainImage: { ...layoutRef.current.mainImage, rect } })
+    },
+    [pushHistory, applyLayout]
+  )
+
+  const updateMainImage = useCallback(
+    (patch: Partial<MainImageConfig>) => {
+      pushHistory()
+      applyLayout({ ...layoutRef.current, mainImage: { ...layoutRef.current.mainImage, ...patch } })
+    },
+    [pushHistory, applyLayout]
+  )
 
   const updateText = useCallback(
     (kind: 'songTitle' | 'artist', patch: Partial<TextLayerConfig>) => {
-      setLayout((l) => ({
-        ...l,
-        texts: { ...l.texts, [kind]: { ...l.texts[kind], ...patch } }
-      }))
+      pushHistory()
+      applyLayout({
+        ...layoutRef.current,
+        texts: {
+          ...layoutRef.current.texts,
+          [kind]: { ...layoutRef.current.texts[kind], ...patch }
+        }
+      })
     },
-    []
+    [pushHistory, applyLayout]
   )
 
-  const updateVisualizer = useCallback((patch: Partial<VisualizerConfig>) => {
-    setLayout((l) => ({ ...l, visualizer: { ...l.visualizer, ...patch } }))
-  }, [])
+  const updateVisualizer = useCallback(
+    (patch: Partial<VisualizerConfig>) => {
+      pushHistory()
+      applyLayout({
+        ...layoutRef.current,
+        visualizer: { ...layoutRef.current.visualizer, ...patch }
+      })
+    },
+    [pushHistory, applyLayout]
+  )
 
-  const updateExport = useCallback((patch: Partial<ExportConfig>) => {
-    setLayout((l) => ({ ...l, export: { ...l.export, ...patch } }))
-  }, [])
+  const updateExport = useCallback(
+    (patch: Partial<ExportConfig>) => {
+      pushHistory()
+      applyLayout({ ...layoutRef.current, export: { ...layoutRef.current.export, ...patch } })
+    },
+    [pushHistory, applyLayout]
+  )
 
   const loadCoverUrl = useCallback((url: string, file: File | null) => {
     setAssets((prev) => {
@@ -251,18 +321,32 @@ export function useProject(): {
   )
 
   /** 保存项目（对话框 + 原子写 + 通知） */
-  const saveProject = useCallback(async (): Promise<void> => {
+  const saveProject = useCallback(async (): Promise<boolean> => {
     try {
       const pf = await buildProjectFile()
       const res = await window.api.project.save(
         JSON.stringify(pf, null, 2),
         layoutRef.current.texts.songTitle.text || '未命名项目'
       )
-      if (res.canceled) return
-      if (res.ok) setNotice('项目已保存：' + res.path)
-      else setNotice('保存失败')
+      if (res.canceled) return false
+      if (res.ok) {
+        setNotice('项目已保存：' + res.path)
+        // 更新已保存快照（脏标记复位）
+        const a = assetsRef.current
+        setSavedSnapshot(
+          JSON.stringify({
+            layout: layoutRef.current,
+            hasCover: a.coverUrl != null,
+            hasAudio: a.audioUrl != null
+          })
+        )
+        return true
+      }
+      setNotice('保存失败')
+      return false
     } catch (e) {
       setFileError('保存项目失败：' + String(e))
+      return false
     }
   }, [buildProjectFile])
 
@@ -281,6 +365,17 @@ export function useProject(): {
         return
       }
       const warnings = await applyProjectFile(pf)
+      // 加载视为新的保存点：清空历史与脏标记
+      pastRef.current = []
+      futureRef.current = []
+      bumpHistory()
+      setSavedSnapshot(
+        JSON.stringify({
+          layout: layoutRef.current,
+          hasCover: assetsRef.current.coverUrl != null,
+          hasAudio: assetsRef.current.audioUrl != null
+        })
+      )
       if (warnings.length > 0) {
         setNotice(warnings.join('；'))
       } else {
@@ -289,11 +384,47 @@ export function useProject(): {
     } catch (e) {
       setFileError('打开项目失败：' + String(e))
     }
-  }, [applyProjectFile])
+  }, [applyProjectFile, bumpHistory])
+
+  /** 撤销：回退到上一个布局快照 */
+  const undo = useCallback(() => {
+    const past = pastRef.current
+    if (past.length === 0) return
+    const prev = past.pop() as string
+    futureRef.current.push(JSON.stringify(layoutRef.current))
+    try {
+      applyLayout(JSON.parse(prev) as ProjectLayout)
+    } catch {
+      /* 快照损坏则忽略 */
+    }
+    bumpHistory()
+  }, [applyLayout, bumpHistory])
+
+  /** 重做 */
+  const redo = useCallback(() => {
+    const future = futureRef.current
+    if (future.length === 0) return
+    const next = future.pop() as string
+    pastRef.current.push(JSON.stringify(layoutRef.current))
+    try {
+      applyLayout(JSON.parse(next) as ProjectLayout)
+    } catch {
+      /* 快照损坏则忽略 */
+    }
+    bumpHistory()
+  }, [applyLayout, bumpHistory])
+
+  const canUndo = histLen.past > 0
+  const canRedo = histLen.future > 0
 
   /** 新建项目：恢复默认布局并清空素材（释放对象 URL） */
   const resetProject = useCallback(() => {
-    setLayout(structuredClone(DEFAULT_LAYOUT))
+    const next = structuredClone(DEFAULT_LAYOUT)
+    applyLayout(next)
+    pastRef.current = []
+    futureRef.current = []
+    bumpHistory()
+    setSavedSnapshot(JSON.stringify({ layout: next, hasCover: false, hasAudio: false }))
     setAssets((prev) => {
       if (prev.coverUrl) URL.revokeObjectURL(prev.coverUrl)
       if (prev.audioUrl) URL.revokeObjectURL(prev.audioUrl)
@@ -301,7 +432,7 @@ export function useProject(): {
     })
     setFileError(null)
     setNotice(null)
-  }, [])
+  }, [applyLayout, bumpHistory])
 
   return {
     layout,
@@ -320,6 +451,11 @@ export function useProject(): {
     saveProject,
     loadProject,
     resetProject,
+    undo,
+    redo,
+    canUndo,
+    canRedo,
+    dirty,
     clearNotice: () => setNotice(null),
     buildProjectFile,
     applyProjectFile
