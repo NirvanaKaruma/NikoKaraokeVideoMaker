@@ -13,8 +13,8 @@ smoke-*-report.json
 TEST-ARTIFACTS/
 .plan/
 
-
-# 开源仓库保留在本地的文档/配置
+# Local-only docs (not uploaded to the public repo)
 README-dev.md
 TEST.md
-
+nikokaraoke.md
+docs/DECISIONS.md
