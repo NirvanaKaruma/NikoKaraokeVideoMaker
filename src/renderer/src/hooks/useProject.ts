@@ -39,6 +39,16 @@ const EMPTY_ASSETS: ProjectAssets = {
   audioFile: null
 }
 
+/** 统一快照：脏比较与保存点写入共用同一构建逻辑（防止字段漂移） */
+function snapshotOf(l: ProjectLayout, a: ProjectAssets): string {
+  return JSON.stringify({
+    layout: l,
+    hasCover: a.coverUrl != null,
+    hasBg: a.bgUrl != null,
+    hasAudio: a.audioUrl != null
+  })
+}
+
 /**
  * 项目状态：归一化布局（唯一数据源）+ 输入资产。
  * 预览与导出都从这份状态读取，保证所见即所得（核心约束 A）。
@@ -83,9 +93,7 @@ export function useProject(): {
   const futureRef = useRef<string[]>([])
   const [histLen, setHistLen] = useState({ past: 0, future: 0 })
   /** 最近一次保存/加载/新建时的快照（判断未保存修改） */
-  const [savedSnapshot, setSavedSnapshot] = useState<string>(() =>
-    JSON.stringify({ layout, hasCover: false, hasAudio: false })
-  )
+  const [savedSnapshot, setSavedSnapshot] = useState<string>(() => snapshotOf(layout, EMPTY_ASSETS))
 
   useEffect(() => {
     layoutRef.current = layout
@@ -93,13 +101,7 @@ export function useProject(): {
   }, [layout, assets])
 
   /** 脏标记：渲染期派生（快照字符串对比，不产生级联渲染） */
-  const dirty =
-    JSON.stringify({
-      layout,
-      hasCover: assets.coverUrl != null,
-      hasBg: assets.bgUrl != null,
-      hasAudio: assets.audioUrl != null
-    }) !== savedSnapshot
+  const dirty = snapshotOf(layout, assets) !== savedSnapshot
 
   const bumpHistory = useCallback(() => {
     setHistLen({ past: pastRef.current.length, future: futureRef.current.length })
@@ -373,13 +375,7 @@ export function useProject(): {
         setNotice('项目已保存：' + res.path)
         // 更新已保存快照（脏标记复位）
         const a = assetsRef.current
-        setSavedSnapshot(
-          JSON.stringify({
-            layout: layoutRef.current,
-            hasCover: a.coverUrl != null,
-            hasAudio: a.audioUrl != null
-          })
-        )
+        setSavedSnapshot(snapshotOf(layoutRef.current, a))
         return true
       }
       setNotice('保存失败')
@@ -409,13 +405,7 @@ export function useProject(): {
       pastRef.current = []
       futureRef.current = []
       bumpHistory()
-      setSavedSnapshot(
-        JSON.stringify({
-          layout: layoutRef.current,
-          hasCover: assetsRef.current.coverUrl != null,
-          hasAudio: assetsRef.current.audioUrl != null
-        })
-      )
+      setSavedSnapshot(snapshotOf(layoutRef.current, assetsRef.current))
       if (warnings.length > 0) {
         setNotice(warnings.join('；'))
       } else {
@@ -464,7 +454,7 @@ export function useProject(): {
     pastRef.current = []
     futureRef.current = []
     bumpHistory()
-    setSavedSnapshot(JSON.stringify({ layout: next, hasCover: false, hasAudio: false }))
+    setSavedSnapshot(snapshotOf(next, EMPTY_ASSETS))
     setAssets((prev) => {
       if (prev.coverUrl) URL.revokeObjectURL(prev.coverUrl)
       if (prev.audioUrl) URL.revokeObjectURL(prev.audioUrl)

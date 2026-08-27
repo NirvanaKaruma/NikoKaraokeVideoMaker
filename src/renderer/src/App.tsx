@@ -620,6 +620,9 @@ function App(): React.JSX.Element {
       const bgF = await makeSyntheticCoverFile()
       if (bgF) project.setBgFile(bgF)
       await sleep(300)
+      // 先走真实保存路径（更新已保存快照，同步 dirty 状态）
+      await project.saveProject()
+      // 再用带音频磁盘路径的版本覆盖磁盘文件（smoke 音频是内存生成，需落盘路径）
       const pf = await project.buildProjectFile()
       const audioPath = await window.api.exportApi.saveAudio(
         await wav.arrayBuffer(),
@@ -628,6 +631,7 @@ function App(): React.JSX.Element {
       pf.audio = { name: 'smoke-audio.wav', path: audioPath }
       const saveRes = await window.api.project.save(JSON.stringify(pf, null, 2), 'smoke-project')
       add('保存项目', saveRes.ok, saveRes.ok ? '已写入 ' + saveRes.path : '保存失败')
+      add('保存后未脏', !projectRef.current.dirty, 'dirty=' + projectRef.current.dirty)
       project.updateText('songTitle', { text: '已修改' })
       project.updateVisualizer({ barCount: 100 })
       project.updateBackground({ blur: 0 })
@@ -751,6 +755,8 @@ function App(): React.JSX.Element {
           ' 音频=' +
           (na.audioFile?.name ?? 'null')
       )
+      add('新建后未脏', !projectRef.current.dirty, 'dirty=' + projectRef.current.dirty)
+      // 关闭守卫关键路径：保存后脏标记必须是 false（曾因 hasBg 字段漂移恒为 true）
       return { ok: checks.every((c) => c.pass), checks }
     }
     return () => {
