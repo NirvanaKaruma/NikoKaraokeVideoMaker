@@ -14,6 +14,9 @@ declare global {
     api: {
       /** M1 hello：ping → 'pong' */
       ping: () => Promise<string>
+      /** 界面语言（i18n）：读取/保存偏好 */
+      getLocale: () => Promise<string>
+      setLocale: (locale: string) => Promise<string>
       /** 获取文件的真实磁盘路径（无法获取时返回空串） */
       getFilePath: (file: File) => string
       ffmpeg: {

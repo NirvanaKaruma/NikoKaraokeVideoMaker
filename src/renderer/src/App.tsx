@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type Konva from 'konva'
 import { SUBTITLE_ZONE_Y } from '@shared/layout'
+import { useLocale } from './hooks/useLocale'
 import { useProject } from './hooks/useProject'
 import { useAudioPlayback, type PlaybackApi } from './hooks/useAudioPlayback'
 import { useFfmpegDownload, useFfmpegStatus } from './hooks/useFfmpeg'
@@ -437,6 +438,7 @@ async function runAudioSmoke(
 /* ================= 应用 ================= */
 
 function App(): React.JSX.Element {
+  const { t } = useLocale()
   const project = useProject()
   const [selectedId, setSelectedId] = useState<SelectableId>(null)
   const [helpOpen, setHelpOpen] = useState(false)
@@ -814,54 +816,54 @@ function App(): React.JSX.Element {
             type="button"
             className="mini-btn"
             disabled={!project.canUndo}
-            title="撤销（Ctrl+Z）"
+            title={t('header.undoTitle')}
             onClick={project.undo}
           >
-            ↩ 撤销
+            {t('header.undo')}
           </button>
           <button
             type="button"
             className="mini-btn"
             disabled={!project.canRedo}
-            title="重做（Ctrl+Y / Ctrl+Shift+Z）"
+            title={t('header.redoTitle')}
             onClick={project.redo}
           >
-            ↪ 重做
+            {t('header.redo')}
           </button>
           <button type="button" className="mini-btn" onClick={() => void project.saveProject()}>
-            💾 保存项目
+            {t('header.saveProject')}
           </button>
           <button
             type="button"
             className="mini-btn"
             onClick={() => {
-              if (window.confirm('新建项目将清空当前内容，确定继续？')) {
+              if (window.confirm(t('header.newProjectConfirm'))) {
                 project.resetProject()
                 setSelectedId(null)
               }
             }}
           >
-            🆕 新建项目
+            {t('header.newProject')}
           </button>
           <button type="button" className="mini-btn" onClick={() => void project.loadProject()}>
-            📂 打开项目
+            {t('header.openProject')}
           </button>
           <button type="button" className="mini-btn" onClick={() => setExportOpen(true)}>
-            📤 导出
+            {t('header.export')}
           </button>
           <button type="button" className="mini-btn" onClick={() => setHelpOpen(true)}>
-            ❓ 帮助
+            {t('header.help')}
           </button>
           <button type="button" className="mini-btn" onClick={() => setSettingsOpen(true)}>
-            ⚙ 设置
+            {t('header.settings')}
           </button>
         </div>
       </header>
       {!ffmpeg.loading && ffmpeg.report && !ffmpeg.report.effective.available && (
         <div className="ffmpeg-banner">
-          <span>⚠ 未检测到 ffmpeg —— 导出已禁用。</span>
+          <span>{t('banner.noFfmpeg')}</span>
           <button type="button" className="banner-btn" onClick={() => void ffmpegDl.start()}>
-            一键下载编码工具
+            {t('banner.downloadTool')}
           </button>
           <button
             type="button"
@@ -876,7 +878,7 @@ function App(): React.JSX.Element {
               })()
             }}
           >
-            手动指定 ffmpeg.exe
+            {t('banner.specifyTool')}
           </button>
         </div>
       )}
@@ -895,7 +897,7 @@ function App(): React.JSX.Element {
             {ffmpegDl.state.percent != null ? ' ' + ffmpegDl.state.percent + '%' : ''}
           </span>
           <button type="button" className="banner-btn" onClick={ffmpegDl.cancel}>
-            取消下载
+            {t('banner.cancelDownload')}
           </button>
         </div>
       )}
@@ -951,9 +953,7 @@ function App(): React.JSX.Element {
               stageRef.current = s
             }}
           />
-          {subzoneWarning && (
-            <div className="warn-banner">⚠ 主图已进入下半区（预留给字幕的区域）。</div>
-          )}
+          {subzoneWarning && <div className="warn-banner">{t('canvas.subtitleZoneWarn')}</div>}
         </main>
       </div>
       <HelpDialog open={helpOpen} onClose={() => setHelpOpen(false)} />

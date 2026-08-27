@@ -1,4 +1,5 @@
 import type { MainImageConfig } from '@shared/layout'
+import { useLocale } from '../../hooks/useLocale'
 
 interface MainImagePanelProps {
   mainImage: MainImageConfig
@@ -6,18 +7,19 @@ interface MainImagePanelProps {
 }
 
 export function MainImagePanel({ mainImage, onChange }: MainImagePanelProps): React.JSX.Element {
+  const { t } = useLocale()
   return (
     <section className="panel-section">
-      <h2>主图</h2>
+      <h2>{t('mainImage.title')}</h2>
       <label className="field">
-        <span>填充方式</span>
+        <span>{t('mainImage.fillMode')}</span>
         <select
           value={mainImage.fillMode}
           onChange={(e) => onChange({ fillMode: e.target.value as MainImageConfig['fillMode'] })}
         >
-          <option value="contain">等比适配</option>
-          <option value="cover">等比铺满</option>
-          <option value="stretch">拉伸填满</option>
+          <option value="contain">{t('mainImage.contain')}</option>
+          <option value="cover">{t('mainImage.cover')}</option>
+          <option value="stretch">{t('mainImage.stretch')}</option>
         </select>
       </label>
     </section>

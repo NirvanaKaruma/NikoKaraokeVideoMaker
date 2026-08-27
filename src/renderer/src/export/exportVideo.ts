@@ -2,6 +2,7 @@ import { ArrayBufferTarget, Muxer } from 'mp4-muxer'
 import type { ProjectLayout, ResolutionOption } from '@shared/layout'
 import { smoothBars, spectrumAt, type SpectrumAnalyzer } from '@shared/spectrum'
 import type { ExportStageHandle } from '../components/ExportStageHost'
+import { t } from '@shared/i18n'
 
 export type ExportPhase =
   'idle' | 'preparing' | 'encoding' | 'merging' | 'done' | 'error' | 'cancelled'
@@ -164,30 +165,28 @@ export async function benchmarkEncoder(width: number, height: number): Promise<E
   const software = await encodeFramesTimed(width, height, 'prefer-software')
   let verdict: string
   if (hardware == null) {
-    verdict = '硬件编码不可用：导出将使用软件编码（速度取决于 CPU）'
+    verdict = t('exporter.verdictHwUnavailable')
     try {
       localStorage.setItem(AUTO_CHOICE_KEY, 'sw')
     } catch {
       /* 忽略 */
     }
   } else if (software == null) {
-    verdict = '软件编码不可用，硬件编码正常：导出将使用 GPU 加速'
+    verdict = t('exporter.verdictSwUnavailable')
     try {
       localStorage.setItem(AUTO_CHOICE_KEY, 'hw')
     } catch {
       /* 忽略 */
     }
   } else if (hardware <= software * 0.7) {
-    verdict = 'GPU 加速可用：硬件编码明显快于软件，导出已自动选用 GPU 编码'
+    verdict = t('exporter.verdictHwFaster')
     try {
       localStorage.setItem(AUTO_CHOICE_KEY, 'hw')
     } catch {
       /* 忽略 */
     }
   } else {
-    verdict =
-      '本机 GPU 编码未带来加速（软件反而更快）→ 导出已自动选用软件编码；' +
-      '若更换显卡/驱动后可重新检测'
+    verdict = t('exporter.verdictSwFaster')
     try {
       localStorage.setItem(AUTO_CHOICE_KEY, 'sw')
     } catch {
@@ -223,9 +222,7 @@ export async function encodeVideo(opts: EncodeVideoOptions): Promise<ArrayBuffer
     BITRATE_TABLE[resolution.id] ?? 10_000_000
   )
   if (!picked) {
-    throw new Error(
-      '当前环境不支持 H.264 编码（WebCodecs 不可用）。建议降低分辨率重试，或更换支持硬件加速的电脑。'
-    )
+    throw new Error(t('exporter.unsupportedH264'))
   }
   const encoderConfig = picked.config
 
@@ -250,7 +247,7 @@ export async function encodeVideo(opts: EncodeVideoOptions): Promise<ArrayBuffer
   const ctx = compose.getContext('2d')
   if (!ctx) {
     encoder.close()
-    throw new Error('无法创建导出画布')
+    throw new Error(t('exporter.canvasFail'))
   }
 
   const staticCanvas = stage.renderStatic()
@@ -271,7 +268,7 @@ export async function encodeVideo(opts: EncodeVideoOptions): Promise<ArrayBuffer
     encoded: 0,
     total: totalFrames,
     mergePercent: null,
-    message: '正在生成视频…'
+    message: t('exporter.encoding')
   })
 
   try {
@@ -280,9 +277,9 @@ export async function encodeVideo(opts: EncodeVideoOptions): Promise<ArrayBuffer
         return null
       }
       const f0 = performance.now()
-      const t = i / fps
+      const tSec = i / fps
       if (analyzer) {
-        const target = spectrumAt(analyzer, t, vizCfg.barCount, null, vizCfg.sensitivity)
+        const target = spectrumAt(analyzer, tSec, vizCfg.barCount, null, vizCfg.sensitivity)
         prevBars = smoothBars(prevBars, target, vizCfg.smoothing)
         stage.setBars(Array.from(prevBars))
       }
@@ -297,11 +294,14 @@ export async function encodeVideo(opts: EncodeVideoOptions): Promise<ArrayBuffer
       frame.close()
       if (encoderError) throw encoderError
       frameMs.push(performance.now() - f0)
-      let message = '正在生成视频…'
+      let message = t('exporter.encoding')
       if ((i + 1) % 30 === 0) {
         const avg = frameMs.reduce((a, b) => a + b, 0) / frameMs.length
         const percent = Math.round(((i + 1) / totalFrames) * 100)
-        message = '正在生成视频… 已完成 ' + percent + '%（平均 ' + Math.round(avg) + ' ms/帧）'
+        message = t('exporter.encodingProgress', {
+          p: percent,
+          ms: Math.round(avg)
+        })
       }
       onProgress({
         phase: 'encoding',
@@ -319,7 +319,7 @@ export async function encodeVideo(opts: EncodeVideoOptions): Promise<ArrayBuffer
       encoded: totalFrames,
       total: totalFrames,
       mergePercent: null,
-      message: '视频编码完成（用时 ' + Math.round(totalMs / 1000) + ' 秒）'
+      message: t('exporter.encodeDone', { s: Math.round(totalMs / 1000) })
     })
     await encoder.flush()
     if (encoderError) throw encoderError

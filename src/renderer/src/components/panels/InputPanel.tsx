@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react'
+import { useLocale } from '../../hooks/useLocale'
 
 interface InputPanelProps {
   songTitle: string
@@ -68,11 +69,12 @@ function DropZone({
 }
 
 export function InputPanel(props: InputPanelProps): React.JSX.Element {
+  const { t } = useLocale()
   return (
     <section className="panel-section">
-      <h2>输入</h2>
+      <h2>{t('input.title')}</h2>
       <label className="field">
-        <span>歌曲名</span>
+        <span>{t('input.songTitle')}</span>
         <input
           type="text"
           value={props.songTitle}
@@ -80,7 +82,7 @@ export function InputPanel(props: InputPanelProps): React.JSX.Element {
         />
       </label>
       <label className="field">
-        <span>作者</span>
+        <span>{t('input.artist')}</span>
         <input
           type="text"
           value={props.artist}
@@ -88,10 +90,10 @@ export function InputPanel(props: InputPanelProps): React.JSX.Element {
         />
       </label>
       <div className="field">
-        <span>封面图（png / jpg / webp）</span>
+        <span>{t('input.cover')}</span>
         <DropZone
-          label="点击或拖入封面图"
-          hint="＋ 封面图"
+          label={t('input.coverDrop')}
+          hint={t('input.coverHint')}
           file={props.coverFile}
           previewUrl={props.coverUrl}
           accept=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp"
@@ -99,10 +101,10 @@ export function InputPanel(props: InputPanelProps): React.JSX.Element {
         />
       </div>
       <div className="field">
-        <span>音频 / 视频（mp3 / wav / flac / m4a / mp4 / mov / webm）</span>
+        <span>{t('input.audio')}</span>
         <DropZone
-          label="点击或拖入音频或视频"
-          hint="♪ 音频"
+          label={t('input.audioDrop')}
+          hint={t('input.audioHint')}
           file={props.audioFile}
           previewUrl={null}
           accept=".mp3,.wav,.flac,.m4a,.ogg,.mp4,.m4v,.mov,.webm,audio/*,video/*"

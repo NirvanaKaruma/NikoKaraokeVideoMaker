@@ -1,3 +1,4 @@
+import { useLocale } from '../../hooks/useLocale'
 import type { AudioStatus } from '../../hooks/useAudioPlayback'
 
 function formatTime(t: number): string {
@@ -20,20 +21,21 @@ interface AudioPanelProps {
 
 /** 预览播放面板（T14）：播放/暂停、进度、seek；播完停止不循环 */
 export function AudioPanel(props: AudioPanelProps): React.JSX.Element {
+  const { t } = useLocale()
   const { status, error, duration, currentTime, isPlaying, fileName, onPlay, onPause, onSeek } =
     props
   return (
     <section className="panel-section">
-      <h2>预览播放</h2>
-      {status === 'empty' && <p className="panel-note">先拖入音频或视频即可预览。</p>}
-      {status === 'loading' && <p className="panel-note">音频解码中…</p>}
-      {status === 'error' && <p className="field-error">{error ?? '音频加载失败'}</p>}
+      <h2>{t('audio.title')}</h2>
+      {status === 'empty' && <p className="panel-note">{t('audio.emptyHint')}</p>}
+      {status === 'loading' && <p className="panel-note">{t('audio.decoding')}</p>}
+      {status === 'error' && <p className="field-error">{error ?? t('audio.loadFailed')}</p>}
       {status === 'ready' && (
         <>
           {fileName && <p className="audio-file">♪ {fileName}</p>}
           <div className="audio-row">
             <button type="button" className="btn" onClick={isPlaying ? onPause : onPlay}>
-              {isPlaying ? '⏸ 暂停' : '▶ 播放'}
+              {isPlaying ? t('audio.pause') : t('audio.play')}
             </button>
             <span className="audio-time">
               {formatTime(currentTime)} / {formatTime(duration)}
@@ -48,7 +50,6 @@ export function AudioPanel(props: AudioPanelProps): React.JSX.Element {
             value={Math.min(currentTime, duration || 1)}
             onChange={(e) => onSeek(Number(e.target.value))}
           />
-          <p className="panel-note">播完自动停止；播放中可拖动进度条，波形与频谱同步跳动。</p>
         </>
       )}
     </section>

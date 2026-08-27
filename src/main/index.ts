@@ -4,6 +4,8 @@ import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 import { IPC } from '../shared/ipc'
+import { setLocale, t } from '../shared/i18n'
+import { getConfig, setConfig } from './config'
 import { registerFfmpegIpc } from './ffmpegIpc'
 import { registerProjectIpc } from './projectIpc'
 import { detectFfmpegStatus, detectManagedFfmpeg, installManagedFfmpeg } from './ffmpeg'
@@ -99,9 +101,9 @@ function createWindow(): BrowserWindow {
           const res = await dialog.showMessageBox(mainWindow, {
             type: 'warning',
             title: 'NikoKaraokeVideoMaker',
-            message: '项目有未保存的修改',
-            detail: '是否保存后退出？',
-            buttons: ['保存并退出', '不保存直接退出', '取消'],
+            message: t('closeGuard.title'),
+            detail: t('closeGuard.detail'),
+            buttons: [t('closeGuard.saveExit'), t('closeGuard.exitNoSave'), t('closeGuard.cancel')],
             defaultId: 0,
             cancelId: 2,
             noLink: true
@@ -145,6 +147,18 @@ function createWindow(): BrowserWindow {
 function registerIpcHandlers(): void {
   // M1 hello：验证 renderer → main 往返链路
   ipcMain.handle(IPC.appPing, () => 'pong')
+
+  // i18n：读取/保存界面语言偏好（renderer 启动时读取，切换时写回）
+  ipcMain.handle(IPC.appGetLocale, async () => (await getConfig()).locale)
+  ipcMain.handle(IPC.appSetLocale, async (_e, locale: unknown) => {
+    const ok = locale === 'zh-cn' || locale === 'en' || locale === 'jp'
+    if (!ok) return (await getConfig()).locale
+    const cfg = await setConfig({ locale })
+    if (cfg.locale === 'zh-cn' || cfg.locale === 'en' || cfg.locale === 'jp') {
+      setLocale(cfg.locale)
+    }
+    return cfg.locale
+  })
 }
 
 async function runSmokeVisual(win: BrowserWindow): Promise<void> {
@@ -336,6 +350,10 @@ app.whenReady().then(async () => {
   registerIpcHandlers()
   registerFfmpegIpc()
   registerProjectIpc()
+  // i18n：启动时按持久化偏好设置全局语言（默认 zh-cn，异步完成不影响 UI）
+  void getConfig().then((cfg) => {
+    if (cfg.locale === 'zh-cn' || cfg.locale === 'en' || cfg.locale === 'jp') setLocale(cfg.locale)
+  })
 
   const mainWindow = createWindow()
   if (isSmokeTest) {

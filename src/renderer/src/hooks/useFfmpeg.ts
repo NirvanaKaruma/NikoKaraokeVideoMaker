@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { DownloadProgress, FfmpegStatusReport } from '@shared/ffmpeg'
+import { t } from '@shared/i18n'
 
 export interface DownloadState extends DownloadProgress {
   token: string
@@ -69,7 +70,7 @@ export function useFfmpegDownload(onDone?: () => void): {
       setState({ token, phase: 'done', percent: 100, message: '安装完成' })
       onDoneRef.current?.()
     } else {
-      setError(res.error ?? '下载失败')
+      setError(res.error ?? t('ffmpeg.downloadFail'))
       setState(null)
     }
   }, [])

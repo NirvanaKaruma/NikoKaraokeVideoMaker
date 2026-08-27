@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type { ExportConfig } from '@shared/layout'
+import { useLocale } from '../hooks/useLocale'
 import { RESOLUTIONS } from '@shared/layout'
 import type { ExporterState } from '../hooks/useExporter'
 import { getEncodeModePref, setEncodeModePref, type EncodeModePref } from '../export/exportVideo'
@@ -16,14 +17,15 @@ interface ExportDialogProps {
   onCancel: () => void
 }
 
-const MODE_LABEL: Record<EncodeModePref, string> = {
-  auto: '自动（按本机检测结果）',
-  hw: '强制 GPU 硬件编码',
-  sw: '强制 CPU 软件编码'
+const MODE_LABEL_KEY: Record<EncodeModePref, string> = {
+  auto: 'exportDialog.modeAuto',
+  hw: 'exportDialog.modeHw',
+  sw: 'exportDialog.modeSw'
 }
 
 /** 导出弹窗（M5 UI 重构：右上角入口，弹窗内选参数并执行） */
 export function ExportDialog(props: ExportDialogProps): React.JSX.Element | null {
+  const { t } = useLocale()
   const {
     open,
     onClose,
@@ -57,14 +59,14 @@ export function ExportDialog(props: ExportDialogProps): React.JSX.Element | null
     <div className="modal-backdrop" onClick={onClose}>
       <div className="modal modal-narrow" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
-          <h2>导出视频</h2>
+          <h2>{t('exportDialog.title')}</h2>
           <button type="button" className="mini-btn" onClick={onClose}>
-            ✕ 关闭
+            {t('common.close')}
           </button>
         </div>
         <div className="modal-body">
           <label className="field">
-            <span>分辨率</span>
+            <span>{t('exportDialog.resolution')}</span>
             <select
               value={config.resolutionId}
               disabled={busy}
@@ -78,37 +80,33 @@ export function ExportDialog(props: ExportDialogProps): React.JSX.Element | null
             </select>
           </label>
           <label className="field">
-            <span>帧率</span>
+            <span>{t('exportDialog.fps')}</span>
             <select
               value={config.fps}
               disabled={busy}
               onChange={(e) => onChange({ fps: Number(e.target.value) })}
             >
-              <option value={30}>30 fps</option>
-              <option value={60}>60 fps</option>
+              <option value={30}>{t('exportDialog.fps30')}</option>
+              <option value={60}>{t('exportDialog.fps60')}</option>
             </select>
           </label>
           <label className="field">
-            <span>编码加速</span>
+            <span>{t('exportDialog.encodeAccel')}</span>
             <select
               value={mode}
               disabled={busy}
               onChange={(e) => applyMode(e.target.value as EncodeModePref)}
             >
-              <option value="auto">{MODE_LABEL.auto}</option>
-              <option value="hw">{MODE_LABEL.hw}</option>
-              <option value="sw">{MODE_LABEL.sw}</option>
+              <option value="auto">{t(MODE_LABEL_KEY.auto)}</option>
+              <option value="hw">{t(MODE_LABEL_KEY.hw)}</option>
+              <option value="sw">{t(MODE_LABEL_KEY.sw)}</option>
             </select>
           </label>
-          <p className="panel-note">详细检测见「设置 → 编码加速」。</p>
+          <p className="panel-note">{t('exportDialog.detailNote')}</p>
 
-          {!ffmpegAvailable && (
-            <p className="field-error">
-              未检测到 ffmpeg：导出已禁用，请到「设置 → ffmpeg」安装或指定。
-            </p>
-          )}
+          {!ffmpegAvailable && <p className="field-error">{t('exportDialog.noFfmpeg')}</p>}
           {ffmpegAvailable && !audioReady && (
-            <p className="panel-note">请先拖入音频，就绪后才能导出。</p>
+            <p className="panel-note">{t('exportDialog.needAudio')}</p>
           )}
 
           {!busy && state.phase !== 'done' && (
@@ -118,7 +116,7 @@ export function ExportDialog(props: ExportDialogProps): React.JSX.Element | null
               disabled={!ffmpegAvailable || !audioReady}
               onClick={onExport}
             >
-              开始导出
+              {t('exportDialog.start')}
             </button>
           )}
 
@@ -132,7 +130,7 @@ export function ExportDialog(props: ExportDialogProps): React.JSX.Element | null
                 {percent != null ? ' ' + percent + '%' : ''}
               </p>
               <button type="button" className="mini-btn danger" onClick={onCancel}>
-                取消导出
+                {t('exportDialog.cancel')}
               </button>
             </div>
           )}

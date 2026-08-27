@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react'
 import type { BackgroundConfig } from '@shared/layout'
+import { useLocale } from '../../hooks/useLocale'
 import { DeferredSlider } from '../DeferredSlider'
 
 interface BackgroundPanelProps {
@@ -13,36 +14,37 @@ interface BackgroundPanelProps {
 
 /** 背景设置：默认用封面图；可额外上传独立背景图，并一键恢复默认（用户反馈） */
 export function BackgroundPanel(props: BackgroundPanelProps): React.JSX.Element {
+  const { t } = useLocale()
   const { background, bgUrl, bgFile, onChange, onBgFile, onClearBg } = props
   const [over, setOver] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
 
   return (
     <section className="panel-section">
-      <h2>背景</h2>
+      <h2>{t('background.title')}</h2>
       <label className="check-row">
         <input
           type="checkbox"
           checked={background.useImage}
           onChange={(e) => onChange({ useImage: e.target.checked })}
         />
-        <span>使用图片背景</span>
+        <span>{t('background.useImage')}</span>
       </label>
       <label className="field">
-        <span>背景图片来源</span>
+        <span>{t('background.source')}</span>
         <select
           value={background.imageSource}
           onChange={(e) =>
             onChange({ imageSource: e.target.value as BackgroundConfig['imageSource'] })
           }
         >
-          <option value="cover">封面图</option>
-          <option value="custom">自定义图片</option>
+          <option value="cover">{t('background.sourceCover')}</option>
+          <option value="custom">{t('background.sourceCustom')}</option>
         </select>
       </label>
       {background.imageSource === 'custom' && (
         <div className="field">
-          <span>自定义背景图</span>
+          <span>{t('background.customImage')}</span>
           <div
             className={'drop-zone' + (over ? ' over' : '')}
             onClick={() => inputRef.current?.click()}
@@ -70,19 +72,19 @@ export function BackgroundPanel(props: BackgroundPanelProps): React.JSX.Element 
             {bgUrl ? (
               <img src={bgUrl} alt="背景预览" className="drop-preview" />
             ) : (
-              <span className="drop-hint">＋ 上传背景图</span>
+              <span className="drop-hint">{t('background.uploadHint')}</span>
             )}
-            <span className="drop-file">{bgFile ? bgFile.name : '点击或拖入图片'}</span>
+            <span className="drop-file">{bgFile ? bgFile.name : t('background.dropOrClick')}</span>
           </div>
           <div className="gradient-row">
             <button type="button" className="mini-btn danger" onClick={onClearBg}>
-              ✕ 清除自定义图
+              {t('background.clearCustom')}
             </button>
           </div>
         </div>
       )}
       <label className="field">
-        <span>背景色</span>
+        <span>{t('background.color')}</span>
         <input
           type="color"
           value={background.color}
@@ -90,7 +92,7 @@ export function BackgroundPanel(props: BackgroundPanelProps): React.JSX.Element 
         />
       </label>
       <DeferredSlider
-        label={(v) => '高斯模糊：' + v}
+        label={(v) => t('background.blur', { v })}
         value={background.blur}
         min={0}
         max={100}
@@ -98,7 +100,7 @@ export function BackgroundPanel(props: BackgroundPanelProps): React.JSX.Element 
         onCommit={(v) => onChange({ blur: v })}
       />
       <DeferredSlider
-        label={(v) => '压暗：' + Math.round(v * 100) + '%'}
+        label={(v) => t('background.dim', { v: Math.round(v * 100) })}
         value={background.dimOpacity}
         min={0}
         max={1}

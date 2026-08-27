@@ -1,5 +1,7 @@
 import { useState } from 'react'
 import type { FfmpegStatusReport } from '@shared/ffmpeg'
+import { SUPPORTED_LOCALES, type Locale } from '@shared/i18n'
+import { useLocale } from '../hooks/useLocale'
 import { SettingsPanel } from './panels/SettingsPanel'
 import {
   benchmarkEncoder,
@@ -17,14 +19,15 @@ interface SettingsDialogProps {
   onRefresh: () => void
 }
 
-const MODE_LABEL: Record<EncodeModePref, string> = {
-  auto: '自动（按本机检测结果）',
-  hw: '强制 GPU 硬件编码',
-  sw: '强制 CPU 软件编码'
+const MODE_LABEL_KEY: Record<EncodeModePref, string> = {
+  auto: 'settings.modeAuto',
+  hw: 'settings.modeHw',
+  sw: 'settings.modeSw'
 }
 
 /** 系统级设置弹窗（M5 UI 重构）：ffmpeg 三源 + 语言预留 + 编码加速（GPU 检测与显式模式） */
 export function SettingsDialog(props: SettingsDialogProps): React.JSX.Element | null {
+  const { t, locale, setLocale } = useLocale()
   const { open, onClose, status, loading, onRefresh } = props
   const [mode, setMode] = useState<EncodeModePref>(() => getEncodeModePref())
   const [diag, setDiag] = useState<EncodeBenchmark | null>(null)
@@ -46,28 +49,43 @@ export function SettingsDialog(props: SettingsDialogProps): React.JSX.Element | 
     setEncodeModePref(m)
   }
 
-  const fmtMs = (v: number | null): string => (v == null ? '不可用' : Math.round(v) + ' ms/帧')
+  const fmtMs = (v: number | null): string =>
+    v == null ? t('settings.unavailable') : Math.round(v) + ' ms/帧'
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
-          <h2>设置</h2>
+          <h2>{t('settings.title')}</h2>
           <button type="button" className="mini-btn" onClick={onClose}>
-            ✕ 关闭
+            {t('common.close')}
           </button>
         </div>
         <div className="modal-body">
           <SettingsPanel status={status} loading={loading} onRefresh={onRefresh} />
 
           <section className="panel-section">
-            <h2>编码加速</h2>
+            <h2>{t('settings.language')}</h2>
             <label className="field">
-              <span>编码模式</span>
+              <span>{t('settings.uiLanguage')}</span>
+              <select value={locale} onChange={(e) => setLocale(e.target.value as Locale)}>
+                {SUPPORTED_LOCALES.map((l) => (
+                  <option key={l.id} value={l.id}>
+                    {l.nativeName}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </section>
+
+          <section className="panel-section">
+            <h2>{t('settings.encodeAccel')}</h2>
+            <label className="field">
+              <span>{t('settings.encodeMode')}</span>
               <select value={mode} onChange={(e) => applyMode(e.target.value as EncodeModePref)}>
-                <option value="auto">{MODE_LABEL.auto}</option>
-                <option value="hw">{MODE_LABEL.hw}</option>
-                <option value="sw">{MODE_LABEL.sw}</option>
+                <option value="auto">{t(MODE_LABEL_KEY.auto)}</option>
+                <option value="hw">{t(MODE_LABEL_KEY.hw)}</option>
+                <option value="sw">{t(MODE_LABEL_KEY.sw)}</option>
               </select>
             </label>
             <div className="audio-row">
@@ -77,19 +95,19 @@ export function SettingsDialog(props: SettingsDialogProps): React.JSX.Element | 
                 onClick={() => void runDiag()}
                 disabled={diagRunning}
               >
-                {diagRunning ? '检测中…' : '重新检测本机 GPU 加速'}
+                {diagRunning ? t('settings.detecting') : t('settings.detectGpu')}
               </button>
             </div>
             {diag && (
               <div className="panel-note">
                 <p>
-                  硬件编码：{fmtMs(diag.hardwareMsPerFrame)} ｜ 软件编码：
-                  {fmtMs(diag.softwareMsPerFrame)}
+                  {t('settings.hw', { v: fmtMs(diag.hardwareMsPerFrame) })} ｜{' '}
+                  {t('settings.sw', { v: fmtMs(diag.softwareMsPerFrame) })}
                 </p>
                 <p>{diag.verdict}</p>
               </div>
             )}
-            <p className="panel-note">「自动」模式会按本机实测结果选择更快的编码方式。</p>
+            <p className="panel-note">{t('settings.autoNote')}</p>
           </section>
         </div>
       </div>

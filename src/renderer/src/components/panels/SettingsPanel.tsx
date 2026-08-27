@@ -1,11 +1,12 @@
 import { useState } from 'react'
 import type { FfmpegDetectInfo, FfmpegSource, FfmpegStatusReport } from '@shared/ffmpeg'
+import { useLocale } from '../../hooks/useLocale'
 import { useFfmpegDownload } from '../../hooks/useFfmpeg'
 
-const SOURCE_LABEL: Record<FfmpegSource, string> = {
-  system: '系统 ffmpeg',
-  managed: '应用托管版',
-  custom: '手动指定'
+const SOURCE_LABEL_KEY: Record<FfmpegSource, string> = {
+  system: 'ffmpegPanel.sourceSystem',
+  managed: 'ffmpegPanel.sourceManaged',
+  custom: 'ffmpegPanel.sourceCustom'
 }
 
 function InfoRow({
@@ -15,8 +16,9 @@ function InfoRow({
   title: string
   info: FfmpegDetectInfo | null
 }): React.JSX.Element {
+  const { t } = useLocale()
   if (!info) {
-    return <p className="panel-note">{title}：未检测到</p>
+    return <p className="panel-note">{t('ffmpegPanel.notDetected', { title })}</p>
   }
   return (
     <div className="ffmpeg-info">
@@ -24,8 +26,8 @@ function InfoRow({
         {info.status === 'ok' ? '✓' : '✗'}
       </span>
       <span className="ffmpeg-desc">
-        {title}：{info.version}
-        {info.error ? ' ｜ ' + info.error : ''}
+        {t('ffmpegPanel.versionSep', { title, version: info.version })}
+        {info.error ? ' ' + t('ffmpegPanel.errorSep', { error: info.error }) : ''}
       </span>
       <span className="ffmpeg-path">{info.path}</span>
     </div>
@@ -44,6 +46,7 @@ export function SettingsPanel({
   loading,
   onRefresh
 }: SettingsPanelProps): React.JSX.Element {
+  const { t } = useLocale()
   const dl = useFfmpegDownload(onRefresh)
   const [urlOverride, setUrlOverride] = useState<string | null>(null)
   const [customBusy, setCustomBusy] = useState(false)
@@ -82,35 +85,38 @@ export function SettingsPanel({
 
   return (
     <section className="panel-section">
-      <h2>ffmpeg 设置</h2>
+      <h2>{t('ffmpegPanel.title')}</h2>
 
       <div className="field">
-        <span>当前生效</span>
+        <span>{t('ffmpegPanel.currentActive')}</span>
         {eff?.available && eff.info ? (
           <div className="ffmpeg-info">
             <span className="ffmpeg-badge ok">✓</span>
             <span className="ffmpeg-desc">
-              {SOURCE_LABEL[eff.source ?? 'system']}：{eff.info.version}
+              {t('ffmpegPanel.versionSep', {
+                title: t(SOURCE_LABEL_KEY[eff.source ?? 'system']),
+                version: eff.info.version
+              })}
             </span>
             <span className="ffmpeg-path">{eff.path}</span>
           </div>
         ) : (
-          <p className="field-error">未检测到可用 ffmpeg（导出已禁用）</p>
+          <p className="field-error">{t('ffmpegPanel.notAvailable')}</p>
         )}
       </div>
 
       <label className="field">
-        <span>使用来源</span>
+        <span>{t('ffmpegPanel.useSource')}</span>
         <select value={source} onChange={(e) => void setSource(e.target.value as FfmpegSource)}>
-          <option value="system">{SOURCE_LABEL.system}</option>
-          <option value="managed">{SOURCE_LABEL.managed}</option>
-          <option value="custom">{SOURCE_LABEL.custom}</option>
+          <option value="system">{t(SOURCE_LABEL_KEY.system)}</option>
+          <option value="managed">{t(SOURCE_LABEL_KEY.managed)}</option>
+          <option value="custom">{t(SOURCE_LABEL_KEY.custom)}</option>
         </select>
       </label>
 
       <div className="audio-row">
         <button type="button" className="mini-btn" onClick={() => void onRefresh()}>
-          {loading ? '检测中…' : '重新检测'}
+          {loading ? t('ffmpegPanel.detecting') : t('ffmpegPanel.redetect')}
         </button>
         <button
           type="button"
@@ -118,19 +124,19 @@ export function SettingsPanel({
           onClick={() => void pickCustom()}
           disabled={customBusy}
         >
-          浏览指定 ffmpeg.exe
+          {t('ffmpegPanel.browseExe')}
         </button>
       </div>
 
       <div className="field">
-        <span>三源状态</span>
-        <InfoRow title="系统 PATH" info={status?.system ?? null} />
-        <InfoRow title="托管版" info={status?.managed ?? null} />
-        <InfoRow title="手动指定" info={status?.custom ?? null} />
+        <span>{t('ffmpegPanel.threeSources')}</span>
+        <InfoRow title={t('ffmpegPanel.rowSystem')} info={status?.system ?? null} />
+        <InfoRow title={t('ffmpegPanel.rowManaged')} info={status?.managed ?? null} />
+        <InfoRow title={t('ffmpegPanel.rowCustom')} info={status?.custom ?? null} />
       </div>
 
       <div className="field">
-        <span>一键安装编码工具</span>
+        <span>{t('ffmpegPanel.installTitle')}</span>
         {dl.state && dl.state.phase !== 'done' && (
           <div className="dl-row">
             <div className="dl-bar">
@@ -141,11 +147,11 @@ export function SettingsPanel({
               {dl.state.percent != null ? ' ' + dl.state.percent + '%' : ''}
             </span>
             <button type="button" className="mini-btn danger" onClick={dl.cancel}>
-              取消
+              {t('ffmpegPanel.downloadCancel')}
             </button>
           </div>
         )}
-        {dl.state?.phase === 'done' && <p className="panel-note">✓ 安装完成，已自动重新检测。</p>}
+        {dl.state?.phase === 'done' && <p className="panel-note">{t('ffmpegPanel.installDone')}</p>}
         {dl.error && <p className="field-error">{dl.error}</p>}
         <div className="audio-row">
           <button
@@ -153,11 +159,11 @@ export function SettingsPanel({
             className="btn"
             onClick={() => void dl.start(shownUrl || undefined)}
           >
-            一键下载安装
+            {t('ffmpegPanel.installBtn')}
           </button>
         </div>
         <label className="field">
-          <span>下载地址覆盖（留空 = 默认 gyan.dev；可填镜像）</span>
+          <span>{t('ffmpegPanel.urlLabel')}</span>
           <input
             type="text"
             value={shownUrl}
@@ -167,7 +173,7 @@ export function SettingsPanel({
         </label>
         <div className="audio-row">
           <button type="button" className="mini-btn" onClick={() => void saveUrl()}>
-            保存地址
+            {t('ffmpegPanel.saveUrl')}
           </button>
         </div>
       </div>

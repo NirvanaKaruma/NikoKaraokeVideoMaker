@@ -5,6 +5,7 @@ import { join } from 'path'
 import { fileURLToPath } from 'url'
 import { app } from 'electron'
 import { open } from 'yauzl'
+import { t } from '../shared/i18n'
 import type {
   DownloadProgress,
   EffectiveFfmpeg,
@@ -78,7 +79,7 @@ export async function validateFfmpeg(ffmpegPath: string): Promise<FfmpegDetectIn
       hasQsv: false,
       hasAmf: false,
       hwaccels: [],
-      error: '无法执行（-version 失败）：' + (versionRes.stderr || versionRes.stdout).slice(0, 300)
+      error: t('ffmpeg.execFailed', { msg: (versionRes.stderr || versionRes.stdout).slice(0, 300) })
     }
   }
   const versionMatch = /ffmpeg version (\S+)/.exec(versionRes.stdout + versionRes.stderr)
@@ -111,7 +112,7 @@ export async function validateFfmpeg(ffmpegPath: string): Promise<FfmpegDetectIn
     hasQsv,
     hasAmf,
     hwaccels,
-    error: hasAac ? undefined : '缺少 aac 编码器，无法用于导出'
+    error: hasAac ? undefined : t('ffmpeg.noAac')
   }
 }
 
@@ -206,7 +207,7 @@ function downloadFile(
   return new Promise((resolve, reject) => {
     const follow = (u: string, redirects: number): void => {
       if (redirects > 5) {
-        reject(new Error('重定向次数过多'))
+        reject(new Error(t('ffmpeg.redirects')))
         return
       }
       const req = get(u, { headers: { 'User-Agent': 'NikoKaraokeVideoMaker/1.0' } }, (res) => {
@@ -218,7 +219,7 @@ function downloadFile(
         }
         if (status !== 200) {
           res.resume()
-          reject(new Error('下载失败：HTTP ' + status))
+          reject(new Error(t('ffmpeg.httpFail', { code: status })))
           return
         }
         const total = Number(res.headers['content-length'] ?? 0)
@@ -249,7 +250,7 @@ async function extractFfmpegExe(zipPath: string, destDir: string): Promise<strin
   return new Promise((resolve, reject) => {
     open(zipPath, { lazyEntries: true }, (err, zipfile) => {
       if (err || !zipfile) {
-        reject(err ?? new Error('打开压缩包失败'))
+        reject(err ?? new Error(t('ffmpeg.zipOpenFail')))
         return
       }
       let found = false
@@ -269,7 +270,7 @@ async function extractFfmpegExe(zipPath: string, destDir: string): Promise<strin
         found = true
         zipfile.openReadStream(entry, (err2, stream) => {
           if (err2 || !stream) {
-            reject(err2 ?? new Error('读取压缩包条目失败'))
+            reject(err2 ?? new Error(t('ffmpeg.zipReadFail')))
             return
           }
           const out = join(destDir, 'ffmpeg.exe')
@@ -285,7 +286,7 @@ async function extractFfmpegExe(zipPath: string, destDir: string): Promise<strin
         })
       })
       zipfile.on('end', () => {
-        if (!found) reject(new Error('压缩包中未找到 ffmpeg.exe'))
+        if (!found) reject(new Error(t('ffmpeg.zipNoExe')))
       })
       zipfile.on('error', reject)
     })
@@ -312,25 +313,29 @@ export async function installManagedFfmpeg(opts: {
   activeDownloads.set(opts.token, active)
 
   try {
-    opts.onProgress({ phase: 'downloading', percent: 0, message: '正在下载 ffmpeg…' })
+    opts.onProgress({ phase: 'downloading', percent: 0, message: t('ffmpeg.downloading') })
     await downloadFile(
       url,
       zipPath,
       (p) => {
-        opts.onProgress({ phase: 'downloading', percent: p, message: '正在下载 ffmpeg…' })
+        opts.onProgress({ phase: 'downloading', percent: p, message: t('ffmpeg.downloading') })
       },
       () => active.aborted
     )
-    if (active.aborted) throw new Error('下载已取消')
+    if (active.aborted) throw new Error(t('ffmpeg.cancelled'))
 
-    opts.onProgress({ phase: 'extracting', percent: null, message: '正在解压 ffmpeg.exe…' })
+    opts.onProgress({ phase: 'extracting', percent: null, message: t('ffmpeg.extracting') })
     await extractFfmpegExe(zipPath, dir)
-    if (active.aborted) throw new Error('下载已取消')
+    if (active.aborted) throw new Error(t('ffmpeg.cancelled'))
 
-    opts.onProgress({ phase: 'validating', percent: null, message: '正在校验编码器…' })
+    opts.onProgress({ phase: 'validating', percent: null, message: t('ffmpeg.validating') })
     const info = await validateFfmpeg(managedFfmpegPath())
-    if (info.status !== 'ok') throw new Error(info.error ?? '校验失败')
-    opts.onProgress({ phase: 'done', percent: 100, message: '安装完成：ffmpeg ' + info.version })
+    if (info.status !== 'ok') throw new Error(info.error ?? t('ffmpeg.validating'))
+    opts.onProgress({
+      phase: 'done',
+      percent: 100,
+      message: t('ffmpeg.installed', { v: info.version })
+    })
     return info
   } finally {
     activeDownloads.delete(opts.token)

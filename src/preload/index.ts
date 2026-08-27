@@ -14,6 +14,10 @@ import type {
 const api = {
   ping: (): Promise<string> => ipcRenderer.invoke(IPC.appPing),
 
+  /** 界面语言（i18n）：读取/保存偏好 */
+  getLocale: (): Promise<string> => ipcRenderer.invoke(IPC.appGetLocale),
+  setLocale: (locale: string): Promise<string> => ipcRenderer.invoke(IPC.appSetLocale, locale),
+
   /** 获取拖放/选择文件的真实磁盘路径（导出合并 ffmpeg 需要） */
   getFilePath: (file: File): string => {
     try {

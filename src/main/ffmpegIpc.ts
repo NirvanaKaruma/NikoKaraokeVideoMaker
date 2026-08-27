@@ -2,6 +2,7 @@ import { BrowserWindow, app, dialog, ipcMain } from 'electron'
 import { promises as fs } from 'fs'
 import { join } from 'path'
 import { IPC } from '../shared/ipc'
+import { t } from '../shared/i18n'
 import type { FfmpegConfig, MergeProgress, MergeRequest } from '../shared/ffmpeg'
 import { getConfig, setConfig } from './config'
 import {
@@ -41,9 +42,9 @@ export function registerFfmpegIpc(): void {
   ipcMain.handle(IPC.ffmpegPickCustom, async (e) => {
     const win = BrowserWindow.fromWebContents(e.sender)
     const opts: Electron.OpenDialogOptions = {
-      title: '选择 ffmpeg.exe',
+      title: t('dialogs.pickFfmpeg'),
       properties: ['openFile'],
-      filters: [{ name: 'ffmpeg 可执行文件', extensions: ['exe'] }]
+      filters: [{ name: t('dialogs.ffmpegExeFilter'), extensions: ['exe'] }]
     }
     const res = win ? await dialog.showOpenDialog(win, opts) : await dialog.showOpenDialog(opts)
     return res.canceled ? null : (res.filePaths[0] ?? null)
@@ -82,9 +83,9 @@ export function registerFfmpegIpc(): void {
     }
     const win = BrowserWindow.fromWebContents(e.sender)
     const opts = {
-      title: '导出视频',
+      title: t('dialogs.exportVideo'),
       defaultPath: (defaultName || '未命名歌曲') + '.mp4',
-      filters: [{ name: 'MP4 视频', extensions: ['mp4'] }]
+      filters: [{ name: t('dialogs.mp4Filter'), extensions: ['mp4'] }]
     }
     const res = win ? await dialog.showSaveDialog(win, opts) : await dialog.showSaveDialog(opts)
     return res.canceled ? null : (res.filePath ?? null)
@@ -110,17 +111,14 @@ export function registerFfmpegIpc(): void {
     const sender = e.sender
     const ffmpegPath = await getFFmpegPath()
     if (!ffmpegPath) {
-      return { ok: false, error: '没有可用的 ffmpeg：请到设置页一键下载托管版或手动指定路径' }
+      return { ok: false, error: t('ffmpeg.noAvailable') }
     }
     // 兜底：输出文件 = 音频源文件 → ffmpeg 无法原地覆盖输入，直接给出可读错误
     const same = (a: string, b: string): boolean =>
       a.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase() ===
       b.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase()
     if (same(req.outputPath, req.audioPath)) {
-      return {
-        ok: false,
-        error: '输出文件与音频源文件是同一个文件，请更换文件名或保存位置后重试。'
-      }
+      return { ok: false, error: t('ffmpeg.mergeFailSameFile') }
     }
     const args = [
       '-y',
@@ -151,7 +149,7 @@ export function registerFfmpegIpc(): void {
         const m = /out_time_ms=(\d+)/.exec(line)
         if (m && req.durationMs > 0 && !sender.isDestroyed()) {
           const percent = Math.min(100, Math.round((Number(m[1]) / req.durationMs) * 100))
-          const progress: MergeProgress = { percent, message: '正在合并音视频…' }
+          const progress: MergeProgress = { percent, message: t('ffmpeg.mergeProgress') }
           sender.send(IPC.exportMergeProgress, progress)
         }
       }
@@ -165,21 +163,21 @@ export function registerFfmpegIpc(): void {
         const stderr = res.stderr || ''
         const mapFfmpegError = (s: string): string => {
           if (/same as Input|cannot edit existing files in-place/.test(s)) {
-            return '输出文件与音频源文件是同一个文件，请更换文件名或保存位置后重试。'
+            return t('ffmpeg.mergeFailSameFile')
           }
           if (/Permission denied|Access is denied/.test(s)) {
-            return '没有权限写入所选位置（文件可能被其他程序占用或受保护），请换个保存位置后重试。'
+            return t('ffmpeg.mergeFailPermission')
           }
           if (/No space left on device/.test(s)) {
-            return '磁盘空间不足，请清理空间后重试。'
+            return t('ffmpeg.mergeFailDisk')
           }
           if (/does not contain any stream|Stream map.*matches no streams/.test(s)) {
-            return '音频文件没有可用的音轨，请换一个音频文件。'
+            return t('ffmpeg.mergeFailNoStream')
           }
           return ''
         }
         const hint = mapFfmpegError(stderr)
-        return { ok: false, error: hint || 'ffmpeg 合并失败：' + tail }
+        return { ok: false, error: hint || t('ffmpeg.mergeFailGeneric', { tail }) }
       }
       return { ok: true }
     } finally {

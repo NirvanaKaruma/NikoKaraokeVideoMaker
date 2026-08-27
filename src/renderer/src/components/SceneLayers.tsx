@@ -23,6 +23,7 @@ import {
   type CanvasSize
 } from '@shared/layout'
 import { colorAt } from '@shared/color'
+import { useLocale } from '../hooks/useLocale'
 
 /** 可选中元素：主图 / 歌名 / 作者 / 可视化 */
 export type SelectableId = 'mainImage' | 'songTitle' | 'artist' | 'visualizer' | null
@@ -305,6 +306,7 @@ function MainImageLayer({
   onSelect,
   onMainRectChange
 }: MainImageLayerProps): React.JSX.Element {
+  const { t } = useLocale()
   const groupRef = useRef<Konva.Group>(null)
   const trRef = useRef<Konva.Transformer>(null)
   const px = normToPixel(layout.mainImage.rect, canvas)
@@ -403,7 +405,7 @@ function MainImageLayer({
               listening={false}
             />
             <KonvaText
-              text="拖入封面图"
+              text={t('canvas.dropCoverPlaceholder')}
               x={0}
               y={px.h / 2 - 26}
               width={px.w}

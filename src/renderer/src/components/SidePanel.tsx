@@ -5,6 +5,7 @@ import type {
   TextLayerConfig,
   VisualizerConfig
 } from '@shared/layout'
+import { useLocale } from '../hooks/useLocale'
 import type { AudioStatus } from '../hooks/useAudioPlayback'
 import { AudioPanel } from './panels/AudioPanel'
 import { InputPanel } from './panels/InputPanel'
@@ -56,14 +57,15 @@ export interface SidePanelProps {
   onVisualizerChange: (patch: Partial<VisualizerConfig>) => void
 }
 
-const TABS: { id: SideTab; label: string }[] = [
-  { id: 'assets', label: '素材与画面' },
-  { id: 'text', label: '文本样式' },
-  { id: 'visualizer', label: '音频可视化' }
+const TABS: { id: SideTab; labelKey: string }[] = [
+  { id: 'assets', labelKey: 'tabs.assets' },
+  { id: 'text', labelKey: 'tabs.text' },
+  { id: 'visualizer', labelKey: 'tabs.visualizer' }
 ]
 
 /** 左侧面板：常驻播放控制 + 分类 tab（M5 UI 重构：避免单列无限堆叠） */
 export function SidePanel(props: SidePanelProps): React.JSX.Element {
+  const { t } = useLocale()
   const [tab, setTab] = useState<SideTab>('assets')
   return (
     <aside className="side-panel">
@@ -79,14 +81,14 @@ export function SidePanel(props: SidePanelProps): React.JSX.Element {
         onSeek={props.onSeek}
       />
       <div className="tab-bar">
-        {TABS.map((t) => (
+        {TABS.map((item) => (
           <button
-            key={t.id}
+            key={item.id}
             type="button"
-            className={'tab' + (tab === t.id ? ' active' : '')}
-            onClick={() => setTab(t.id)}
+            className={'tab' + (tab === item.id ? ' active' : '')}
+            onClick={() => setTab(item.id)}
           >
-            {t.label}
+            {t(item.labelKey)}
           </button>
         ))}
       </div>

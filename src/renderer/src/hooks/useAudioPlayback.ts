@@ -8,6 +8,7 @@ import {
   type SpectrumAnalyzer
 } from '@shared/spectrum'
 import { placeholderBars } from '@shared/color'
+import { t } from '@shared/i18n'
 
 export type AudioStatus = 'empty' | 'loading' | 'ready' | 'error'
 
@@ -150,7 +151,7 @@ export function useAudioPlayback(
       setError(null)
       try {
         const ctx = ensureCtx()
-        if (!ctx) throw new Error('当前环境不支持 Web Audio')
+        if (!ctx) throw new Error(t('playback.noWebAudio'))
         const ab = await audioFile.arrayBuffer()
         const decoded = await ctx.decodeAudioData(ab)
         if (cancelled) return
@@ -183,7 +184,7 @@ export function useAudioPlayback(
       } catch (e) {
         if (!cancelled) {
           setStatus('error')
-          setError('音频解码失败：' + String(e))
+          setError(t('playback.decodeFailed', { err: String(e) }))
         }
       }
     })()

@@ -4,10 +4,13 @@ import { join } from 'path'
 import type { FfmpegConfig } from '../shared/ffmpeg'
 
 interface AppConfig {
+  /** 界面语言（i18n）：zh-cn | en | jp，默认 zh-cn */
+  locale: string
   ffmpeg: FfmpegConfig
 }
 
 const DEFAULT_CONFIG: AppConfig = {
+  locale: 'zh-cn',
   ffmpeg: {
     source: 'system',
     customPath: '',
@@ -28,6 +31,7 @@ export async function getConfig(): Promise<AppConfig> {
     const raw = await fs.readFile(configPath(), 'utf-8')
     const parsed = JSON.parse(raw) as Partial<AppConfig>
     cache = {
+      locale: parsed.locale ?? DEFAULT_CONFIG.locale,
       ffmpeg: {
         source: parsed.ffmpeg?.source ?? DEFAULT_CONFIG.ffmpeg.source,
         customPath: parsed.ffmpeg?.customPath ?? '',
@@ -41,9 +45,13 @@ export async function getConfig(): Promise<AppConfig> {
 }
 
 /** 写入配置（原子写：临时文件 + 重命名） */
-export async function setConfig(patch: { ffmpeg?: Partial<FfmpegConfig> }): Promise<AppConfig> {
+export async function setConfig(patch: {
+  locale?: string
+  ffmpeg?: Partial<FfmpegConfig>
+}): Promise<AppConfig> {
   const current = await getConfig()
   const next: AppConfig = {
+    locale: patch.locale ?? current.locale,
     ffmpeg: {
       source: patch.ffmpeg?.source ?? current.ffmpeg.source,
       customPath: patch.ffmpeg?.customPath ?? current.ffmpeg.customPath,

@@ -10,6 +10,7 @@ import {
   VisualizerConfig
 } from '@shared/layout'
 import type { ProjectFile } from '@shared/project'
+import { t } from '@shared/i18n'
 
 export const COVER_EXTENSIONS = ['png', 'jpg', 'jpeg', 'webp']
 /** 音频 + 可提取音轨的视频（预览解码由 Chromium 支持，导出由 ffmpeg 提取音轨） */
@@ -188,7 +189,7 @@ export function useProject(): {
     })
     const img = new Image()
     img.onload = () => setAssets((prev) => ({ ...prev, coverElement: img }))
-    img.onerror = () => setFileError('封面图片加载失败，请换一张试试')
+    img.onerror = () => setFileError(t('project.coverLoadFail'))
     img.src = url
   }, [])
 
@@ -197,7 +198,7 @@ export function useProject(): {
       if (!file) return
       const ext = (file.name.split('.').pop() ?? '').toLowerCase()
       if (!COVER_EXTENSIONS.includes(ext)) {
-        setFileError(`封面仅支持 png/jpg/webp（收到 .${ext}）`)
+        setFileError(t('project.coverType', { ext }))
         return
       }
       setFileError(null)
@@ -218,7 +219,7 @@ export function useProject(): {
     if (!file) return
     const ext = (file.name.split('.').pop() ?? '').toLowerCase()
     if (!AUDIO_EXTENSIONS.includes(ext)) {
-      setFileError(`仅支持 mp3/wav/flac/m4a/ogg/mp4/m4v/mov/webm（收到 .${ext}）`)
+      setFileError(t('project.audioType', { ext }))
       return
     }
     setFileError(null)
@@ -350,10 +351,10 @@ export function useProject(): {
             return { ...prev, audioUrl: URL.createObjectURL(f), audioFile: f }
           })
         } else {
-          warnings.push('音频文件未找到（' + pf.audio.path + '），请重新拖入音频')
+          warnings.push(t('project.audioMissing', { path: pf.audio.path }))
         }
       } else if (pf.audio) {
-        warnings.push('项目保存时音频无磁盘路径，请重新拖入音频')
+        warnings.push(t('project.audioNoPath'))
       }
 
       setFileError(null)
@@ -368,20 +369,20 @@ export function useProject(): {
       const pf = await buildProjectFile()
       const res = await window.api.project.save(
         JSON.stringify(pf, null, 2),
-        layoutRef.current.texts.songTitle.text || '未命名项目'
+        layoutRef.current.texts.songTitle.text || t('project.defaultName')
       )
       if (res.canceled) return false
       if (res.ok) {
-        setNotice('项目已保存：' + res.path)
+        setNotice(t('project.saved', { path: res.path ?? '' }))
         // 更新已保存快照（脏标记复位）
         const a = assetsRef.current
         setSavedSnapshot(snapshotOf(layoutRef.current, a))
         return true
       }
-      setNotice('保存失败')
+      setNotice(t('project.saveFailed'))
       return false
     } catch (e) {
-      setFileError('保存项目失败：' + String(e))
+      setFileError(t('project.saveError', { err: String(e) }))
       return false
     }
   }, [buildProjectFile])
@@ -392,12 +393,12 @@ export function useProject(): {
       const res = await window.api.project.load()
       if (res.canceled) return
       if (!res.ok || !res.json) {
-        setFileError('打开项目失败：' + (res.error ?? '未知错误'))
+        setFileError(t('project.openFailed', { err: res.error ?? '未知错误' }))
         return
       }
       const pf = JSON.parse(res.json) as ProjectFile
       if (!pf || pf.version !== 1 || !pf.layout) {
-        setFileError('项目文件格式不支持或已损坏')
+        setFileError(t('project.badFormat'))
         return
       }
       const warnings = await applyProjectFile(pf)
@@ -409,10 +410,10 @@ export function useProject(): {
       if (warnings.length > 0) {
         setNotice(warnings.join('；'))
       } else {
-        setNotice('项目已打开')
+        setNotice(t('project.opened'))
       }
     } catch (e) {
-      setFileError('打开项目失败：' + String(e))
+      setFileError(t('project.openFailed', { err: String(e) }))
     }
   }, [applyProjectFile, bumpHistory])
 
@@ -470,7 +471,7 @@ export function useProject(): {
       if (!file) return
       const ext = (file.name.split('.').pop() ?? '').toLowerCase()
       if (!COVER_EXTENSIONS.includes(ext)) {
-        setFileError(`背景图仅支持 png/jpg/webp（收到 .${ext}）`)
+        setFileError(t('project.bgType', { ext }))
         return
       }
       setFileError(null)
@@ -481,7 +482,7 @@ export function useProject(): {
       })
       const img = new Image()
       img.onload = () => setAssets((prev) => ({ ...prev, bgElement: img }))
-      img.onerror = () => setFileError('背景图片加载失败，请换一张试试')
+      img.onerror = () => setFileError(t('project.bgLoadFail'))
       img.src = url
       // 来源切换进历史栈（可 Ctrl+Z 撤销回默认封面图行为）
       pushHistory()

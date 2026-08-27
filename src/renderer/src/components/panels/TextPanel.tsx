@@ -1,19 +1,21 @@
 import type { TextLayerConfig } from '@shared/layout'
+import { useLocale } from '../../hooks/useLocale'
 import { DeferredSlider } from '../DeferredSlider'
 import { useSystemFonts } from '../../hooks/useSystemFonts'
 
-const BUILTIN_FONTS: { label: string; value: string }[] = [
+/** 内置字体：labelKey 指向语言资源；value 为 CSS font-family */
+const BUILTIN_FONTS: { labelKey: string; value: string }[] = [
   {
-    label: '系统默认',
+    labelKey: 'textPanel.fontDefault',
     value: '"Segoe UI", "Microsoft YaHei", "PingFang SC", "Noto Sans CJK SC", sans-serif'
   },
-  { label: '微软雅黑', value: '"Microsoft YaHei", "Segoe UI", sans-serif' },
-  { label: '黑体', value: '"SimHei", "Microsoft YaHei", sans-serif' },
-  { label: '宋体', value: '"SimSun", "Songti SC", serif' },
-  { label: '楷体', value: '"KaiTi", "Kaiti SC", serif' },
-  { label: '仿宋', value: '"FangSong", "STFangsong", serif' },
-  { label: '等线', value: '"DengXian", "Microsoft YaHei", sans-serif' },
-  { label: '幼圆', value: '"YouYuan", "Microsoft YaHei", sans-serif' }
+  { labelKey: 'textPanel.fontYahei', value: '"Microsoft YaHei", "Segoe UI", sans-serif' },
+  { labelKey: 'textPanel.fontHei', value: '"SimHei", "Microsoft YaHei", sans-serif' },
+  { labelKey: 'textPanel.fontSong', value: '"SimSun", "Songti SC", serif' },
+  { labelKey: 'textPanel.fontKai', value: '"KaiTi", "Kaiti SC", serif' },
+  { labelKey: 'textPanel.fontFangSong', value: '"FangSong", "STFangsong", serif' },
+  { labelKey: 'textPanel.fontDengXian', value: '"DengXian", "Microsoft YaHei", sans-serif' },
+  { labelKey: 'textPanel.fontYouYuan', value: '"YouYuan", "Microsoft YaHei", sans-serif' }
 ]
 
 const systemFontValue = (family: string): string => '"' + family.replace(/"/g, '') + '", sans-serif'
@@ -31,6 +33,7 @@ function StyleControls({
   systemFonts,
   onChange
 }: StyleControlsProps): React.JSX.Element {
+  const { t } = useLocale()
   const s = cfg.style
   const setStyle = (patch: Partial<TextLayerConfig['style']>): void =>
     onChange({ style: { ...s, ...patch } })
@@ -38,17 +41,17 @@ function StyleControls({
     <div className="text-block">
       <h3>{title}</h3>
       <label className="field">
-        <span>字体</span>
+        <span>{t('textPanel.font')}</span>
         <select value={s.fontFamily} onChange={(e) => setStyle({ fontFamily: e.target.value })}>
-          <optgroup label="常用字体">
+          <optgroup label={t('textPanel.commonFonts')}>
             {BUILTIN_FONTS.map((f) => (
-              <option key={f.label} value={f.value}>
-                {f.label}
+              <option key={f.labelKey} value={f.value}>
+                {t(f.labelKey)}
               </option>
             ))}
           </optgroup>
           {systemFonts.length > 0 && (
-            <optgroup label="系统字体">
+            <optgroup label={t('textPanel.systemFonts')}>
               {systemFonts.map((f) => (
                 <option key={f} value={systemFontValue(f)}>
                   {f}
@@ -59,7 +62,7 @@ function StyleControls({
         </select>
       </label>
       <DeferredSlider
-        label={(v) => '字号：' + Math.round(v * 100) + '%'}
+        label={(v) => t('textPanel.size', { v: Math.round(v * 100) })}
         value={s.fontSize}
         min={0.02}
         max={0.2}
@@ -72,14 +75,14 @@ function StyleControls({
           checked={s.bold}
           onChange={(e) => setStyle({ bold: e.target.checked })}
         />
-        <span>加粗</span>
+        <span>{t('textPanel.bold')}</span>
       </label>
       <label className="field">
-        <span>文字颜色</span>
+        <span>{t('textPanel.textColor')}</span>
         <input type="color" value={s.color} onChange={(e) => setStyle({ color: e.target.value })} />
       </label>
       <label className="field">
-        <span>描边颜色</span>
+        <span>{t('textPanel.strokeColor')}</span>
         <input
           type="color"
           value={s.strokeColor}
@@ -87,7 +90,7 @@ function StyleControls({
         />
       </label>
       <DeferredSlider
-        label={(v) => '描边宽度：' + (v * 100).toFixed(2) + '%'}
+        label={(v) => t('textPanel.strokeWidth', { v: (v * 100).toFixed(2) })}
         value={s.strokeWidth}
         min={0}
         max={0.02}
@@ -100,10 +103,10 @@ function StyleControls({
           checked={s.glowEnabled}
           onChange={(e) => setStyle({ glowEnabled: e.target.checked })}
         />
-        <span>外发光</span>
+        <span>{t('textPanel.glow')}</span>
       </label>
       <label className="field">
-        <span>发光颜色</span>
+        <span>{t('textPanel.glowColor')}</span>
         <input
           type="color"
           value={s.glowColor}
@@ -111,7 +114,7 @@ function StyleControls({
         />
       </label>
       <DeferredSlider
-        label={(v) => '发光强度：' + Math.round(v * 2000)}
+        label={(v) => t('textPanel.glowStrength', { v: Math.round(v * 2000) })}
         value={s.glowBlur}
         min={0}
         max={0.05}
@@ -131,30 +134,31 @@ interface TextPanelProps {
 
 /** 文本样式面板：歌曲名 / 作者分别独立可调（T11）；支持扫描系统全部字体 */
 export function TextPanel(props: TextPanelProps): React.JSX.Element {
+  const { t } = useLocale()
   const sys = useSystemFonts()
   return (
     <section className="panel-section">
-      <h2>文本样式</h2>
+      <h2>{t('textPanel.title')}</h2>
       <div className="gradient-row">
         <button type="button" className="mini-btn" onClick={() => void sys.scan()}>
-          {sys.loading ? '扫描中…' : '重新载入系统字体'}
+          {sys.loading ? t('textPanel.scanning') : t('textPanel.rescan')}
         </button>
         <span className="panel-note">
           {sys.scanned && !sys.error
-            ? '已载入 ' + sys.fonts.length + ' 个系统字体'
+            ? t('textPanel.loaded', { n: sys.fonts.length })
             : sys.error
-              ? '无法读取系统字体列表（仅显示常用字体）'
-              : '首次自动扫描中…'}
+              ? t('textPanel.loadFailed')
+              : t('textPanel.firstScan')}
         </span>
       </div>
       <StyleControls
-        title="歌曲名"
+        title={t('textPanel.songTitle')}
         cfg={props.songTitle}
         systemFonts={sys.fonts}
         onChange={props.onSongTitleChange}
       />
       <StyleControls
-        title="作者"
+        title={t('textPanel.artist')}
         cfg={props.artist}
         systemFonts={sys.fonts}
         onChange={props.onArtistChange}

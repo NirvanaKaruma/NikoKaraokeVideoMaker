@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { t } from '@shared/i18n'
 
 export interface SystemFontsState {
   /** 系统字体族名列表（去重排序） */
@@ -26,7 +27,7 @@ export function useSystemFonts(): SystemFontsState {
     setError(null)
     try {
       if (typeof window.queryLocalFonts !== 'function') {
-        throw new Error('当前环境不支持字体枚举')
+        throw new Error(t('playback.fontEnumFailed'))
       }
       const list = await window.queryLocalFonts()
       const uniq = Array.from(new Set(list.map((f) => f.family).filter(Boolean))).sort((a, b) =>

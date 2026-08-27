@@ -1,23 +1,24 @@
 import { useState } from 'react'
 import type { VisualizerConfig } from '@shared/layout'
+import { useLocale } from '../../hooks/useLocale'
 import { DeferredSlider } from '../DeferredSlider'
 
-const BUILTIN_PRESETS: { label: string; colors: string[] }[] = [
-  { label: '粉→青', colors: ['#ff5f9e', '#7ce3ff'] },
-  { label: '青→紫', colors: ['#7ce3ff', '#a78bfa'] },
-  { label: '暖阳橙→红', colors: ['#fbbf24', '#f43f5e'] },
-  { label: '纯白', colors: ['#ffffff'] },
-  { label: '绿→黄', colors: ['#34d399', '#fde047'] }
+const BUILTIN_PRESETS: { labelKey: string; colors: string[] }[] = [
+  { labelKey: 'visualizer.pickPinkCyan', colors: ['#ff5f9e', '#7ce3ff'] },
+  { labelKey: 'visualizer.pickCyanViolet', colors: ['#7ce3ff', '#a78bfa'] },
+  { labelKey: 'visualizer.pickWarmRed', colors: ['#fbbf24', '#f43f5e'] },
+  { labelKey: 'visualizer.pickWhite', colors: ['#ffffff'] },
+  { labelKey: 'visualizer.pickGreenYellow', colors: ['#34d399', '#fde047'] }
 ]
 
 const CUSTOM_PRESETS_KEY = 'niko.viz.customPresets.v1'
 
 /** 频率范围快捷预置（对数刻度）：柱群整体覆盖的频率窗口 */
-const FREQ_PRESETS: { label: string; freqMin: number; freqMax: number }[] = [
-  { label: '全频段 30–16k', freqMin: 30, freqMax: 16000 },
-  { label: '常用 30–8k', freqMin: 30, freqMax: 8000 },
-  { label: '中低频 30–4k', freqMin: 30, freqMax: 4000 },
-  { label: '鼓点/贝斯 20–1k', freqMin: 20, freqMax: 1000 }
+const FREQ_PRESETS: { labelKey: string; freqMin: number; freqMax: number }[] = [
+  { labelKey: 'visualizer.presetFull', freqMin: 30, freqMax: 16000 },
+  { labelKey: 'visualizer.presetCommon', freqMin: 30, freqMax: 8000 },
+  { labelKey: 'visualizer.presetMidLow', freqMin: 30, freqMax: 4000 },
+  { labelKey: 'visualizer.presetBass', freqMin: 20, freqMax: 1000 }
 ]
 
 const keyOf = (colors: string[]): string => JSON.stringify(colors)
@@ -65,14 +66,22 @@ interface VisualizerPanelProps {
 
 /** 可视化参数面板（T13）：柱数/柱宽/高度/圆角/平滑/灵敏度/配色（含自定义渐变预置） */
 export function VisualizerPanel({ config, onChange }: VisualizerPanelProps): React.JSX.Element {
+  const { t } = useLocale()
   const [customPresets, setCustomPresets] = useState<string[][]>(() => loadCustomPresets())
   const [gradientText, setGradientText] = useState<string>(config.colors.join(', '))
   const [gradientError, setGradientError] = useState<string | null>(null)
 
-  const allPresets: { label: string; colors: string[]; custom?: boolean; index?: number }[] = [
-    ...BUILTIN_PRESETS.map((p) => ({ label: p.label, colors: p.colors })),
+  const allPresets: {
+    labelKey: string
+    labelParams?: Record<string, number>
+    colors: string[]
+    custom?: boolean
+    index?: number
+  }[] = [
+    ...BUILTIN_PRESETS.map((p) => ({ labelKey: p.labelKey, colors: p.colors })),
     ...customPresets.map((colors, i) => ({
-      label: '自定义渐变 ' + (i + 1),
+      labelKey: 'visualizer.customGradientOption',
+      labelParams: { i: i + 1 },
       colors,
       custom: true,
       index: i
@@ -84,7 +93,7 @@ export function VisualizerPanel({ config, onChange }: VisualizerPanelProps): Rea
   const applyGradient = (): void => {
     const parsed = parseGradient(gradientText)
     if (!parsed) {
-      setGradientError('格式如 #ff0000,#00ff00（1–8 个颜色值）')
+      setGradientError(t('visualizer.gradientError'))
       return
     }
     setGradientError(null)
@@ -106,9 +115,9 @@ export function VisualizerPanel({ config, onChange }: VisualizerPanelProps): Rea
 
   return (
     <section className="panel-section">
-      <h2>音频可视化</h2>
+      <h2>{t('visualizer.title')}</h2>
       <DeferredSlider
-        label={(v) => '柱数：' + v + '（100–160）'}
+        label={(v) => t('visualizer.barCount', { v })}
         value={config.barCount}
         min={100}
         max={160}
@@ -116,11 +125,9 @@ export function VisualizerPanel({ config, onChange }: VisualizerPanelProps): Rea
         onCommit={(v) => onChange({ barCount: v })}
       />
       <div className="field">
-        <span>
-          显示频率范围：{config.freqMin}–{config.freqMax} Hz
-        </span>
+        <span>{t('visualizer.freqRange', { min: config.freqMin, max: config.freqMax })}</span>
         <DeferredSlider
-          label={(v) => '最低频率：' + v + ' Hz'}
+          label={(v) => t('visualizer.freqMin', { v })}
           value={config.freqMin}
           min={20}
           max={Math.max(21, config.freqMax - 100)}
@@ -128,7 +135,7 @@ export function VisualizerPanel({ config, onChange }: VisualizerPanelProps): Rea
           onCommit={(v) => onChange({ freqMin: Math.min(Math.round(v), config.freqMax - 100) })}
         />
         <DeferredSlider
-          label={(v) => '最高频率：' + v + ' Hz'}
+          label={(v) => t('visualizer.freqMax', { v })}
           value={config.freqMax}
           min={config.freqMin + 100}
           max={20000}
@@ -138,20 +145,20 @@ export function VisualizerPanel({ config, onChange }: VisualizerPanelProps): Rea
         <div className="gradient-row">
           {FREQ_PRESETS.map((p) => (
             <button
-              key={p.label}
+              key={p.labelKey}
               type="button"
               className="mini-btn"
               disabled={config.freqMin === p.freqMin && config.freqMax === p.freqMax}
               onClick={() => onChange({ freqMin: p.freqMin, freqMax: p.freqMax })}
             >
-              {p.label}
+              {t(p.labelKey)}
             </button>
           ))}
         </div>
-        <p className="panel-note">左端为低频、右端为高频；若右侧柱几乎不动，可调低上限。</p>
+        <p className="panel-note">{t('visualizer.freqNote')}</p>
       </div>
       <DeferredSlider
-        label={(v) => '柱宽：' + Math.round(v * 100) + '%'}
+        label={(v) => t('visualizer.barWidth', { v: Math.round(v * 100) })}
         value={config.barWidthRatio}
         min={0.1}
         max={0.9}
@@ -159,7 +166,7 @@ export function VisualizerPanel({ config, onChange }: VisualizerPanelProps): Rea
         onCommit={(v) => onChange({ barWidthRatio: v })}
       />
       <DeferredSlider
-        label={(v) => '柱最大高度：' + Math.round(v * 100) + '%'}
+        label={(v) => t('visualizer.maxHeight', { v: Math.round(v * 100) })}
         value={config.heightRatio}
         min={0.2}
         max={1}
@@ -167,7 +174,7 @@ export function VisualizerPanel({ config, onChange }: VisualizerPanelProps): Rea
         onCommit={(v) => onChange({ heightRatio: v })}
       />
       <DeferredSlider
-        label={(v) => '柱顶圆角：' + v + 'px'}
+        label={(v) => t('visualizer.roundness', { v })}
         value={config.roundness}
         min={0}
         max={24}
@@ -175,7 +182,7 @@ export function VisualizerPanel({ config, onChange }: VisualizerPanelProps): Rea
         onCommit={(v) => onChange({ roundness: v })}
       />
       <DeferredSlider
-        label={(v) => '平滑：' + Math.round(v * 100) + '%'}
+        label={(v) => t('visualizer.smoothing', { v: Math.round(v * 100) })}
         value={config.smoothing}
         min={0}
         max={0.9}
@@ -183,7 +190,7 @@ export function VisualizerPanel({ config, onChange }: VisualizerPanelProps): Rea
         onCommit={(v) => onChange({ smoothing: v })}
       />
       <DeferredSlider
-        label={(v) => '灵敏度：' + v}
+        label={(v) => t('visualizer.sensitivity', { v })}
         value={config.sensitivity}
         min={1}
         max={15}
@@ -191,7 +198,7 @@ export function VisualizerPanel({ config, onChange }: VisualizerPanelProps): Rea
         onCommit={(v) => onChange({ sensitivity: v })}
       />
       <label className="field">
-        <span>配色方案</span>
+        <span>{t('visualizer.colors')}</span>
         <select
           value={currentPreset ? currentKey : '__custom__'}
           onChange={(e) => {
@@ -204,20 +211,22 @@ export function VisualizerPanel({ config, onChange }: VisualizerPanelProps): Rea
           }}
         >
           {BUILTIN_PRESETS.map((p) => (
-            <option key={p.label} value={keyOf(p.colors)}>
-              {p.label}
+            <option key={p.labelKey} value={keyOf(p.colors)}>
+              {t(p.labelKey)}
             </option>
           ))}
-          {customPresets.map((colors, i) => (
-            <option key={'custom-' + i} value={keyOf(colors)}>
-              自定义渐变 {i + 1}
-            </option>
-          ))}
-          {!currentPreset && <option value="__custom__">自定义（未命名）</option>}
+          {allPresets
+            .filter((p) => p.custom)
+            .map((p) => (
+              <option key={keyOf(p.colors)} value={keyOf(p.colors)}>
+                {t(p.labelKey, p.labelParams)}
+              </option>
+            ))}
+          {!currentPreset && <option value="__custom__">{t('visualizer.customUnnamed')}</option>}
         </select>
       </label>
       <div className="field">
-        <span>自定义渐变（1–8 个颜色值，逗号分隔）</span>
+        <span>{t('visualizer.customGradient')}</span>
         <div className="gradient-row">
           <input
             type="text"
@@ -226,10 +235,10 @@ export function VisualizerPanel({ config, onChange }: VisualizerPanelProps): Rea
             placeholder="#ff0000, #00ff00"
           />
           <button type="button" className="mini-btn" onClick={applyGradient}>
-            应用
+            {t('visualizer.apply')}
           </button>
           <button type="button" className="mini-btn" onClick={saveAsPreset}>
-            存为预置
+            {t('visualizer.saveAsPreset')}
           </button>
         </div>
         {gradientError && <p className="field-error">{gradientError}</p>}
@@ -240,7 +249,7 @@ export function VisualizerPanel({ config, onChange }: VisualizerPanelProps): Rea
               className="mini-btn danger"
               onClick={() => removePreset(currentPreset.index ?? 0)}
             >
-              ✕ 删除当前自定义预置
+              {t('visualizer.deletePreset')}
             </button>
           </div>
         )}

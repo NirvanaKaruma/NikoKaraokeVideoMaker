@@ -3,6 +3,7 @@ import { promises as fs } from 'fs'
 import { join } from 'path'
 import { createCipheriv, createDecipheriv, randomBytes } from 'crypto'
 import { IPC } from '../shared/ipc'
+import { t } from '../shared/i18n'
 
 /** 项目文件扩展名（专有后缀，M5 用户反馈） */
 export const PROJECT_EXTENSION = 'niko'
@@ -42,7 +43,7 @@ function decryptProject(buf: Buffer): string {
   // 旧版明文回退
   const text = buf.toString('utf-8').trimStart()
   if (text.startsWith('{')) return text
-  throw new Error('不是有效的 NikoKaraokeVideoMaker 项目文件')
+  throw new Error(t('ffmpeg.invalidProject'))
 }
 
 /** 项目保存/加载 IPC（T23）：保存对话框 + 加密写；smoke 模式免对话框 */
@@ -56,9 +57,9 @@ export function registerProjectIpc(): void {
     } else {
       const win = BrowserWindow.fromWebContents(e.sender)
       const opts = {
-        title: '保存项目',
+        title: t('dialogs.saveProject'),
         defaultPath: (defaultName || '未命名项目') + '.' + PROJECT_EXTENSION,
-        filters: [{ name: 'NikoKaraokeVideoMaker 项目', extensions: [PROJECT_EXTENSION] }]
+        filters: [{ name: t('dialogs.projectFilter'), extensions: [PROJECT_EXTENSION] }]
       }
       const res = win ? await dialog.showSaveDialog(win, opts) : await dialog.showSaveDialog(opts)
       if (res.canceled || !res.filePath) return { ok: false, canceled: true, path: null }
@@ -77,9 +78,9 @@ export function registerProjectIpc(): void {
     } else {
       const win = BrowserWindow.fromWebContents(e.sender)
       const opts = {
-        title: '打开项目',
+        title: t('dialogs.openProject'),
         properties: ['openFile'] as Electron.OpenDialogOptions['properties'],
-        filters: [{ name: 'NikoKaraokeVideoMaker 项目', extensions: [PROJECT_EXTENSION, 'json'] }]
+        filters: [{ name: t('dialogs.projectFilter'), extensions: [PROJECT_EXTENSION, 'json'] }]
       }
       const res = win ? await dialog.showOpenDialog(win, opts) : await dialog.showOpenDialog(opts)
       if (res.canceled || !res.filePaths[0]) return { ok: false, canceled: true, json: null }

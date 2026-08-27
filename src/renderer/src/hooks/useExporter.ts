@@ -4,6 +4,7 @@ import { RESOLUTIONS } from '@shared/layout'
 import type { SpectrumAnalyzer } from '@shared/spectrum'
 import type { ExportStageHandle } from '../components/ExportStageHost'
 import { encodeVideo, type ExportProgressInfo } from '../export/exportVideo'
+import { t } from '@shared/i18n'
 
 export interface ExporterState extends ExportProgressInfo {
   error: string | null
@@ -96,17 +97,17 @@ export function useExporter(args: UseExporterArgs): {
             })
         })
         if (!buffer) {
-          update({ phase: 'cancelled', message: '导出已取消' })
+          update({ phase: 'cancelled', message: t('exporter.exportCancelled') })
           setStageRequest(null)
           return
         }
         if (abort.signal.aborted) {
-          update({ phase: 'cancelled', message: '导出已取消' })
+          update({ phase: 'cancelled', message: t('exporter.exportCancelled') })
           setStageRequest(null)
           return
         }
         // 2) 纯视频写入临时文件（main）
-        update({ phase: 'merging', mergePercent: 0, message: '正在准备合成…' })
+        update({ phase: 'merging', mergePercent: 0, message: t('exporter.prepareMerge') })
         const videoPath = await window.api.exportApi.saveVideo(
           buffer,
           'video-' + Date.now() + '.mp4'
@@ -120,11 +121,11 @@ export function useExporter(args: UseExporterArgs): {
             'audio-' + Date.now() + '.' + (a.audioFile.name.split('.').pop() ?? 'bin')
           )
         }
-        if (!audioPath) throw new Error('无法定位音频文件路径')
+        if (!audioPath) throw new Error(t('exporter.noAudioPath'))
         // 4) ffmpeg 合并
         const mergeId = crypto.randomUUID()
         mergeIdRef.current = mergeId
-        update({ phase: 'merging', mergePercent: 0, message: '正在合成音视频…' })
+        update({ phase: 'merging', mergePercent: 0, message: t('exporter.merging') })
         const off = window.api.exportApi.onMergeProgress((p) => {
           update({ phase: 'merging', mergePercent: p.percent, message: p.message })
         })
@@ -137,20 +138,20 @@ export function useExporter(args: UseExporterArgs): {
         })
         off()
         mergeIdRef.current = null
-        if (!res.ok) throw new Error(res.error ?? '合并失败')
+        if (!res.ok) throw new Error(res.error ?? t('exporter.mergeFailed'))
         update({
           phase: 'done',
           encoded: a.durationMs ? Math.round((a.durationMs / 1000) * layout.export.fps) : 0,
           total: a.durationMs ? Math.round((a.durationMs / 1000) * layout.export.fps) : 0,
           mergePercent: 100,
-          message: '导出完成：' + (a.outputPathRef.current ?? '')
+          message: t('exporter.exportDone', { path: a.outputPathRef.current ?? '' })
         })
       } catch (e) {
         if (abort.signal.aborted) {
-          update({ phase: 'cancelled', message: '导出已取消' })
+          update({ phase: 'cancelled', message: t('exporter.exportCancelled') })
         } else {
           const msg = e instanceof Error ? e.message : String(e)
-          update({ phase: 'error', error: msg, message: '导出失败' })
+          update({ phase: 'error', error: msg, message: t('exporter.exportFailed') })
         }
       } finally {
         setStageRequest(null)
@@ -169,16 +170,18 @@ export function useExporter(args: UseExporterArgs): {
   const start = useCallback(async () => {
     const a = argsRef.current
     if (!a.ffmpegAvailable) {
-      setState({ ...IDLE, phase: 'error', error: '没有可用的 ffmpeg：请到设置页安装或指定' })
+      setState({ ...IDLE, phase: 'error', error: t('exporter.noFfmpeg') })
       return
     }
     if (!a.audioFile || !a.analyzer) {
-      setState({ ...IDLE, phase: 'error', error: '请先加载音频（音频就绪后才能导出）' })
+      setState({ ...IDLE, phase: 'error', error: t('exporter.needAudio') })
       return
     }
     const resolution =
       RESOLUTIONS.find((r) => r.id === a.layout.export.resolutionId) ?? RESOLUTIONS[1]
-    const outputPath = await window.api.exportApi.pickOutput(a.defaultName || '未命名歌曲')
+    const outputPath = await window.api.exportApi.pickOutput(
+      a.defaultName || t('exporter.unnamedSong')
+    )
     if (!outputPath) return
     // 输出路径与音频源文件相同 → ffmpeg 无法原地覆盖输入（合并必然失败），提前拦截给出可读提示
     if (a.audioFile) {
@@ -187,7 +190,7 @@ export function useExporter(args: UseExporterArgs): {
         setState({
           ...IDLE,
           phase: 'error',
-          error: '输出文件与音频源文件是同一个文件。请换个文件名或保存位置，再重新导出。'
+          error: t('exporter.sameFile')
         })
         return
       }
@@ -195,7 +198,7 @@ export function useExporter(args: UseExporterArgs): {
     const abort = new AbortController()
     abortRef.current = abort
     a.outputPathRef.current = outputPath
-    setState({ ...IDLE, phase: 'preparing', message: '准备导出…', outputPath })
+    setState({ ...IDLE, phase: 'preparing', message: t('exporter.preparing'), outputPath })
     setStageRequest({ width: resolution.width, height: resolution.height })
   }, [])
 
@@ -204,7 +207,7 @@ export function useExporter(args: UseExporterArgs): {
     if (mergeIdRef.current) {
       void window.api.exportApi.cancelMerge(mergeIdRef.current)
     }
-    update({ phase: 'cancelled', message: '导出已取消' })
+    update({ phase: 'cancelled', message: t('exporter.exportCancelled') })
   }, [update])
 
   const reset = useCallback(() => {

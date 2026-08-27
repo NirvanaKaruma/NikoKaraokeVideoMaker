@@ -6,6 +6,10 @@ export const IPC = {
   /** M1 hello：ping → 'pong'，验证 renderer→main 往返链路 */
   appPing: 'app:ping',
 
+  /** 界面语言（i18n）：读取/保存用户偏好 */
+  appGetLocale: 'app:get-locale',
+  appSetLocale: 'app:set-locale',
+
   /** ffmpeg 三源管理 */
   ffmpegDetect: 'ffmpeg:detect',
   ffmpegConfigGet: 'ffmpeg:config:get',
