@@ -34,8 +34,8 @@ export function HelpDialog({ open, onClose }: HelpDialogProps): React.JSX.Elemen
           <Section title="基本流程">
             <ol className="help-list">
               <li>
-                拖入封面图（png / jpg / webp，支持透明）与音频（mp3 / wav / flac / m4a，也支持 mp4 /
-                mov / webm 视频取音轨）；
+                拖入封面图（png / jpg / webp）与音频（mp3 / wav / flac / m4a，也支持 mp4 / mov /
+                webm 视频，自动提取其中的音频）；
               </li>
               <li>输入歌曲名与作者；</li>
               <li>点选画布元素拖动位置（主图可拖角等比缩放），调背景、文本样式与频谱参数；</li>
@@ -47,13 +47,10 @@ export function HelpDialog({ open, onClose }: HelpDialogProps): React.JSX.Elemen
           <Section title="ffmpeg 三种来源">
             <ul className="help-list">
               <li>
-                <b>系统 ffmpeg</b>：启动时自动检测 PATH 中的 ffmpeg（含 aac
-                编码器校验），默认优先使用；
+                <b>系统 ffmpeg</b>：自动检测系统已安装的 ffmpeg，默认优先使用；
               </li>
               <li>
-                <b>应用托管版</b>：一键下载 gyan.dev 稳定版并只解压 ffmpeg.exe
-                到用户数据目录（下载进度可见、可取消）；
-                网络不佳时可在设置里改下载地址（如镜像站）；
+                <b>应用内置版</b>：一键下载安装； 网络不佳时可在设置里改下载地址（如镜像站）；
               </li>
               <li>
                 <b>手动指定</b>：浏览选择本机任意 ffmpeg.exe。
@@ -67,9 +64,7 @@ export function HelpDialog({ open, onClose }: HelpDialogProps): React.JSX.Elemen
           <Section title="导出说明">
             <ul className="help-list">
               <li>分辨率：1280×720 / 1920×1080 / 2560×1440 / 3840×2160（16:9）；帧率 30 / 60；</li>
-              <li>
-                导出 = 画面上半区元素 + 音乐 + 跳动频谱；下半区留白（预留给字幕），拖入元素仅提醒；
-              </li>
+              <li>导出的画面包含音乐与频谱；下半区预留给字幕。</li>
               <li>「检测 GPU 加速」会实测本机硬件/软件编码速度并自动选用更快的路径；</li>
               <li>可随时取消；失败会给出可读原因（如 4K 编码失败建议降为 1080p）。</li>
             </ul>
@@ -77,10 +72,7 @@ export function HelpDialog({ open, onClose }: HelpDialogProps): React.JSX.Elemen
 
           <Section title="项目保存 / 打开 / 新建">
             <ul className="help-list">
-              <li>
-                「保存项目」把布局、样式、封面存入专有后缀的 .niko
-                项目文件（内容已加密混淆，防直接查看/篡改；音频只记路径）；
-              </li>
+              <li>「保存项目」把布局、样式、封面存入 .niko 项目文件；</li>
               <li>「打开项目」一键恢复；音频文件被移动后会提示重新拖入；</li>
               <li>「新建项目」清空当前内容，恢复默认布局。</li>
             </ul>

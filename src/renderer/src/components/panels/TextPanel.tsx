@@ -48,7 +48,7 @@ function StyleControls({
             ))}
           </optgroup>
           {systemFonts.length > 0 && (
-            <optgroup label="系统字体（全部）">
+            <optgroup label="系统字体">
               {systemFonts.map((f) => (
                 <option key={f} value={systemFontValue(f)}>
                   {f}
@@ -59,7 +59,7 @@ function StyleControls({
         </select>
       </label>
       <DeferredSlider
-        label={(v) => '字号：' + Math.round(v * 100) + '%（相对画布高）'}
+        label={(v) => '字号：' + Math.round(v * 100) + '%'}
         value={s.fontSize}
         min={0.02}
         max={0.2}
@@ -87,7 +87,7 @@ function StyleControls({
         />
       </label>
       <DeferredSlider
-        label={(v) => '描边宽度：' + (v * 100).toFixed(2) + '%（0 = 无描边）'}
+        label={(v) => '描边宽度：' + (v * 100).toFixed(2) + '%'}
         value={s.strokeWidth}
         min={0}
         max={0.02}
@@ -137,13 +137,13 @@ export function TextPanel(props: TextPanelProps): React.JSX.Element {
       <h2>文本样式</h2>
       <div className="gradient-row">
         <button type="button" className="mini-btn" onClick={() => void sys.scan()}>
-          {sys.loading ? '扫描中…' : '重新扫描系统字体'}
+          {sys.loading ? '扫描中…' : '重新载入系统字体'}
         </button>
         <span className="panel-note">
           {sys.scanned && !sys.error
-            ? '已载入 ' + sys.fonts.length + ' 个系统字体（含日文等特殊字体）'
+            ? '已载入 ' + sys.fonts.length + ' 个系统字体'
             : sys.error
-              ? '字体枚举不可用（保持常用字体）'
+              ? '无法读取系统字体列表（仅显示常用字体）'
               : '首次自动扫描中…'}
         </span>
       </div>

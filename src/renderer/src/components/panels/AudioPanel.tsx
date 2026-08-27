@@ -25,11 +25,7 @@ export function AudioPanel(props: AudioPanelProps): React.JSX.Element {
   return (
     <section className="panel-section">
       <h2>预览播放</h2>
-      {status === 'empty' && (
-        <p className="panel-note">
-          先拖入音频或视频（mp3 / wav / flac / m4a / mp4 / mov / webm）即可预览。
-        </p>
-      )}
+      {status === 'empty' && <p className="panel-note">先拖入音频或视频即可预览。</p>}
       {status === 'loading' && <p className="panel-note">音频解码中…</p>}
       {status === 'error' && <p className="field-error">{error ?? '音频加载失败'}</p>}
       {status === 'ready' && (

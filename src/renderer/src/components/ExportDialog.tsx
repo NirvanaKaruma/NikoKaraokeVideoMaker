@@ -84,8 +84,8 @@ export function ExportDialog(props: ExportDialogProps): React.JSX.Element | null
               disabled={busy}
               onChange={(e) => onChange({ fps: Number(e.target.value) })}
             >
-              <option value={30}>30 fps（推荐）</option>
-              <option value={60}>60 fps（更丝滑，编码耗时约翻倍）</option>
+              <option value={30}>30 fps</option>
+              <option value={60}>60 fps</option>
             </select>
           </label>
           <label className="field">
@@ -100,9 +100,7 @@ export function ExportDialog(props: ExportDialogProps): React.JSX.Element | null
               <option value="sw">{MODE_LABEL.sw}</option>
             </select>
           </label>
-          <p className="panel-note">
-            检测与详细设置见右上角「设置 → 编码加速」。默认「自动」会按本机实测选择更快的路径。
-          </p>
+          <p className="panel-note">详细检测见「设置 → 编码加速」。</p>
 
           {!ffmpegAvailable && (
             <p className="field-error">
@@ -110,7 +108,7 @@ export function ExportDialog(props: ExportDialogProps): React.JSX.Element | null
             </p>
           )}
           {ffmpegAvailable && !audioReady && (
-            <p className="panel-note">先拖入音频并等待解码完成，才能导出。</p>
+            <p className="panel-note">请先拖入音频，就绪后才能导出。</p>
           )}
 
           {!busy && state.phase !== 'done' && (

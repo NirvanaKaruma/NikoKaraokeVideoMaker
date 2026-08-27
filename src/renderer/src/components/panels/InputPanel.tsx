@@ -88,7 +88,7 @@ export function InputPanel(props: InputPanelProps): React.JSX.Element {
         />
       </label>
       <div className="field">
-        <span>封面图（png / jpg / webp，支持透明）</span>
+        <span>封面图（png / jpg / webp）</span>
         <DropZone
           label="点击或拖入封面图"
           hint="＋ 封面图"
@@ -99,7 +99,7 @@ export function InputPanel(props: InputPanelProps): React.JSX.Element {
         />
       </div>
       <div className="field">
-        <span>音频 / 视频（mp3 / wav / flac / m4a / mp4 / mov / webm，视频取音轨）</span>
+        <span>音频 / 视频（mp3 / wav / flac / m4a / mp4 / mov / webm）</span>
         <DropZone
           label="点击或拖入音频或视频"
           hint="♪ 音频"

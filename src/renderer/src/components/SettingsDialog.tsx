@@ -32,8 +32,6 @@ export function SettingsDialog(props: SettingsDialogProps): React.JSX.Element | 
 
   if (!open) return null
 
-  const effInfo = status?.effective?.info ?? null
-
   const runDiag = async (): Promise<void> => {
     setDiagRunning(true)
     try {
@@ -63,21 +61,9 @@ export function SettingsDialog(props: SettingsDialogProps): React.JSX.Element | 
           <SettingsPanel status={status} loading={loading} onRefresh={onRefresh} />
 
           <section className="panel-section">
-            <h2>语言（Language）</h2>
-            <label className="field">
-              <span>界面语言</span>
-              <select value="zh-CN" disabled>
-                <option value="zh-CN">简体中文（当前）</option>
-                <option value="en-US">English（预留，待实现 i18n）</option>
-              </select>
-            </label>
-            <p className="panel-note">已预留多语言接口，后续版本可扩展。</p>
-          </section>
-
-          <section className="panel-section">
             <h2>编码加速</h2>
             <label className="field">
-              <span>编码模式（显式选择）</span>
+              <span>编码模式</span>
               <select value={mode} onChange={(e) => applyMode(e.target.value as EncodeModePref)}>
                 <option value="auto">{MODE_LABEL.auto}</option>
                 <option value="hw">{MODE_LABEL.hw}</option>
@@ -103,32 +89,7 @@ export function SettingsDialog(props: SettingsDialogProps): React.JSX.Element | 
                 <p>{diag.verdict}</p>
               </div>
             )}
-            <p className="panel-note">
-              WebCodecs 编码路径：本机 Chromium 是否暴露 GPU
-              编码器因机器而异；「自动」模式按上述实测选择更快路径。
-            </p>
-          </section>
-
-          <section className="panel-section">
-            <h2>ffmpeg 硬件能力（信息展示）</h2>
-            {effInfo ? (
-              <div className="panel-note">
-                <p>
-                  NVIDIA NVENC：{effInfo.hasNvenc ? '✓ 有' : '✗ 无'} ｜ Intel QSV：
-                  {effInfo.hasQsv ? '✓ 有' : '✗ 无'} ｜ AMD AMF：{effInfo.hasAmf ? '✓ 有' : '✗ 无'}
-                </p>
-                <p>
-                  硬件加速器：{effInfo.hwaccels.length > 0 ? effInfo.hwaccels.join('、') : '无'}
-                </p>
-                <p>
-                  说明：当前导出管线的视频编码在 WebCodecs（本页「编码加速」控制）；ffmpeg
-                  仅做无损混流（copy）与 AAC 音频编码。若未来启用 raw 帧回退管线，将优先使用上述
-                  ffmpeg 硬件编码器（如 nvenc）。
-                </p>
-              </div>
-            ) : (
-              <p className="panel-note">未检测到可用 ffmpeg，暂无硬件能力信息。</p>
-            )}
+            <p className="panel-note">「自动」模式会按本机实测结果选择更快的编码方式。</p>
           </section>
         </div>
       </div>

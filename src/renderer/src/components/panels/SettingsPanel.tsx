@@ -3,7 +3,7 @@ import type { FfmpegDetectInfo, FfmpegSource, FfmpegStatusReport } from '@shared
 import { useFfmpegDownload } from '../../hooks/useFfmpeg'
 
 const SOURCE_LABEL: Record<FfmpegSource, string> = {
-  system: '系统 PATH（自动检测）',
+  system: '系统 ffmpeg',
   managed: '应用托管版',
   custom: '手动指定'
 }
@@ -24,8 +24,7 @@ function InfoRow({
         {info.status === 'ok' ? '✓' : '✗'}
       </span>
       <span className="ffmpeg-desc">
-        {title}：{info.version} ｜ aac {info.hasAac ? '✓' : '✗'}
-        {info.status === 'ok' && !info.hasLibx264 ? '（无 libx264，仅警告）' : ''}
+        {title}：{info.version}
         {info.error ? ' ｜ ' + info.error : ''}
       </span>
       <span className="ffmpeg-path">{info.path}</span>
@@ -91,9 +90,7 @@ export function SettingsPanel({
           <div className="ffmpeg-info">
             <span className="ffmpeg-badge ok">✓</span>
             <span className="ffmpeg-desc">
-              {SOURCE_LABEL[eff.source ?? 'system']}：{eff.info.version} ｜ aac{' '}
-              {eff.info.hasAac ? '✓' : '✗'}
-              {!eff.info.hasLibx264 ? '（无 libx264，仅警告）' : ''}
+              {SOURCE_LABEL[eff.source ?? 'system']}：{eff.info.version}
             </span>
             <span className="ffmpeg-path">{eff.path}</span>
           </div>
@@ -103,7 +100,7 @@ export function SettingsPanel({
       </div>
 
       <label className="field">
-        <span>使用来源（切换立即生效并保存）</span>
+        <span>使用来源</span>
         <select value={source} onChange={(e) => void setSource(e.target.value as FfmpegSource)}>
           <option value="system">{SOURCE_LABEL.system}</option>
           <option value="managed">{SOURCE_LABEL.managed}</option>
@@ -133,7 +130,7 @@ export function SettingsPanel({
       </div>
 
       <div className="field">
-        <span>托管版一键安装（gyan.dev 稳定版，仅解压 ffmpeg.exe）</span>
+        <span>一键安装编码工具</span>
         {dl.state && dl.state.phase !== 'done' && (
           <div className="dl-row">
             <div className="dl-bar">

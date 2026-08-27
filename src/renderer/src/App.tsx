@@ -389,7 +389,13 @@ async function runAudioSmoke(
   if (bars3.length === wideLen && narrowPeak > widePeak + 3) {
     pass(
       '频率范围可调',
-      '30–8k 440Hz 峰值 #' + widePeak + ' → 30–4k 峰值 #' + narrowPeak + '（柱数 ' + bars3.length + ' 不变）'
+      '30–8k 440Hz 峰值 #' +
+        widePeak +
+        ' → 30–4k 峰值 #' +
+        narrowPeak +
+        '（柱数 ' +
+        bars3.length +
+        ' 不变）'
     )
   } else {
     fail(
@@ -820,7 +826,7 @@ function App(): React.JSX.Element {
             type="button"
             className="mini-btn"
             onClick={() => {
-              if (window.confirm('新建项目将清空当前编辑内容（布局与素材），确定继续？')) {
+              if (window.confirm('新建项目将清空当前内容，确定继续？')) {
                 project.resetProject()
                 setSelectedId(null)
               }
@@ -840,14 +846,13 @@ function App(): React.JSX.Element {
           <button type="button" className="mini-btn" onClick={() => setSettingsOpen(true)}>
             ⚙ 设置
           </button>
-          <span className="app-stage-tag">M5</span>
         </div>
       </header>
       {!ffmpeg.loading && ffmpeg.report && !ffmpeg.report.effective.available && (
         <div className="ffmpeg-banner">
           <span>⚠ 未检测到 ffmpeg —— 导出已禁用。</span>
           <button type="button" className="banner-btn" onClick={() => void ffmpegDl.start()}>
-            一键下载托管版
+            一键下载编码工具
           </button>
           <button
             type="button"
@@ -938,9 +943,7 @@ function App(): React.JSX.Element {
             }}
           />
           {subzoneWarning && (
-            <div className="warn-banner">
-              ⚠ 主图已进入下半区（y&gt;55%，预留字幕区）——仅提醒，不禁止。
-            </div>
+            <div className="warn-banner">⚠ 主图已进入下半区（预留给字幕的区域）。</div>
           )}
         </main>
       </div>

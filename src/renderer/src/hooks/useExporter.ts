@@ -98,7 +98,7 @@ export function useExporter(args: UseExporterArgs): {
           return
         }
         // 2) 纯视频写入临时文件（main）
-        update({ phase: 'merging', mergePercent: 0, message: '正在准备合并…' })
+        update({ phase: 'merging', mergePercent: 0, message: '正在准备合成…' })
         const videoPath = await window.api.exportApi.saveVideo(
           buffer,
           'video-' + Date.now() + '.mp4'
@@ -116,7 +116,7 @@ export function useExporter(args: UseExporterArgs): {
         // 4) ffmpeg 合并
         const mergeId = crypto.randomUUID()
         mergeIdRef.current = mergeId
-        update({ phase: 'merging', mergePercent: 0, message: '正在合并音视频…' })
+        update({ phase: 'merging', mergePercent: 0, message: '正在合成音视频…' })
         const off = window.api.exportApi.onMergeProgress((p) => {
           update({ phase: 'merging', mergePercent: p.percent, message: p.message })
         })

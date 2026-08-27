@@ -3,7 +3,7 @@ import type { VisualizerConfig } from '@shared/layout'
 import { DeferredSlider } from '../DeferredSlider'
 
 const BUILTIN_PRESETS: { label: string; colors: string[] }[] = [
-  { label: '粉→青（默认）', colors: ['#ff5f9e', '#7ce3ff'] },
+  { label: '粉→青', colors: ['#ff5f9e', '#7ce3ff'] },
   { label: '青→紫', colors: ['#7ce3ff', '#a78bfa'] },
   { label: '暖阳橙→红', colors: ['#fbbf24', '#f43f5e'] },
   { label: '纯白', colors: ['#ffffff'] },
@@ -84,7 +84,7 @@ export function VisualizerPanel({ config, onChange }: VisualizerPanelProps): Rea
   const applyGradient = (): void => {
     const parsed = parseGradient(gradientText)
     if (!parsed) {
-      setGradientError('格式：1–8 个十六进制色、逗号分隔，如 #ff0000,#00ff00')
+      setGradientError('格式如 #ff0000,#00ff00（1–8 个颜色值）')
       return
     }
     setGradientError(null)
@@ -108,7 +108,7 @@ export function VisualizerPanel({ config, onChange }: VisualizerPanelProps): Rea
     <section className="panel-section">
       <h2>音频可视化</h2>
       <DeferredSlider
-        label={(v) => '柱数：' + v + '（100–160，频率范围不变，柱越多分度越细）'}
+        label={(v) => '柱数：' + v + '（100–160）'}
         value={config.barCount}
         min={100}
         max={160}
@@ -117,7 +117,7 @@ export function VisualizerPanel({ config, onChange }: VisualizerPanelProps): Rea
       />
       <div className="field">
         <span>
-          显示频率范围：{config.freqMin}–{config.freqMax} Hz（对数刻度）
+          显示频率范围：{config.freqMin}–{config.freqMax} Hz
         </span>
         <DeferredSlider
           label={(v) => '最低频率：' + v + ' Hz'}
@@ -148,9 +148,7 @@ export function VisualizerPanel({ config, onChange }: VisualizerPanelProps): Rea
             </button>
           ))}
         </div>
-        <p className="panel-note">
-          左端=低频（鼓/贝斯），右端=高频（镲片/人声泛音）。音乐能量集中在低频，若右侧柱几乎不动，减小上限即可让柱子布满整个区域；上限受音频采样率限制。
-        </p>
+        <p className="panel-note">左端为低频、右端为高频；若右侧柱几乎不动，可调低上限。</p>
       </div>
       <DeferredSlider
         label={(v) => '柱宽：' + Math.round(v * 100) + '%'}
@@ -177,7 +175,7 @@ export function VisualizerPanel({ config, onChange }: VisualizerPanelProps): Rea
         onCommit={(v) => onChange({ roundness: v })}
       />
       <DeferredSlider
-        label={(v) => '平滑：' + Math.round(v * 100) + '%（0 = 最灵敏，默认 20%）'}
+        label={(v) => '平滑：' + Math.round(v * 100) + '%'}
         value={config.smoothing}
         min={0}
         max={0.9}
@@ -185,7 +183,7 @@ export function VisualizerPanel({ config, onChange }: VisualizerPanelProps): Rea
         onCommit={(v) => onChange({ smoothing: v })}
       />
       <DeferredSlider
-        label={(v) => '灵敏度：' + v + '（越大柱越高越灵敏）'}
+        label={(v) => '灵敏度：' + v}
         value={config.sensitivity}
         min={1}
         max={15}
@@ -219,7 +217,7 @@ export function VisualizerPanel({ config, onChange }: VisualizerPanelProps): Rea
         </select>
       </label>
       <div className="field">
-        <span>自定义渐变（1–8 个 hex，逗号分隔）</span>
+        <span>自定义渐变（1–8 个颜色值，逗号分隔）</span>
         <div className="gradient-row">
           <input
             type="text"
@@ -246,9 +244,6 @@ export function VisualizerPanel({ config, onChange }: VisualizerPanelProps): Rea
             </button>
           </div>
         )}
-        <p className="panel-note">
-          单色 = 只填 1 个色；多色从左到右线性渐变。自定义预置保存在本机。
-        </p>
       </div>
     </section>
   )

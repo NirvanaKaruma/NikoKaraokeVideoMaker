@@ -26,7 +26,7 @@ export function BackgroundPanel(props: BackgroundPanelProps): React.JSX.Element 
           checked={background.useImage}
           onChange={(e) => onChange({ useImage: e.target.checked })}
         />
-        <span>使用图片背景（关闭 = 纯色背景）</span>
+        <span>使用图片背景</span>
       </label>
       <label className="field">
         <span>背景图片来源</span>
@@ -36,13 +36,13 @@ export function BackgroundPanel(props: BackgroundPanelProps): React.JSX.Element 
             onChange({ imageSource: e.target.value as BackgroundConfig['imageSource'] })
           }
         >
-          <option value="cover">封面图（默认）</option>
-          <option value="custom">自定义图片（独立上传）</option>
+          <option value="cover">封面图</option>
+          <option value="custom">自定义图片</option>
         </select>
       </label>
       {background.imageSource === 'custom' && (
         <div className="field">
-          <span>自定义背景图（png / jpg / webp）</span>
+          <span>自定义背景图</span>
           <div
             className={'drop-zone' + (over ? ' over' : '')}
             onClick={() => inputRef.current?.click()}
@@ -76,13 +76,13 @@ export function BackgroundPanel(props: BackgroundPanelProps): React.JSX.Element 
           </div>
           <div className="gradient-row">
             <button type="button" className="mini-btn danger" onClick={onClearBg}>
-              ✕ 清除自定义图（恢复用封面图）
+              ✕ 清除自定义图
             </button>
           </div>
         </div>
       )}
       <label className="field">
-        <span>背景色（透明图先与此色合成再模糊）</span>
+        <span>背景色</span>
         <input
           type="color"
           value={background.color}
@@ -105,9 +105,6 @@ export function BackgroundPanel(props: BackgroundPanelProps): React.JSX.Element 
         step={0.01}
         onCommit={(v) => onChange({ dimOpacity: v })}
       />
-      <p className="panel-note">
-        提示：点选主图后可拖动、拖角缩放（等比锁定）；拖入下半区（y&gt;55%，预留字幕区）仅提醒不禁止。
-      </p>
     </section>
   )
 }

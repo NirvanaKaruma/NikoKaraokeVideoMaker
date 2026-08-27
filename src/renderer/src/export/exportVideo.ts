@@ -228,12 +228,6 @@ export async function encodeVideo(opts: EncodeVideoOptions): Promise<ArrayBuffer
     )
   }
   const encoderConfig = picked.config
-  const modeLabel =
-    picked.choice.mode === 'prefer-hardware'
-      ? '硬件优先'
-      : picked.choice.mode === 'prefer-software'
-        ? '软件'
-        : '自动'
 
   const muxer = new Muxer({
     target: new ArrayBufferTarget(),
@@ -277,7 +271,7 @@ export async function encodeVideo(opts: EncodeVideoOptions): Promise<ArrayBuffer
     encoded: 0,
     total: totalFrames,
     mergePercent: null,
-    message: '正在编码视频帧…'
+    message: '正在生成视频…'
   })
 
   try {
@@ -303,17 +297,11 @@ export async function encodeVideo(opts: EncodeVideoOptions): Promise<ArrayBuffer
       frame.close()
       if (encoderError) throw encoderError
       frameMs.push(performance.now() - f0)
-      let message = '正在编码视频帧…'
+      let message = '正在生成视频…'
       if ((i + 1) % 30 === 0) {
         const avg = frameMs.reduce((a, b) => a + b, 0) / frameMs.length
-        message =
-          '正在编码视频帧… 帧 ' +
-          (i + 1) +
-          '/' +
-          totalFrames +
-          '（平均 ' +
-          Math.round(avg) +
-          'ms/帧）'
+        const percent = Math.round(((i + 1) / totalFrames) * 100)
+        message = '正在生成视频… 已完成 ' + percent + '%（平均 ' + Math.round(avg) + ' ms/帧）'
       }
       onProgress({
         phase: 'encoding',
@@ -331,18 +319,7 @@ export async function encodeVideo(opts: EncodeVideoOptions): Promise<ArrayBuffer
       encoded: totalFrames,
       total: totalFrames,
       mergePercent: null,
-      message:
-        '编码完成：' +
-        totalFrames +
-        ' 帧 / ' +
-        Math.round(totalMs / 1000) +
-        's（平均 ' +
-        Math.round(totalMs / totalFrames) +
-        'ms/帧）· 编码器 ' +
-        picked.choice.codec +
-        '（' +
-        modeLabel +
-        '）'
+      message: '视频编码完成（用时 ' + Math.round(totalMs / 1000) + ' 秒）'
     })
     await encoder.flush()
     if (encoderError) throw encoderError
