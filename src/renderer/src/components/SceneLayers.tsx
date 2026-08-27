@@ -51,16 +51,20 @@ export interface SceneLayersProps {
 
 const SELECT_BORDER = '#ff5f9e'
 
-/** 拖动时限制在画布内 */
+/**
+ * 拖动边界：自由移动（元素可部分超出画布，所见即所得），
+ * 只保证至少 60px 可见，避免完全拖丢（尤其元素接近/超过画布大小时）。
+ */
 function clampPos(
   pos: { x: number; y: number },
   w: number,
   h: number,
   canvas: CanvasSize
 ): { x: number; y: number } {
+  const MIN_VISIBLE = 60
   return {
-    x: Math.min(Math.max(pos.x, 0), canvas.width - w),
-    y: Math.min(Math.max(pos.y, 0), canvas.height - h)
+    x: Math.min(Math.max(pos.x, -(w - MIN_VISIBLE)), canvas.width - MIN_VISIBLE),
+    y: Math.min(Math.max(pos.y, -(h - MIN_VISIBLE)), canvas.height - MIN_VISIBLE)
   }
 }
 

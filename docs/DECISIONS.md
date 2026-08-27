@@ -125,6 +125,11 @@
 - 渲染：BackgroundLayer 按 source 选图（custom 且已上传 → bgElement，否则封面图），仍走私有半分辨率副本 + 缓存模糊管线。
 - 项目文件 .niko 增加 backgroundImage 字段（dataURL 内嵌）；脏标记快照包含 hasBg。
 - smoke-project 扩展至 9 项：背景图保存/恢复、撤销×4、重做×4。
+
+## 14. 拖动边界（用户反馈修复）
+
+- 原实现把元素严格限制在画布内——主图默认高 90%，纵向可动范围仅约 108px，放大超过画布后纵向锁死（「只能左右移动」）。
+- 改为**自由移动**：元素可部分超出画布（所见即所得，导出即裁剪效果），仅保证至少 60px 可见防止完全拖丢；主图/文本/可视化共用同一 clampPos。
 - **GitHub 同步**（用户要求）：私有仓库 github.com/NirvanaKaruma/NikoKaraokeVideoMaker，默认分支 main，通过本机 SSH 密钥（gh CLI 未安装）推送；每个里程碑提交后同步。
 
 ## 6. 依赖与安全决策（M1 期间追加）
