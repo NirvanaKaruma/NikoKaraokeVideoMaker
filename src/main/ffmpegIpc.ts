@@ -112,6 +112,16 @@ export function registerFfmpegIpc(): void {
     if (!ffmpegPath) {
       return { ok: false, error: '没有可用的 ffmpeg：请到设置页一键下载托管版或手动指定路径' }
     }
+    // 兜底：输出文件 = 音频源文件 → ffmpeg 无法原地覆盖输入，直接给出可读错误
+    const same = (a: string, b: string): boolean =>
+      a.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase() ===
+      b.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase()
+    if (same(req.outputPath, req.audioPath)) {
+      return {
+        ok: false,
+        error: '输出文件与音频源文件是同一个文件，请更换文件名或保存位置后重试。'
+      }
+    }
     const args = [
       '-y',
       '-i',
@@ -152,7 +162,24 @@ export function registerFfmpegIpc(): void {
       mergeHandles.delete(req.mergeId)
       if (res.code !== 0) {
         const tail = (res.stderr || res.stdout).slice(-600)
-        return { ok: false, error: 'ffmpeg 合并失败：' + tail }
+        const stderr = res.stderr || ''
+        const mapFfmpegError = (s: string): string => {
+          if (/same as Input|cannot edit existing files in-place/.test(s)) {
+            return '输出文件与音频源文件是同一个文件，请更换文件名或保存位置后重试。'
+          }
+          if (/Permission denied|Access is denied/.test(s)) {
+            return '没有权限写入所选位置（文件可能被其他程序占用或受保护），请换个保存位置后重试。'
+          }
+          if (/No space left on device/.test(s)) {
+            return '磁盘空间不足，请清理空间后重试。'
+          }
+          if (/does not contain any stream|Stream map.*matches no streams/.test(s)) {
+            return '音频文件没有可用的音轨，请换一个音频文件。'
+          }
+          return ''
+        }
+        const hint = mapFfmpegError(stderr)
+        return { ok: false, error: hint || 'ffmpeg 合并失败：' + tail }
       }
       return { ok: true }
     } finally {

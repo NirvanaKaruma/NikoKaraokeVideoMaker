@@ -770,9 +770,18 @@ function App(): React.JSX.Element {
       )
       // 新建项目：应回到默认布局并清空素材
       project.resetProject()
-      await sleep(300)
-      const nl = projectRef.current.layout
-      const na = projectRef.current.assets
+      // 竞态防护：轮询等待 reset 的异步提交完成（曾偶发读到旧状态）
+      const resetWait = Date.now()
+      let nl = projectRef.current.layout
+      let na = projectRef.current.assets
+      while (
+        (nl.texts.songTitle.text !== '歌曲名' || na.audioFile != null) &&
+        Date.now() - resetWait < 3000
+      ) {
+        await sleep(120)
+        nl = projectRef.current.layout
+        na = projectRef.current.assets
+      }
       add(
         '新建重置',
         nl.texts.songTitle.text === '歌曲名' &&

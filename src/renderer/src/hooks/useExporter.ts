@@ -24,6 +24,14 @@ export interface UseExporterArgs {
   outputPathRef: React.MutableRefObject<string>
 }
 
+/** Windows 路径比较：大小写不敏感、分隔符与结尾斜杠归一 */
+export function sameFilePath(a: string, b: string): boolean {
+  return (
+    a.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase() ===
+    b.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase()
+  )
+}
+
 const IDLE: ExporterState = {
   phase: 'idle',
   encoded: 0,
@@ -170,9 +178,20 @@ export function useExporter(args: UseExporterArgs): {
     }
     const resolution =
       RESOLUTIONS.find((r) => r.id === a.layout.export.resolutionId) ?? RESOLUTIONS[1]
-    // 4K 提示（Q2=A：失败才报错建议降档，这里只给一次提示）
     const outputPath = await window.api.exportApi.pickOutput(a.defaultName || '未命名歌曲')
     if (!outputPath) return
+    // 输出路径与音频源文件相同 → ffmpeg 无法原地覆盖输入（合并必然失败），提前拦截给出可读提示
+    if (a.audioFile) {
+      const audioPath = window.api.getFilePath(a.audioFile)
+      if (audioPath && sameFilePath(outputPath, audioPath)) {
+        setState({
+          ...IDLE,
+          phase: 'error',
+          error: '输出文件与音频源文件是同一个文件。请换个文件名或保存位置，再重新导出。'
+        })
+        return
+      }
+    }
     const abort = new AbortController()
     abortRef.current = abort
     a.outputPathRef.current = outputPath
