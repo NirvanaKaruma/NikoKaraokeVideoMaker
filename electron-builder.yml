@@ -1,5 +1,6 @@
 appId: com.niko.karaoke
 productName: NikoKaraokeVideoMaker
+copyright: Copyright © 2026 NirvanaKaruma
 directories:
   buildResources: build
 files:

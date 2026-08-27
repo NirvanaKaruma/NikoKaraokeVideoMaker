@@ -13,3 +13,8 @@ smoke-*-report.json
 TEST-ARTIFACTS/
 .plan/
 
+
+# 开源仓库保留在本地的文档/配置
+README-dev.md
+TEST.md
+

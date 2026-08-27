@@ -1,6 +1,6 @@
 {
   "name": "niko-karaoke-video-maker",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "NikoKaraokeVideoMaker — KTV 字幕底视频生成器（16:9 MP4，含音频与频谱可视化）",
   "main": "./out/main/index.js",
   "author": "NirvanaKaruma <2300013113@stu.pku.edu.cn>",
