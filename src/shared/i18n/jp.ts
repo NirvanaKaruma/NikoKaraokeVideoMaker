@@ -1,7 +1,7 @@
 /**
  * 日本語 language resource (translation WIP — fill values, empty = fallback to zh-cn).
  * NOTE: key structure must stay isomorphic with zh-cn.ts; empty strings fall back to zh-cn.
- * Keys with {xxx} placeholders are filled by t(key, params); e.g. `'柱数: {v}'` → Japanese.
+ * Keys with {xxx} placeholders are filled by t(key, params).
  */
 
 /**
@@ -169,6 +169,9 @@ export const jp = {
     languageJp: '',
     encodeAccel: '',
     encodeMode: '',
+    modeAuto: '',
+    modeHw: '',
+    modeSw: '',
     detectGpu: '',
     detecting: '',
     hw: '',
@@ -204,7 +207,8 @@ export const jp = {
   help: {
     title: '',
     basics: '',
-    basicsStep1: '',
+    basicsStep1:
+      '拖入封面图（png / jpg / webp）与音频（mp3 / wav / flac / m4a，也支持 mp4 / mov / webm 视频，自动提取其中的音频）；',
     basicsStep2: '',
     basicsStep3: '',
     basicsStep4: '',
@@ -216,7 +220,8 @@ export const jp = {
     sourceManagedDesc: '',
     sourceCustomLabel: '',
     sourceCustomDesc: '',
-    sourcesNote: '',
+    sourcesNote:
+      '三种来源可随时切换并自动保存。没有任何可用 ffmpeg 时导出按钮会禁用，并出现顶部提示。',
     exportTitle: '',
     exportRes: '',
     exportContent: '',
@@ -268,12 +273,14 @@ export const jp = {
     exportFailed: '',
     mergeFailed: '',
     noAudioPath: '',
-    unsupportedH264: '',
+    unsupportedH264:
+      '当前环境不支持 H.264 编码（WebCodecs 不可用）。建议降低分辨率重试，或更换支持硬件加速的电脑。',
     canvasFail: '',
     verdictHwUnavailable: '',
     verdictSwUnavailable: '',
     verdictHwFaster: '',
-    verdictSwFaster: ''
+    verdictSwFaster:
+      '本机 GPU 编码未带来加速（软件反而更快）→ 导出已自动选用软件编码；若更换显卡/驱动后可重新检测'
   },
   playback: {
     noWebAudio: '',
@@ -294,7 +301,8 @@ export const jp = {
     zipReadFail: '',
     zipNoExe: '',
     mergeFailSameFile: '',
-    mergeFailPermission: '',
+    mergeFailPermission:
+      '没有权限写入所选位置（文件可能被其他程序占用或受保护），请换个保存位置后重试。',
     mergeFailDisk: '',
     mergeFailNoStream: '',
     mergeFailGeneric: '',

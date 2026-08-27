@@ -1,3 +1,5 @@
+import { readdirSync, readFileSync, statSync } from 'fs'
+import { join } from 'path'
 import { describe, expect, it } from 'vitest'
 import { getLocale, setLocale, subscribeLocale, t } from './index'
 import { en } from './en'
@@ -17,10 +19,35 @@ function sameShape(a: unknown, b: unknown, path = ''): string[] {
     for (const k of new Set([...ka, ...kb])) {
       if (!(k in (a as Record<string, unknown>))) diffs.push(path + '.' + k + ' (缺于 a)')
       else if (!(k in (b as Record<string, unknown>))) diffs.push(path + '.' + k + ' (缺于 b)')
-      else diffs.push(...sameShape((a as Record<string, unknown>)[k], (b as Record<string, unknown>)[k], path + '.' + k))
+      else
+        diffs.push(
+          ...sameShape((a as Record<string, unknown>)[k], (b as Record<string, unknown>)[k], path + '.' + k)
+        )
     }
   }
   return diffs
+}
+
+/** 收集源码内所有 t('key') / t("key") 调用键（排除本测试与 en/jp 资源文件） */
+function collectUsedKeys(): Set<string> {
+  const used = new Set<string>()
+  const walk = (dir: string): void => {
+    for (const name of readdirSync(dir)) {
+      const p = join(dir, name)
+      if (statSync(p).isDirectory()) {
+        if (p.includes('node_modules') || p.includes('dist') || p.includes('out')) continue
+        walk(p)
+        continue
+      }
+      if (!/\.(ts|tsx)$/.test(name)) continue
+      if (p.endsWith('i18n.test.ts')) continue
+      const text = readFileSync(p, 'utf-8')
+      // 单双引号均可：t('key') 或 t("key")
+      for (const m of text.matchAll(/\bt\((['"])([a-zA-Z0-9.]+)\1/g)) used.add(m[2])
+    }
+  }
+  walk(join(__dirname, '../../..'))
+  return used
 }
 
 describe('i18n', () => {
@@ -42,13 +69,22 @@ describe('i18n', () => {
 
   it('占位符替换：参数注入 {v}/{min}/{max}', () => {
     expect(t('visualizer.barCount', { v: 128 })).toBe('柱数：128（100–160）')
-    expect(t('visualizer.freqRange', { min: 30, max: 8000 })).toBe(
-      '显示频率范围：30–8000 Hz'
-    )
+    expect(t('visualizer.freqRange', { min: 30, max: 8000 })).toBe('显示频率范围：30–8000 Hz')
   })
 
   it('未知键返回 key 本身（便于发现缺失）', () => {
     expect(t('no.such.key')).toBe('no.such.key')
+  })
+
+  it('源码中使用的全部 t(key) 均存在（防"爆键"回归）', () => {
+    setLocale('zh-cn')
+    const used = collectUsedKeys()
+    expect(used.size).toBeGreaterThan(0)
+    const missing: string[] = []
+    for (const k of used) {
+      if (t(k) === k) missing.push(k) // t 返回 key 本身 = 资源缺失
+    }
+    expect(missing).toEqual([])
   })
 
   it('setLocale 触发订阅；无效语言忽略', () => {
