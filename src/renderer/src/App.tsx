@@ -168,6 +168,24 @@ function runVisualChecks(stage: Konva.Stage): VisualCheckReport {
     )
   }
 
+  // 交互回归：文本区域应可命中（曾有回归：文本框子元素全 listening=false 导致不可选中）
+  const hitCheck = (() => {
+    try {
+      const hp = stage.getIntersection({
+        x: Math.round(0.7 * 1920 * scale + offX),
+        y: Math.round(0.18 * 1080 * scale + offY)
+      })
+      return !!hp && hp.getLayer()?.name() === 'text'
+    } catch {
+      return false
+    }
+  })()
+  if (hitCheck) {
+    pass('文本可选中', '歌名区域命中检测通过（文字层节点）')
+  } else {
+    fail('文本可选中', '歌名区域无命中节点（文本框不可选中）')
+  }
+
   const textN = countIn(
     0.54 * 1920,
     0.12 * 1080,
@@ -610,7 +628,7 @@ function App(): React.JSX.Element {
       project.updateText('songTitle', { text: '已修改' })
       project.updateVisualizer({ barCount: 100 })
       project.updateBackground({ blur: 0 })
-            // 撤销/重做（用户反馈：画布操作可 Ctrl+Z；每字段修改一个历史条目 → 三次撤销回保存点）
+      // 撤销/重做（用户反馈：画布操作可 Ctrl+Z；每字段修改一个历史条目 → 三次撤销回保存点）
       await sleep(200)
       project.undo()
       await sleep(120)
@@ -621,8 +639,15 @@ function App(): React.JSX.Element {
       const ul = projectRef.current.layout
       add(
         '撤销',
-        ul.texts.songTitle.text === '项目测试曲' && ul.visualizer.barCount === 140 && ul.background.blur === 40,
-        'undo×3 后: 歌名=' + ul.texts.songTitle.text + ' 柱数=' + ul.visualizer.barCount + ' 模糊=' + ul.background.blur
+        ul.texts.songTitle.text === '项目测试曲' &&
+          ul.visualizer.barCount === 140 &&
+          ul.background.blur === 40,
+        'undo×3 后: 歌名=' +
+          ul.texts.songTitle.text +
+          ' 柱数=' +
+          ul.visualizer.barCount +
+          ' 模糊=' +
+          ul.background.blur
       )
       project.redo()
       await sleep(120)
@@ -633,8 +658,15 @@ function App(): React.JSX.Element {
       const rl = projectRef.current.layout
       add(
         '重做',
-        rl.texts.songTitle.text === '已修改' && rl.visualizer.barCount === 100 && rl.background.blur === 0,
-        'redo×3 后: 歌名=' + rl.texts.songTitle.text + ' 柱数=' + rl.visualizer.barCount + ' 模糊=' + rl.background.blur
+        rl.texts.songTitle.text === '已修改' &&
+          rl.visualizer.barCount === 100 &&
+          rl.background.blur === 0,
+        'redo×3 后: 歌名=' +
+          rl.texts.songTitle.text +
+          ' 柱数=' +
+          rl.visualizer.barCount +
+          ' 模糊=' +
+          rl.background.blur
       )
       await sleep(300)
       await project.loadProject()

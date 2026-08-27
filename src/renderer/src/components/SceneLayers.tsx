@@ -225,6 +225,8 @@ function TextNode({
           return clampPos(pos, node.width(), node.height(), canvas)
         }}
       >
+        {/* 透明命中区：让整个文本框区域都可点击选中/拖动 */}
+        <Rect width={px.w} height={px.h} fill="rgba(0,0,0,0.01)" />
         {selected && (
           <Rect
             width={px.w}
