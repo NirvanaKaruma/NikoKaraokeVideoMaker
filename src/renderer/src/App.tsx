@@ -375,6 +375,31 @@ async function runAudioSmoke(
     fail('可视化动态渲染', '两时刻频谱区域仅 ' + diffPx + ' 个差异像素（预期 >150）')
   }
 
+  // 频率范围可调（用户反馈）：收窄范围 → 同一音高峰值柱位右移；柱组按新配置即时重算（不再"拉宽/压扁"）
+  const widePeak = maxBarIndex(bars1)
+  const wideLen = bars1.length
+  project.updateVisualizer({ freqMax: 4000 })
+  await sleep(250)
+  pbRef.current.seek(0.45)
+  await sleep(300)
+  pbRef.current.seek(0.45)
+  await sleep(300)
+  const bars3 = pbRef.current.bars.slice()
+  const narrowPeak = maxBarIndex(bars3)
+  if (bars3.length === wideLen && narrowPeak > widePeak + 3) {
+    pass(
+      '频率范围可调',
+      '30–8k 440Hz 峰值 #' + widePeak + ' → 30–4k 峰值 #' + narrowPeak + '（柱数 ' + bars3.length + ' 不变）'
+    )
+  } else {
+    fail(
+      '频率范围可调',
+      '柱数 ' + bars3.length + '（期望 ' + wideLen + '），峰值 #' + widePeak + ' → #' + narrowPeak
+    )
+  }
+  project.updateVisualizer({ freqMax: 8000 })
+  await sleep(250)
+
   // 回归：播放中 seek 不得被旧音源 onended 误判为播完（曾跳到结尾并停止）
   pbRef.current.seek(0.2)
   pbRef.current.play()

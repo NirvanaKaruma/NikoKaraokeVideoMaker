@@ -12,6 +12,14 @@ const BUILTIN_PRESETS: { label: string; colors: string[] }[] = [
 
 const CUSTOM_PRESETS_KEY = 'niko.viz.customPresets.v1'
 
+/** 频率范围快捷预置（对数刻度）：柱群整体覆盖的频率窗口 */
+const FREQ_PRESETS: { label: string; freqMin: number; freqMax: number }[] = [
+  { label: '全频段 30–16k', freqMin: 30, freqMax: 16000 },
+  { label: '常用 30–8k', freqMin: 30, freqMax: 8000 },
+  { label: '中低频 30–4k', freqMin: 30, freqMax: 4000 },
+  { label: '鼓点/贝斯 20–1k', freqMin: 20, freqMax: 1000 }
+]
+
 const keyOf = (colors: string[]): string => JSON.stringify(colors)
 
 function isValidHex(c: string): boolean {
@@ -100,13 +108,50 @@ export function VisualizerPanel({ config, onChange }: VisualizerPanelProps): Rea
     <section className="panel-section">
       <h2>音频可视化</h2>
       <DeferredSlider
-        label={(v) => '柱数：' + v + '（100–160）'}
+        label={(v) => '柱数：' + v + '（100–160，频率范围不变，柱越多分度越细）'}
         value={config.barCount}
         min={100}
         max={160}
         step={1}
         onCommit={(v) => onChange({ barCount: v })}
       />
+      <div className="field">
+        <span>
+          显示频率范围：{config.freqMin}–{config.freqMax} Hz（对数刻度）
+        </span>
+        <DeferredSlider
+          label={(v) => '最低频率：' + v + ' Hz'}
+          value={config.freqMin}
+          min={20}
+          max={Math.max(21, config.freqMax - 100)}
+          step={10}
+          onCommit={(v) => onChange({ freqMin: Math.min(Math.round(v), config.freqMax - 100) })}
+        />
+        <DeferredSlider
+          label={(v) => '最高频率：' + v + ' Hz'}
+          value={config.freqMax}
+          min={config.freqMin + 100}
+          max={20000}
+          step={100}
+          onCommit={(v) => onChange({ freqMax: Math.max(Math.round(v), config.freqMin + 100) })}
+        />
+        <div className="gradient-row">
+          {FREQ_PRESETS.map((p) => (
+            <button
+              key={p.label}
+              type="button"
+              className="mini-btn"
+              disabled={config.freqMin === p.freqMin && config.freqMax === p.freqMax}
+              onClick={() => onChange({ freqMin: p.freqMin, freqMax: p.freqMax })}
+            >
+              {p.label}
+            </button>
+          ))}
+        </div>
+        <p className="panel-note">
+          左端=低频（鼓/贝斯），右端=高频（镲片/人声泛音）。音乐能量集中在低频，若右侧柱几乎不动，减小上限即可让柱子布满整个区域；上限受音频采样率限制。
+        </p>
+      </div>
       <DeferredSlider
         label={(v) => '柱宽：' + Math.round(v * 100) + '%'}
         value={config.barWidthRatio}

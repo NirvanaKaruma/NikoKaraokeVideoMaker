@@ -70,6 +70,52 @@ describe('共享频谱分析器', () => {
     }
   })
 
+  it('频率范围钳制：freqMax 不超过奈奎斯特、freqMin<freqMax（非法输入被纠正）', () => {
+    const sr = 8000
+    // freqMin=5 合法但 freqMax=16000 超过奈奎斯特 4000 → 被钳到 4000
+    const a = createSpectrumAnalyzer(makeSine(440, sr, 2), sr, {
+      fftSize: 2048,
+      freqMin: 30,
+      freqMax: 16000
+    })
+    expect(a.freqMax).toBe(4000)
+    // freqMin ≥ freqMax 的退化输入：强制频带宽度至少 1Hz
+    const b = createSpectrumAnalyzer(makeSine(440, sr, 2), sr, {
+      fftSize: 2048,
+      freqMin: 5000,
+      freqMax: 100
+    })
+    expect(b.freqMin).toBeLessThan(b.freqMax)
+  })
+
+  it('同一音高在更窄的频率范围中柱位更靠右（频率范围=固定的量尺）', () => {
+    const sr = 44100
+    const tone = makeSine(440, sr, 2)
+    const wide = createSpectrumAnalyzer(tone, sr, { fftSize: 2048, freqMin: 30, freqMax: 16000 })
+    const narrow = createSpectrumAnalyzer(tone, sr, { fftSize: 2048, freqMin: 30, freqMax: 4000 })
+    const bw = spectrumAt(wide, 1.0, 128)
+    const bn = spectrumAt(narrow, 1.0, 128)
+    let iw = 0
+    let ni = 0
+    for (let i = 1; i < 128; i++) {
+      if (bw[i] > bw[iw]) iw = i
+      if (bn[i] > bn[ni]) ni = i
+    }
+    // 30–16000 中 440Hz ≈ 55 柱；30–4000 中 ≈ 70 柱
+    expect(iw).toBeGreaterThan(45)
+    expect(iw).toBeLessThan(65)
+    expect(ni).toBeGreaterThan(60)
+    expect(ni).toBeLessThan(85)
+  })
+
+  it('平滑处理柱数变化：prev 长度不一致时直接取 target（无 NaN）', () => {
+    const prev = new Float32Array([0.5, 0.2])
+    const target = new Float32Array([0.8, 0.3, 0.1, 0.7, 0.6])
+    const res = smoothBars(prev, target, 0.5)
+    expect(res.length).toBe(5)
+    for (const v of res) expect(Number.isFinite(v)).toBe(true)
+  })
+
   it('时刻越界按边缘钳制，不抛异常', () => {
     const analyzer = createSpectrumAnalyzer(makeSine(440, 8000, 1), 8000)
     expect(spectrumAt(analyzer, -1, 64).length).toBe(64)

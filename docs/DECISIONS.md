@@ -137,6 +137,13 @@
 - **修复**：抽出统一 snapshotOf(layout, assets) 构建快照，脏比较与全部保存点写入共用，杜绝字段漂移；smoke 新增「保存后未脏」「新建后未脏」回归项（11/11）。
 - **GitHub 同步**（用户要求）：私有仓库 github.com/NirvanaKaruma/NikoKaraokeVideoMaker，默认分支 main，通过本机 SSH 密钥（gh CLI 未安装）推送；每个里程碑提交后同步。
 
+## 16. 可视化频率显示范围（用户反馈）
+
+- **根因一（右侧柱不动）**：默认范围 30–16000Hz，音乐能量绝大多数 <4kHz，对数刻度下 4k–16k 段柱子几乎为零——不是 bug，是量程盖住了有效区域。默认改为 30–8000Hz（"向低频移动"= 收窄上限）。
+- **根因二（柱数"拉宽/压扁"）**：暂停态改柱数只重排槽位（slot=宽/柱数），bars 数组仍是旧长度 → 图象被挤扁/溢出。修复：配置变化（柱数/频率范围/灵敏度）→ 同步分析器 + 立即按当前时刻重算；SceneLayers 绘制循环以 config.barCount 为准（bars[i] 缺失补 0）；smoothBars 对长度不一致的 prev 直接取 target（防 NaN）。
+- **UI**：面板新增「显示频率范围」两个滑块（最低 20–freqMax−100 / 最高 freqMin+100–20000Hz）+ 快捷预置（全频段 30–16k / 常用 30–8k / 中低频 30–4k / 鼓点贝斯 20–1k）；频率范围入布局模型（随项目保存、可撤销/重做、导出与预览共用同一分析器）。
+- 频率范围校验：0 < freqMin < freqMax ≤ 奈奎斯特（createSpectrumAnalyzer 与 useAudioPlayback 双处钳制）。
+
 ## 6. 依赖与安全决策（M1 期间追加）
 
 - **electron ^44.0.0**（原模板 ^39.2.6）：npm audit 报 2 个高危（extract-zip ≤2.0.1 符号链接路径穿越，GHSA-jmr9-qjv8-65gv），官方修复版本为 electron 44。趁 M1 无 API 依赖时升级；新 Chromium 对 M4 的 WebCodecs 编码也更有利。

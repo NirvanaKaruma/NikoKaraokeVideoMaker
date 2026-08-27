@@ -81,13 +81,18 @@ export function createSpectrumAnalyzer(
   opts: SpectrumOptions = {}
 ): SpectrumAnalyzer {
   const fftSize = nextPow2(opts.fftSize ?? 2048)
+  // 频率范围校验：0 < freqMin < freqMax ≤ 奈奎斯特（避免对数分桶比值退化）
+  const half = sampleRate > 0 ? sampleRate / 2 : 24000
+  const fMin = Math.min(Math.max(1, opts.freqMin ?? 30), half - 1)
+  let fMax = Math.min(half, opts.freqMax ?? Math.min(16000, half))
+  if (fMax <= fMin) fMax = Math.min(half, fMin + 1)
   return {
     sampleRate,
     samples: mono,
     duration: sampleRate > 0 ? mono.length / sampleRate : 0,
     fftSize,
-    freqMin: opts.freqMin ?? 30,
-    freqMax: opts.freqMax ?? Math.min(16000, sampleRate / 2),
+    freqMin: fMin,
+    freqMax: fMax,
     window: makeHann(fftSize),
     twiddles: makeTwiddles(fftSize),
     bitRev: makeBitRev(fftSize)
@@ -199,7 +204,8 @@ export function smoothBars(
   smoothing: number,
   out: Float32Array | null = null
 ): Float32Array {
-  if (!prev) {
+  // prev 缺失或长度与 target 不一致（柱数改变）→ 直接取 target，避免索引越界产生 NaN
+  if (!prev || prev.length !== target.length) {
     if (out && out.length === target.length) {
       out.set(target)
       return out

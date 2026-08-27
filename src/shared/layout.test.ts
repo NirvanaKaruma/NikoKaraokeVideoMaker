@@ -38,6 +38,12 @@ describe('归一化布局模型', () => {
     expect(DEFAULT_LAYOUT.visualizer.sensitivity).toBe(7)
   })
 
+  it('可视化频率范围默认 30–8000Hz（用户反馈：原 30–16k 高频段音乐能量极少、右侧柱几乎不动）', () => {
+    expect(DEFAULT_LAYOUT.visualizer.freqMin).toBe(30)
+    expect(DEFAULT_LAYOUT.visualizer.freqMax).toBe(8000)
+    expect(DEFAULT_LAYOUT.visualizer.freqMin).toBeLessThan(DEFAULT_LAYOUT.visualizer.freqMax)
+  })
+
   it('导出默认 1080p@30fps，RESOLUTIONS 提供 4 档 16:9', () => {
     expect(DEFAULT_LAYOUT.export.resolutionId).toBe('1080p')
     expect(DEFAULT_LAYOUT.export.fps).toBe(30)

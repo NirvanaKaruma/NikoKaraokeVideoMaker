@@ -533,7 +533,8 @@ function VisualizerLayer({
       >
         {/* 透明命中区：整个矩形（含柱子间空隙）都可拖动/选中 */}
         <Rect width={px.w} height={px.h} fill="rgba(0,0,0,0.01)" />
-        {bars.map((v, i) => {
+        {Array.from({ length: config.barCount }, (_, i) => {
+          const v = Math.min(Math.max(bars[i] ?? 0, 0), 1)
           const h = Math.max(4, v * maxH)
           const x = i * slot + (slot - barW) / 2
           return (

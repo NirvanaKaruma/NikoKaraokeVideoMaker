@@ -78,6 +78,15 @@ export function useAudioPlayback(
     return ctxRef.current
   }
 
+  /** 频率范围校验（与 spectrum.ts 同一钳制逻辑，供解码/配置同步共用） */
+  const normalizeFreqRange = useCallback((freqMin: number, freqMax: number, sampleRate: number) => {
+    const half = sampleRate > 0 ? sampleRate / 2 : 24000
+    const lo = Math.max(1, Math.min(freqMin, half - 1))
+    let hi = Math.min(half, Math.max(freqMax, lo + 1))
+    if (hi <= lo) hi = Math.min(half, lo + 1)
+    return { freqMin: lo, freqMax: hi }
+  }, [])
+
   const computeBars = useCallback((t: number, viaState: boolean) => {
     const an = analyzerRef.current
     if (!an) return
@@ -151,7 +160,17 @@ export function useAudioPlayback(
         }
         const mono = mixToMono(channels, decoded.length)
         bufferRef.current = decoded
-        const an = createSpectrumAnalyzer(mono, decoded.sampleRate)
+        // 频率范围取自布局配置（预览与导出共用同一分析器 → 所见即所得）
+        const range = normalizeFreqRange(
+          configRef.current.freqMin,
+          configRef.current.freqMax,
+          decoded.sampleRate
+        )
+        const an = createSpectrumAnalyzer(mono, decoded.sampleRate, {
+          fftSize: 2048,
+          freqMin: range.freqMin,
+          freqMax: range.freqMax
+        })
         analyzerRef.current = an
         setAnalyzer(an)
         offsetRef.current = 0
@@ -171,7 +190,7 @@ export function useAudioPlayback(
     return () => {
       cancelled = true
     }
-  }, [audioFile, computeBars])
+  }, [audioFile, computeBars, normalizeFreqRange])
 
   const play = useCallback(() => {
     const ctx = ensureCtx()
@@ -241,6 +260,30 @@ export function useAudioPlayback(
       setBars(placeholderBars(configRef.current.barCount))
     }
   }, [config.barCount, status])
+
+  // 可视化配置变化（柱数/频率范围/灵敏度）：同步分析器并立即按当前时刻重算。
+  // 修复：暂停态改柱数只重排槽位（老旧柱数组被挤进新槽位 → 看起来"拉宽/压扁"），
+  // 现在无论播放与否都得到与新配置一致的分桶结构。
+  useEffect(() => {
+    const an = analyzerRef.current
+    if (!an) return
+    const range = normalizeFreqRange(config.freqMin, config.freqMax, an.sampleRate)
+    if (an.freqMin !== range.freqMin || an.freqMax !== range.freqMax) {
+      an.freqMin = range.freqMin
+      an.freqMax = range.freqMax
+    }
+    if (status === 'ready') {
+      computeBars(offsetRef.current, true)
+    }
+  }, [
+    config.barCount,
+    config.freqMin,
+    config.freqMax,
+    config.sensitivity,
+    status,
+    computeBars,
+    normalizeFreqRange
+  ])
 
   return {
     status,

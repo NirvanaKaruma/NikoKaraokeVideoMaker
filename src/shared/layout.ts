@@ -64,6 +64,10 @@ export interface VisualizerConfig {
   rect: NormRect
   /** 柱数 100–160，默认 128 */
   barCount: number
+  /** 频谱显示范围下限（Hz，对数分桶起点），默认 30 */
+  freqMin: number
+  /** 频谱显示范围上限（Hz，对数分桶终点），默认 8000（原 16000：4k–16k 段音乐能量极少，右侧柱无起伏） */
+  freqMax: number
   /** 柱宽占槽宽比例 0–1 */
   barWidthRatio: number
   /** 柱间间距占槽宽比例 0–1 */
@@ -186,6 +190,8 @@ export const DEFAULT_LAYOUT: ProjectLayout = {
     // §4：横向 [49%, 97%]、中心 y≈49%（用户目视反馈后上移，中心 47%）
     rect: { x: 0.49, y: 0.38, w: 0.48, h: 0.18 },
     barCount: 128,
+    freqMin: 30,
+    freqMax: 8000,
     barWidthRatio: 0.55,
     gapRatio: 0.45,
     heightRatio: 0.92,
