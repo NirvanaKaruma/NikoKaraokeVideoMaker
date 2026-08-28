@@ -702,11 +702,20 @@ async function runAudioSmoke(
     }
   }
 
-  // 片头黑场：t≈0 全黑 → t=1.5 正常画面
+  // 片头黑场：t≈0 全黑 → t=1.5 正常画面（等待黑场叠色真的到位，防绘制调度抖动）
   project.updateIntroOutro({ introFade: 1 })
   await sleep(200)
   pbRef.current.seek(0.05)
-  await sleep(250)
+  const blackWait = Date.now()
+  await sleep(200)
+  while (
+    Date.now() - blackWait < 2000 &&
+    stage.find('.fx-black').length &&
+    stage.find('.fx-black')[0].opacity() < 0.9
+  ) {
+    await sleep(80)
+    pbRef.current.seek(0.05)
+  }
   const introA = captureRegion(stage, 0.3 * 1920, 0.3 * 1080, 0.7 * 1920, 0.7 * 1080)
   pbRef.current.seek(1.5)
   await sleep(250)

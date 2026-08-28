@@ -361,6 +361,7 @@ function IntroOutroLayer({
     <>
       <Rect
         ref={blackRef}
+        name="fx-black"
         x={0}
         y={0}
         width={canvas.width}
