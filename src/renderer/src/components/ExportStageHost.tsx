@@ -22,6 +22,8 @@ interface ExportStageHostProps {
   bgElement: HTMLImageElement | null
   /** 共享频谱分析器（动效层按 t 计算分带能量） */
   analyzer?: SpectrumAnalyzer | null
+  /** 音频总时长秒（片尾时间轴用） */
+  mediaDurationSec?: number
   width: number
   height: number
   onReady: (handle: ExportStageHandle) => void
@@ -35,7 +37,8 @@ export type LayerFxRef = { current: ((t: number) => void) | null }
  * 每帧 = 静态画布 + setBars 后的可视化画布。复用 SceneLayers（核心约束 A）。
  */
 export function ExportStageHost(props: ExportStageHostProps): React.JSX.Element {
-  const { layout, coverElement, bgElement, analyzer, width, height, onReady } = props
+  const { layout, coverElement, bgElement, analyzer, mediaDurationSec, width, height, onReady } =
+    props
   const staticRef = useRef<Konva.Stage>(null)
   const vizRef = useRef<Konva.Stage>(null)
   const barsHandleRef = useRef<((bars: number[]) => void) | null>(null)
@@ -91,6 +94,7 @@ export function ExportStageHost(props: ExportStageHostProps): React.JSX.Element 
           canvasSize={{ width, height }}
           layers={['background', 'main', 'text']}
           layerFxRef={layerFxHandleRef}
+          mediaDurationSec={mediaDurationSec}
         />
       </Stage>
       <Stage ref={vizRef} width={width} height={height}>
@@ -106,9 +110,10 @@ export function ExportStageHost(props: ExportStageHostProps): React.JSX.Element 
           bars={Array(layout.visualizer.barCount).fill(0)}
           analyzer={analyzer}
           canvasSize={{ width, height }}
-          layers={['visualizer']}
+          layers={['visualizer', 'fx']}
           barsHandleRef={barsHandleRef}
           frameTRef={frameTHandleRef}
+          mediaDurationSec={mediaDurationSec}
         />
       </Stage>
     </div>

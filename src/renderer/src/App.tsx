@@ -1100,6 +1100,7 @@ function App(): React.JSX.Element {
             frameTRef={frameTRef}
             analyzer={pb.analyzer}
             layerFxRef={layerFxRef}
+            mediaDurationSec={pb.duration}
             onStageReady={(s) => {
               stageRef.current = s
             }}
@@ -1141,6 +1142,7 @@ function App(): React.JSX.Element {
           coverElement={project.assets.coverElement}
           bgElement={project.assets.bgElement}
           analyzer={pb.analyzer}
+          mediaDurationSec={pb.duration}
           width={exporter.stageRequest.width}
           height={exporter.stageRequest.height}
           onReady={exporter.onStageReady}

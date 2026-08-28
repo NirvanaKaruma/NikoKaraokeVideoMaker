@@ -151,6 +151,44 @@ export function bounceIn(x: number): number {
   return Math.max(0, 1 - Math.exp(-6 * t) * Math.cos(8 * t))
 }
 
+/** 片头/片尾时间函数（0.5.0）：黑场alpha 与标题卡 alpha（0–1） */
+export interface IntroOutroAlpha {
+  /** 片头黑场（1→0）：刚开播全黑，introFade 秒内淡入画面 */
+  intro: number
+  /** 标题卡（0–1 边缘淡入淡出）：片头淡入后展示 introTitleCard 秒 */
+  titleCard: number
+  /** 片尾黑场（0→1）：结束前 outroFade 秒内淡出 */
+  outro: number
+}
+
+export interface IntroOutroParam {
+  introFade: number
+  introTitleCard: number
+  outroFade: number
+}
+
+/** 片头/片尾状态（纯时刻函数；30/60fps 同 t 同值） */
+export function introOutroAlpha(
+  t: number,
+  durationSec: number,
+  cfg: IntroOutroParam
+): IntroOutroAlpha {
+  const dur = Math.max(0, durationSec)
+  const intro = cfg.introFade > 0 ? 1 - entryProgress(t, 0, cfg.introFade) : 0
+  const tcStart = Math.max(0, cfg.introFade)
+  const tcLen = Math.max(0, cfg.introTitleCard)
+  const tcFade = Math.min(0.4, tcLen / 4)
+  const titleCard =
+    tcLen <= 0
+      ? 0
+      : Math.min(
+          entryProgress(t, tcStart, tcFade),
+          1 - entryProgress(t, tcStart + tcLen - tcFade, tcFade)
+        )
+  const outro = cfg.outroFade > 0 ? entryProgress(t, dur - cfg.outroFade, cfg.outroFade) : 0
+  return { intro, titleCard, outro }
+}
+
 /** 能量阶跃（踩点闪光）：band 能量在 windowSec 内的上升量 0–1；纯时刻函数、与帧率无关 */
 export function energyAttack(
   sample: (t: number) => BandEnergies,

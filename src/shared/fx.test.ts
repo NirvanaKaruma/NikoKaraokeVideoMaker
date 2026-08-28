@@ -7,6 +7,7 @@ import {
   easeOutCubic,
   energyAttack,
   entryProgress,
+  introOutroAlpha,
   lineHeights,
   seededRng,
   smoothBarsFx,
@@ -179,6 +180,27 @@ describe('fx 时间函数库', () => {
     let max = 0
     for (let i = 0; i <= 20; i++) max = Math.max(max, bounceIn(i / 20))
     expect(max).toBeGreaterThan(1.05) // 有回弹超冲
+  })
+
+  it('introOutroAlpha：片头黑场 1→0、标题卡边缘淡入淡出、片尾 0→1（纯时刻函数）', () => {
+    const cfg = { introFade: 1, introTitleCard: 2, outroFade: 1 }
+    // t=0：全黑；t=1（片头结束）：黑场消失
+    expect(introOutroAlpha(0, 10, cfg).intro).toBeCloseTo(1, 6)
+    expect(introOutroAlpha(1, 10, cfg).intro).toBeCloseTo(0, 6)
+    // 标题卡窗口 [1, 3]：窗口内非 0、超出为 0、边缘渐入
+    expect(introOutroAlpha(0, 10, cfg).titleCard).toBe(0)
+    expect(introOutroAlpha(2, 10, cfg).titleCard).toBeCloseTo(1, 2)
+    expect(introOutroAlpha(4, 10, cfg).titleCard).toBe(0)
+    // 片尾：t=9 尚未淡出；t=10 全黑
+    expect(introOutroAlpha(8.5, 10, cfg).outro).toBe(0)
+    expect(introOutroAlpha(10, 10, cfg).outro).toBeCloseTo(1, 6)
+    // 全关 → 恒 0
+    const off = introOutroAlpha(3, 10, { introFade: 0, introTitleCard: 0, outroFade: 0 })
+    expect(off.intro).toBe(0)
+    expect(off.titleCard).toBe(0)
+    expect(off.outro).toBe(0)
+    // 确定性
+    expect(introOutroAlpha(1.234, 10, cfg)).toEqual(introOutroAlpha(1.234, 10, cfg))
   })
 
   it('wedgeGeometry：radial 楔形 4 顶点 8 数值，弧长随半径增长均匀', () => {

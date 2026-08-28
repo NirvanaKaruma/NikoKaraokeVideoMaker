@@ -31,6 +31,7 @@ import {
   bounceIn,
   easeOutCubic,
   entryProgress,
+  introOutroAlpha,
   kenBurns,
   lineHeights,
   wedgeGeometry,
@@ -45,7 +46,7 @@ const SEED_BG_FX = 987654321
 /** 可选中元素：主图 / 歌名 / 作者 / 可视化 */
 export type SelectableId = 'mainImage' | 'songTitle' | 'artist' | 'visualizer' | null
 
-export type SceneLayerName = 'background' | 'main' | 'text' | 'visualizer'
+export type SceneLayerName = 'background' | 'main' | 'text' | 'visualizer' | 'fx'
 
 export interface SceneLayersProps {
   layout: ProjectLayout
@@ -69,8 +70,10 @@ export interface SceneLayersProps {
   frameTRef?: { current: ((t: number) => void) | null }
   /** 共享频谱分析器（动效层按时间 t 计算分带能量；预览/导出同一数据源） */
   analyzer?: SpectrumAnalyzer | null
-  /** 非可视化动效帧分发（背景/主图/文本每帧更新；预览 rAF 与导出逐帧同源） */
+  /** 非可视化动效帧分发（背景/主图/文本/片头片尾每帧更新；预览 rAF 与导出逐帧同源） */
   layerFxRef?: { current: ((t: number) => void) | null }
+  /** 音频总时长秒（片尾时间轴用） */
+  mediaDurationSec?: number
 }
 
 const SELECT_BORDER = '#ff5f9e'
@@ -277,6 +280,106 @@ function BackgroundLayer({
           listening={false}
         />
       )}
+    </>
+  )
+}
+
+/** 片头/片尾层（0.5.0）：黑场淡入/淡出 + 标题卡（复用歌名/作者样式居中）。
+ * 时间函数纯确定性（introOutroAlpha）；由 fxSlot 逐帧驱动（预览/导出同源）。 */
+function IntroOutroLayer({
+  layout,
+  canvas,
+  mediaDurationSec,
+  fxSlotRef
+}: {
+  layout: ProjectLayout
+  canvas: CanvasSize
+  /** 音频总时长秒（片尾时间轴用；无音频=0 → 片尾不生效） */
+  mediaDurationSec?: number
+  /** 每帧更新槽（SceneLayers 分发 frame(t)） */
+  fxSlotRef?: { current: ((t: number) => void) | null }
+}): React.JSX.Element {
+  const blackRef = useRef<Konva.Rect>(null)
+  const tcGroupRef = useRef<Konva.Group>(null)
+
+  useEffect(() => {
+    if (!fxSlotRef) return
+    fxSlotRef.current = (t: number): void => {
+      const a = introOutroAlpha(t, mediaDurationSec ?? 0, layout.introOutro)
+      const black = blackRef.current
+      if (black) {
+        const opacity = Math.min(1, Math.max(a.intro, a.outro))
+        if (Math.abs(black.opacity() - opacity) > 0.001) black.opacity(opacity)
+      }
+      const tc = tcGroupRef.current
+      if (tc) {
+        if (Math.abs(tc.opacity() - a.titleCard) > 0.001) tc.opacity(a.titleCard)
+      }
+      ;(black ?? tc)?.getLayer()?.batchDraw()
+    }
+    return () => {
+      fxSlotRef.current = null
+    }
+  }, [fxSlotRef, layout.introOutro, mediaDurationSec])
+
+  const title = layout.texts.songTitle
+  const artist = layout.texts.artist
+  const tcW = canvas.width * 0.72
+  const tcX = (canvas.width - tcW) / 2
+  const titleStyle = title.style
+  const artistStyle = artist.style
+
+  return (
+    <>
+      <Rect
+        ref={blackRef}
+        x={0}
+        y={0}
+        width={canvas.width}
+        height={canvas.height}
+        fill="#000000"
+        opacity={0}
+        listening={false}
+      />
+      <Group ref={tcGroupRef} opacity={0} listening={false}>
+        <KonvaText
+          text={title.text}
+          x={tcX}
+          y={canvas.height * 0.34}
+          width={tcW}
+          align="center"
+          wrap="word"
+          fontFamily={titleStyle.fontFamily}
+          fontSize={relToPixel(titleStyle.fontSize * 1.7, canvas)}
+          fontStyle={titleStyle.bold ? 'bold' : 'normal'}
+          fill={titleStyle.color}
+          stroke={titleStyle.strokeColor}
+          strokeWidth={relToPixel(titleStyle.strokeWidth, canvas)}
+          shadowEnabled={titleStyle.glowEnabled}
+          shadowColor={titleStyle.glowColor}
+          shadowBlur={relToPixel(titleStyle.glowBlur, canvas)}
+          shadowOpacity={1}
+          listening={false}
+        />
+        <KonvaText
+          text={artist.text}
+          x={tcX}
+          y={canvas.height * 0.56}
+          width={tcW}
+          align="center"
+          wrap="word"
+          fontFamily={artistStyle.fontFamily}
+          fontSize={relToPixel(artistStyle.fontSize * 1.6, canvas)}
+          fill={artistStyle.color}
+          stroke={artistStyle.strokeColor}
+          strokeWidth={relToPixel(artistStyle.strokeWidth, canvas)}
+          shadowEnabled={artistStyle.glowEnabled}
+          shadowColor={artistStyle.glowColor}
+          shadowBlur={relToPixel(artistStyle.glowBlur, canvas)}
+          shadowOpacity={1}
+          listening={false}
+        />
+      </Group>
     </>
   )
 }
@@ -1132,7 +1235,8 @@ export function SceneLayers(props: SceneLayersProps): React.JSX.Element {
     barsHandleRef,
     frameTRef,
     analyzer,
-    layerFxRef
+    layerFxRef,
+    mediaDurationSec
   } = props
   const canvas = canvasSize ?? { width: LOGICAL_WIDTH, height: LOGICAL_HEIGHT }
   const show = (name: SceneLayerName): boolean => !layers || layers.includes(name)
@@ -1142,6 +1246,7 @@ export function SceneLayers(props: SceneLayersProps): React.JSX.Element {
   const imgFxSlot = useRef<((t: number) => void) | null>(null)
   const titleFxSlot = useRef<((t: number) => void) | null>(null)
   const artistFxSlot = useRef<((t: number) => void) | null>(null)
+  const introFxSlot = useRef<((t: number) => void) | null>(null)
   useEffect(() => {
     if (!layerFxRef) return
     layerFxRef.current = (t: number) => {
@@ -1149,6 +1254,7 @@ export function SceneLayers(props: SceneLayersProps): React.JSX.Element {
       imgFxSlot.current?.(t)
       titleFxSlot.current?.(t)
       artistFxSlot.current?.(t)
+      introFxSlot.current?.(t)
     }
     return () => {
       layerFxRef.current = null
@@ -1215,6 +1321,16 @@ export function SceneLayers(props: SceneLayersProps): React.JSX.Element {
             onRectChange={onVisualizerRectChange}
             barsHandleRef={barsHandleRef}
             frameTRef={frameTRef}
+          />
+        </Layer>
+      )}
+      {show('fx') && (
+        <Layer name="fx" listening={false}>
+          <IntroOutroLayer
+            layout={layout}
+            canvas={canvas}
+            mediaDurationSec={mediaDurationSec}
+            fxSlotRef={introFxSlot}
           />
         </Layer>
       )}

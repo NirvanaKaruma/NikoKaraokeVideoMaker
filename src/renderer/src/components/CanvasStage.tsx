@@ -26,6 +26,8 @@ export interface CanvasStageProps {
   analyzer?: SpectrumAnalyzer | null
   /** 非可视化动效帧分发（背景/主图/文本每帧更新） */
   layerFxRef?: LayerFxRef
+  /** 音频总时长秒（片尾时间轴用） */
+  mediaDurationSec?: number
   onStageReady?: (stage: Konva.Stage | null) => void
 }
 
@@ -45,6 +47,7 @@ export function CanvasStage(props: CanvasStageProps): React.JSX.Element {
     frameTRef,
     analyzer,
     layerFxRef,
+    mediaDurationSec,
     onStageReady
   } = props
   const containerRef = useRef<HTMLDivElement>(null)
@@ -111,6 +114,7 @@ export function CanvasStage(props: CanvasStageProps): React.JSX.Element {
           frameTRef={frameTRef}
           analyzer={analyzer}
           layerFxRef={layerFxRef}
+          mediaDurationSec={mediaDurationSec}
         />
       </Stage>
     </div>
