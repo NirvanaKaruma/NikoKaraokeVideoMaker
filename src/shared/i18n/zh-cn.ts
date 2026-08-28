@@ -37,7 +37,8 @@ export const zhCn = {
   tabs: {
     assets: '素材与画面',
     text: '文本样式',
-    visualizer: '音频可视化'
+    visualizer: '音频可视化',
+    fx: '动效与后期'
   },
   input: {
     title: '输入',

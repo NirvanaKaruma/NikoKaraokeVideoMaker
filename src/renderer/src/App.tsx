@@ -593,12 +593,14 @@ function App(): React.JSX.Element {
   const barsHandleRef = useRef<((bars: number[]) => void) | null>(null)
   const frameTRef = useRef<((t: number) => void) | null>(null)
   const layerFxRef = useRef<((t: number) => void) | null>(null)
+  const playTimeRef = useRef(0)
   const pb = useAudioPlayback(
     project.assets.audioFile,
     project.layout.visualizer,
     barsHandleRef,
     frameTRef,
-    layerFxRef
+    layerFxRef,
+    playTimeRef
   )
   const pbRef = useRef<PlaybackApi>(pb)
 
@@ -1084,6 +1086,18 @@ function App(): React.JSX.Element {
           onArtistCfgChange={(x) => project.updateText('artist', x)}
           visualizer={project.layout.visualizer}
           onVisualizerChange={project.updateVisualizer}
+          backgroundFx={project.layout.background.fx}
+          imageFx={project.layout.mainImage.fx}
+          songTitleEntry={project.layout.texts.songTitle.entry}
+          artistEntry={project.layout.texts.artist.entry}
+          canvasFx={project.layout.canvasFx}
+          introOutro={project.layout.introOutro}
+          onBackgroundFxChange={project.updateBackgroundFx}
+          onImageFxChange={project.updateImageFx}
+          onSongTitleEntryChange={(x) => project.updateTextEntry('songTitle', x)}
+          onArtistEntryChange={(x) => project.updateTextEntry('artist', x)}
+          onCanvasFxChange={project.updateCanvasFx}
+          onIntroOutroChange={project.updateIntroOutro}
         />
         <main className="canvas-wrap">
           <CanvasStage
@@ -1101,6 +1115,7 @@ function App(): React.JSX.Element {
             analyzer={pb.analyzer}
             layerFxRef={layerFxRef}
             mediaDurationSec={pb.duration}
+            playTimeRef={playTimeRef}
             onStageReady={(s) => {
               stageRef.current = s
             }}

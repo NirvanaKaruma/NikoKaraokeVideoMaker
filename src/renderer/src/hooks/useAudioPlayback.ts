@@ -41,7 +41,9 @@ export function useAudioPlayback(
   /** 播放中同步帧时间（动效：flow 相位等） */
   frameTSink?: { current: ((t: number) => void) | null },
   /** 播放中同步帧时间（动效：背景/主图/文本层每帧更新） */
-  layerFxSink?: { current: ((t: number) => void) | null }
+  layerFxSink?: { current: ((t: number) => void) | null },
+  /** 播放时间值盒（CanvasFX overlay 等 rAF 自绘组件读取最新 t） */
+  timeBoxRef?: { current: number }
 ): PlaybackApi {
   const ctxRef = useRef<AudioContext | null>(null)
   const bufferRef = useRef<AudioBuffer | null>(null)
@@ -57,6 +59,10 @@ export function useAudioPlayback(
   const sinkRef = useRef(barsSink)
   const frameTSinkRef = useRef(frameTSink)
   const layerFxSinkRef = useRef(layerFxSink)
+  const timeBoxRefStable = useRef(timeBoxRef)
+  useEffect(() => {
+    timeBoxRefStable.current = timeBoxRef
+  }, [timeBoxRef])
 
   useEffect(() => {
     sinkRef.current = barsSink
@@ -103,6 +109,7 @@ export function useAudioPlayback(
   }, [])
 
   const computeBars = useCallback((t: number, viaState: boolean) => {
+    if (timeBoxRefStable.current) timeBoxRefStable.current.current = t
     const an = analyzerRef.current
     if (!an) return
     const cfg = configRef.current

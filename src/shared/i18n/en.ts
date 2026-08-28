@@ -37,7 +37,8 @@ export const en = {
   tabs: {
     assets: 'Assets & Layout',
     text: 'Text Style',
-    visualizer: 'Audio Visualizer'
+    visualizer: 'Audio Visualizer',
+    fx: 'Motion & FX'
   },
   input: {
     title: 'Input',

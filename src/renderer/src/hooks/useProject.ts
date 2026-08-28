@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   BackgroundConfig,
+  CanvasFxConfig,
   DEFAULT_LAYOUT,
   ExportConfig,
+  IntroOutroConfig,
   MainImageConfig,
   NormRect,
   ProjectLayout,
@@ -64,6 +66,11 @@ export function useProject(): {
   updateMainImage: (patch: Partial<MainImageConfig>) => void
   updateText: (kind: 'songTitle' | 'artist', patch: Partial<TextLayerConfig>) => void
   updateVisualizer: (patch: Partial<VisualizerConfig>) => void
+  updateBackgroundFx: (patch: Partial<BackgroundConfig['fx']>) => void
+  updateImageFx: (patch: Partial<MainImageConfig['fx']>) => void
+  updateTextEntry: (kind: 'songTitle' | 'artist', patch: Partial<TextLayerConfig['entry']>) => void
+  updateCanvasFx: (patch: Partial<CanvasFxConfig>) => void
+  updateIntroOutro: (patch: Partial<IntroOutroConfig>) => void
   updateExport: (patch: Partial<ExportConfig>) => void
   setCoverFile: (file: File | null) => void
   setCoverFromUrl: (url: string) => void
@@ -169,6 +176,70 @@ export function useProject(): {
       applyLayout({
         ...layoutRef.current,
         visualizer: { ...layoutRef.current.visualizer, ...patch }
+      })
+    },
+    [pushHistory, applyLayout]
+  )
+
+  const updateBackgroundFx = useCallback(
+    (patch: Partial<BackgroundConfig['fx']>) => {
+      pushHistory()
+      applyLayout({
+        ...layoutRef.current,
+        background: {
+          ...layoutRef.current.background,
+          fx: { ...layoutRef.current.background.fx, ...patch }
+        }
+      })
+    },
+    [pushHistory, applyLayout]
+  )
+
+  const updateImageFx = useCallback(
+    (patch: Partial<MainImageConfig['fx']>) => {
+      pushHistory()
+      applyLayout({
+        ...layoutRef.current,
+        mainImage: {
+          ...layoutRef.current.mainImage,
+          fx: { ...layoutRef.current.mainImage.fx, ...patch }
+        }
+      })
+    },
+    [pushHistory, applyLayout]
+  )
+
+  const updateTextEntry = useCallback(
+    (kind: 'songTitle' | 'artist', patch: Partial<TextLayerConfig['entry']>) => {
+      pushHistory()
+      applyLayout({
+        ...layoutRef.current,
+        texts: {
+          ...layoutRef.current.texts,
+          [kind]: {
+            ...layoutRef.current.texts[kind],
+            entry: { ...layoutRef.current.texts[kind].entry, ...patch }
+          }
+        }
+      })
+    },
+    [pushHistory, applyLayout]
+  )
+
+  const updateCanvasFx = useCallback(
+    (patch: Partial<CanvasFxConfig>) => {
+      pushHistory()
+      applyLayout({ ...layoutRef.current, canvasFx: { ...layoutRef.current.canvasFx, ...patch } })
+    },
+    [pushHistory, applyLayout]
+  )
+
+  const updateIntroOutro = useCallback(
+    (patch: Partial<IntroOutroConfig>) => {
+      pushHistory()
+      applyLayout({
+        ...layoutRef.current,
+        introOutro: { ...layoutRef.current.introOutro, ...patch }
       })
     },
     [pushHistory, applyLayout]
@@ -517,6 +588,11 @@ export function useProject(): {
     updateMainImage,
     updateText,
     updateVisualizer,
+    updateBackgroundFx,
+    updateImageFx,
+    updateTextEntry,
+    updateCanvasFx,
+    updateIntroOutro,
     updateExport,
     setCoverFile,
     setCoverFromUrl,

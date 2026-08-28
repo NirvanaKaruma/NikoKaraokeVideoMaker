@@ -13,8 +13,10 @@ import { MainImagePanel } from './panels/MainImagePanel'
 import { BackgroundPanel } from './panels/BackgroundPanel'
 import { TextPanel } from './panels/TextPanel'
 import { VisualizerPanel } from './panels/VisualizerPanel'
+import { FxPanel } from './panels/FxPanel'
+import type { CanvasFxConfig, IntroOutroConfig } from '@shared/layout'
 
-export type SideTab = 'assets' | 'text' | 'visualizer'
+export type SideTab = 'assets' | 'text' | 'visualizer' | 'fx'
 
 export interface SidePanelProps {
   // 输入
@@ -55,12 +57,26 @@ export interface SidePanelProps {
   // 可视化
   visualizer: VisualizerConfig
   onVisualizerChange: (patch: Partial<VisualizerConfig>) => void
+  // 动效（0.5.0）
+  backgroundFx: BackgroundConfig['fx']
+  imageFx: MainImageConfig['fx']
+  songTitleEntry: TextLayerConfig['entry']
+  artistEntry: TextLayerConfig['entry']
+  canvasFx: CanvasFxConfig
+  introOutro: IntroOutroConfig
+  onBackgroundFxChange: (patch: Partial<BackgroundConfig['fx']>) => void
+  onImageFxChange: (patch: Partial<MainImageConfig['fx']>) => void
+  onSongTitleEntryChange: (patch: Partial<TextLayerConfig['entry']>) => void
+  onArtistEntryChange: (patch: Partial<TextLayerConfig['entry']>) => void
+  onCanvasFxChange: (patch: Partial<CanvasFxConfig>) => void
+  onIntroOutroChange: (patch: Partial<IntroOutroConfig>) => void
 }
 
 const TABS: { id: SideTab; labelKey: string }[] = [
   { id: 'assets', labelKey: 'tabs.assets' },
   { id: 'text', labelKey: 'tabs.text' },
-  { id: 'visualizer', labelKey: 'tabs.visualizer' }
+  { id: 'visualizer', labelKey: 'tabs.visualizer' },
+  { id: 'fx', labelKey: 'tabs.fx' }
 ]
 
 /** 左侧面板：常驻播放控制 + 分类 tab（M5 UI 重构：避免单列无限堆叠） */
@@ -128,6 +144,22 @@ export function SidePanel(props: SidePanelProps): React.JSX.Element {
         )}
         {tab === 'visualizer' && (
           <VisualizerPanel config={props.visualizer} onChange={props.onVisualizerChange} />
+        )}
+        {tab === 'fx' && (
+          <FxPanel
+            backgroundFx={props.backgroundFx}
+            imageFx={props.imageFx}
+            songTitleEntry={props.songTitleEntry}
+            artistEntry={props.artistEntry}
+            canvasFx={props.canvasFx}
+            introOutro={props.introOutro}
+            onBgFxChange={props.onBackgroundFxChange}
+            onImageFxChange={props.onImageFxChange}
+            onSongTitleEntryChange={props.onSongTitleEntryChange}
+            onArtistEntryChange={props.onArtistEntryChange}
+            onCanvasFxChange={props.onCanvasFxChange}
+            onIntroOutroChange={props.onIntroOutroChange}
+          />
         )}
       </div>
     </aside>

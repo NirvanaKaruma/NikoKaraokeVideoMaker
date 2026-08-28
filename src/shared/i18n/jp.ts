@@ -37,7 +37,8 @@ export const jp = {
   tabs: {
     assets: '素材と画面',
     text: 'テキストスタイル',
-    visualizer: 'オーディオビジュアライザー'
+    visualizer: 'オーディオビジュアライザー',
+    fx: 'モーションとFX'
   },
   input: {
     title: '入力',

@@ -1,12 +1,94 @@
 import { useEffect, useRef, useState } from 'react'
 import { Layer, Rect, Stage } from 'react-konva'
 import type Konva from 'konva'
-import { LOGICAL_HEIGHT, LOGICAL_WIDTH, NormRect, ProjectLayout } from '@shared/layout'
-import type { SpectrumAnalyzer } from '@shared/spectrum'
+import {
+  CanvasFxConfig,
+  LOGICAL_HEIGHT,
+  LOGICAL_WIDTH,
+  NormRect,
+  ProjectLayout,
+  VisualizerConfig
+} from '@shared/layout'
+import { bandEnergiesAt, type SpectrumAnalyzer } from '@shared/spectrum'
+import { drawCanvasFx, type CanvasFxDrawOpts } from '@shared/canvasfx'
 import { SceneLayers, SelectableId } from './SceneLayers'
 
 /** 非可视化动效帧分发（背景/主图/文本每帧更新） */
 export type LayerFxRef = { current: ((t: number) => void) | null }
+
+/** 全局后期叠加（0.5.0）：独立 2D canvas 置于 Konva 舞台之上，rAF 自绘（有动效才跑）；
+ * 与导出 compose 共用 drawCanvasFx（核心约束 A）。 */
+function CanvasFxOverlay({
+  canvasFx,
+  visualizer,
+  analyzer,
+  playTimeRef,
+  scale,
+  offX,
+  offY
+}: {
+  canvasFx: CanvasFxConfig
+  visualizer: VisualizerConfig
+  analyzer?: SpectrumAnalyzer | null
+  playTimeRef?: { current: number }
+  scale: number
+  offX: number
+  offY: number
+}): React.JSX.Element {
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const enabled =
+    canvasFx.vignette > 0 ||
+    canvasFx.grain > 0 ||
+    canvasFx.scanline > 0 ||
+    canvasFx.beatFlash > 0 ||
+    canvasFx.lightLeak > 0
+
+  useEffect(() => {
+    if (!enabled) return
+    let raf = 0
+    const draw = (): void => {
+      raf = requestAnimationFrame(draw)
+      const c = canvasRef.current
+      if (!c) return
+      const ctx = c.getContext('2d')
+      if (!ctx) return
+      ctx.clearRect(0, 0, c.width, c.height)
+      const offset = visualizer.offsetMs > 0 ? visualizer.offsetMs / 1000 : 0
+      const t = (playTimeRef?.current ?? 0) + offset
+      const feed: CanvasFxDrawOpts = {
+        t,
+        vignette: canvasFx.vignette,
+        grain: canvasFx.grain,
+        scanline: canvasFx.scanline,
+        beatFlash: canvasFx.beatFlash,
+        lightLeak: canvasFx.lightLeak,
+        energy: analyzer
+          ? (tt: number) =>
+              bandEnergiesAt(analyzer, tt + offset, visualizer.barCount, visualizer.sensitivity)
+          : undefined,
+        leakSprite: undefined
+      }
+      drawCanvasFx(ctx, feed, c.width, c.height)
+    }
+    raf = requestAnimationFrame(draw)
+    return () => cancelAnimationFrame(raf)
+  }, [enabled, canvasFx, visualizer, analyzer, playTimeRef])
+
+  return (
+    <canvas
+      ref={canvasRef}
+      className="fx-overlay"
+      width={LOGICAL_WIDTH}
+      height={LOGICAL_HEIGHT}
+      style={{
+        width: LOGICAL_WIDTH * scale,
+        height: LOGICAL_HEIGHT * scale,
+        left: offX,
+        top: offY
+      }}
+    />
+  )
+}
 
 export interface CanvasStageProps {
   layout: ProjectLayout
@@ -28,6 +110,8 @@ export interface CanvasStageProps {
   layerFxRef?: LayerFxRef
   /** 音频总时长秒（片尾时间轴用） */
   mediaDurationSec?: number
+  /** 播放时间值盒（CanvasFX overlay 等 rAF 自绘组件读取最新 t） */
+  playTimeRef?: { current: number }
   onStageReady?: (stage: Konva.Stage | null) => void
 }
 
@@ -48,6 +132,7 @@ export function CanvasStage(props: CanvasStageProps): React.JSX.Element {
     analyzer,
     layerFxRef,
     mediaDurationSec,
+    playTimeRef,
     onStageReady
   } = props
   const containerRef = useRef<HTMLDivElement>(null)
@@ -75,6 +160,15 @@ export function CanvasStage(props: CanvasStageProps): React.JSX.Element {
 
   return (
     <div ref={containerRef} className="canvas-container">
+      <CanvasFxOverlay
+        canvasFx={layout.canvasFx}
+        visualizer={layout.visualizer}
+        analyzer={analyzer}
+        playTimeRef={playTimeRef}
+        scale={scale}
+        offX={offX}
+        offY={offY}
+      />
       <Stage
         ref={stageRef}
         width={box.w}
