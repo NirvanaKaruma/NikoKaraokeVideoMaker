@@ -5,6 +5,7 @@ import {
   LOGICAL_WIDTH,
   RESOLUTIONS,
   clampNormRect,
+  hasDynamicFx,
   normToPixel,
   pixelToNorm,
   sanitizeNormRect
@@ -103,6 +104,25 @@ describe('归一化布局模型', () => {
     expect(v.x).toBeCloseTo(0.49, 5)
     expect(v.x + v.w).toBeCloseTo(0.97, 5)
     expect(v.y + v.h / 2).toBeCloseTo(0.47, 5)
+  })
+
+  it('hasDynamicFx：默认全关 = false；任一特效开启 = true', () => {
+    const base = structuredClone(DEFAULT_LAYOUT)
+    expect(hasDynamicFx(base)).toBe(false)
+    const withBg = structuredClone(base)
+    withBg.background.fx.kenBurns = 0.05
+    expect(hasDynamicFx(withBg)).toBe(true)
+    const withEntry = structuredClone(base)
+    withEntry.texts.songTitle.entry.type = 'fade'
+    expect(hasDynamicFx(withEntry)).toBe(true)
+    const withPost = structuredClone(base)
+    withPost.canvasFx.vignette = 0.5
+    expect(hasDynamicFx(withPost)).toBe(true)
+    // 静态外观项（遮罩/边框）不触发动态路径
+    const withMask = structuredClone(base)
+    withMask.mainImage.fx.mask = 'star'
+    withMask.mainImage.fx.border = 0.01
+    expect(hasDynamicFx(withMask)).toBe(false)
   })
 
   it('normToPixel / pixelToNorm 往返一致', () => {

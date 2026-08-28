@@ -315,6 +315,25 @@ export const DEFAULT_LAYOUT: ProjectLayout = {
   }
 }
 
+/** 0.5.0 动效快照：是否存在随时间变化的特效（无 → 导出走静态缓存快速路径，输出与 0.4.0 一致） */
+export function hasDynamicFx(layout: ProjectLayout): boolean {
+  const b = layout.background.fx
+  if (b.kenBurns > 0 || b.bassBrightness > 0 || b.bassHue > 0) return true
+  const i = layout.mainImage.fx
+  if (i.breathe > 0 || i.rotateDeg > 0 || i.glowPulse > 0) return true
+  if (layout.texts.songTitle.entry.type !== 'none' || layout.texts.artist.entry.type !== 'none')
+    return true
+  const io = layout.introOutro
+  if (io.introFade > 0 || io.introTitleCard > 0 || io.outroFade > 0) return true
+  return (
+    layout.canvasFx.vignette > 0 ||
+    layout.canvasFx.grain > 0 ||
+    layout.canvasFx.scanline > 0 ||
+    layout.canvasFx.beatFlash > 0 ||
+    layout.canvasFx.lightLeak > 0
+  )
+}
+
 /** 归一化 → 像素 */
 export function normToPixel(rect: NormRect, canvas: CanvasSize): PixelRect {
   return {

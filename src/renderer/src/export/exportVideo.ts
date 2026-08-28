@@ -1,7 +1,8 @@
 import { ArrayBufferTarget, Muxer } from 'mp4-muxer'
-import type { ProjectLayout, ResolutionOption } from '@shared/layout'
-import { spectrumAt, type SpectrumAnalyzer } from '@shared/spectrum'
+import { hasDynamicFx, type ProjectLayout, type ResolutionOption } from '@shared/layout'
+import { bandEnergiesAt, spectrumAt, type SpectrumAnalyzer } from '@shared/spectrum'
 import { smoothBarsFx, type SmoothFxState } from '@shared/fx'
+import { drawCanvasFx } from '@shared/canvasfx'
 import type { ExportStageHandle } from '../components/ExportStageHost'
 import { t } from '@shared/i18n'
 
@@ -251,9 +252,21 @@ export async function encodeVideo(opts: EncodeVideoOptions): Promise<ArrayBuffer
     throw new Error(t('exporter.canvasFail'))
   }
 
-  const staticCanvas = stage.renderStatic()
+  // 0.5.0 动效：存在随时间变化的特效 → 逐帧全层渲染（同一批节点）；
+  // 否则走静态缓存快速路径（与 0.4.0 输出一致）。
+  const dynamic = hasDynamicFx(layout)
+  const staticCanvas = dynamic ? null : stage.renderStatic()
   const fxState: SmoothFxState = { prev: null, peak: null }
   const vizCfg = layout.visualizer
+  const cfxCfg = layout.canvasFx
+  const cfxOn =
+    cfxCfg.vignette > 0 ||
+    cfxCfg.grain > 0 ||
+    cfxCfg.scanline > 0 ||
+    cfxCfg.beatFlash > 0 ||
+    cfxCfg.lightLeak > 0
+  const cfxEnergy = (tt: number): ReturnType<typeof bandEnergiesAt> =>
+    bandEnergiesAt(analyzer!, tt, vizCfg.barCount, vizCfg.sensitivity)
   const tOffset = vizCfg.offsetMs > 0 ? vizCfg.offsetMs / 1000 : 0
   // 频率范围以布局快照为准（分析器字段为共享可变对象：防止导出中途改滑块导致前后帧不一致）
   if (analyzer) {
@@ -292,9 +305,32 @@ export async function encodeVideo(opts: EncodeVideoOptions): Promise<ArrayBuffer
         stage.setBars(Array.from(smoothed))
       }
       stage.setFrame(tSec)
-      const viz = stage.renderViz()
-      ctx.drawImage(staticCanvas, 0, 0)
-      ctx.drawImage(viz, 0, 0)
+      if (dynamic) {
+        // 全层逐帧渲染（含背景/主图/文本动效、片头片尾；同一 SceneLayers 绘制代码）
+        ctx.clearRect(0, 0, resolution.width, resolution.height)
+        ctx.drawImage(stage.renderFull(), 0, 0)
+      } else {
+        const viz = stage.renderViz()
+        ctx.drawImage(staticCanvas!, 0, 0)
+        ctx.drawImage(viz, 0, 0)
+      }
+      // 全局后期（CanvasFX 管线）：预览 overlay 与导出同函数（核心约束 A）
+      if (cfxOn && analyzer) {
+        drawCanvasFx(
+          ctx,
+          {
+            t: tSec + tOffset,
+            vignette: cfxCfg.vignette,
+            grain: cfxCfg.grain,
+            scanline: cfxCfg.scanline,
+            beatFlash: cfxCfg.beatFlash,
+            lightLeak: cfxCfg.lightLeak,
+            energy: cfxEnergy
+          },
+          resolution.width,
+          resolution.height
+        )
+      }
       const frame = new VideoFrame(compose, {
         timestamp: Math.round((i * 1_000_000) / fps),
         duration: Math.round(1_000_000 / fps)

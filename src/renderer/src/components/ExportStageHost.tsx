@@ -6,14 +6,16 @@ import type { SpectrumAnalyzer } from '@shared/spectrum'
 import { SceneLayers } from './SceneLayers'
 
 export interface ExportStageHandle {
-  /** 静态层（背景/主图/文本）合成画布 */
+  /** 静态层（背景/主图/文本）合成画布（无动态动效的快速路径） */
   renderStatic: () => HTMLCanvasElement
   /** 命令式更新频谱柱（同一批 Konva 节点 = 同一绘制代码） */
   setBars: (bars: number[]) => void
-  /** 动效帧时间（秒）：flow 等随时间形态 */
+  /** 动效帧时间（秒）：flow 相位 + 背景/主图/文本/片头片尾每帧更新 */
   setFrame: (t: number) => void
   /** 可视化层画布 */
   renderViz: () => HTMLCanvasElement
+  /** 全层渲染画布（存在动态动效时逐帧调用：所有层同一批节点 = 同一绘制代码） */
+  renderFull: () => HTMLCanvasElement
 }
 
 interface ExportStageHostProps {
@@ -41,25 +43,38 @@ export function ExportStageHost(props: ExportStageHostProps): React.JSX.Element 
     props
   const staticRef = useRef<Konva.Stage>(null)
   const vizRef = useRef<Konva.Stage>(null)
+  const fullRef = useRef<Konva.Stage>(null)
   const barsHandleRef = useRef<((bars: number[]) => void) | null>(null)
   const frameTHandleRef = useRef<((t: number) => void) | null>(null)
-  const layerFxHandleRef = useRef<((t: number) => void) | null>(null)
+  const fxStaticHandleRef = useRef<((t: number) => void) | null>(null)
+  const fxVizHandleRef = useRef<((t: number) => void) | null>(null)
+  const fullBarsHandleRef = useRef<((bars: number[]) => void) | null>(null)
+  const fullFrameTHandleRef = useRef<((t: number) => void) | null>(null)
+  const fullFxHandleRef = useRef<((t: number) => void) | null>(null)
 
   useEffect(() => {
     // 等 Konva 挂载 + 背景模糊缓存完成后交付句柄
     const t = setTimeout(() => {
       const s = staticRef.current
       const v = vizRef.current
-      if (s && v && barsHandleRef.current) {
+      const f = fullRef.current
+      if (s && v && f && barsHandleRef.current) {
         s.draw()
         onReady({
           renderStatic: () => s.toCanvas({ pixelRatio: 1 }),
-          setBars: (bars) => barsHandleRef.current?.(bars),
-          setFrame: (t) => {
-            layerFxHandleRef.current?.(t)
-            frameTHandleRef.current?.(t)
+          setBars: (bars) => {
+            barsHandleRef.current?.(bars)
+            fullBarsHandleRef.current?.(bars)
           },
-          renderViz: () => v.toCanvas({ pixelRatio: 1 })
+          setFrame: (tt) => {
+            fxStaticHandleRef.current?.(tt)
+            fxVizHandleRef.current?.(tt)
+            frameTHandleRef.current?.(tt)
+            fullFxHandleRef.current?.(tt)
+            fullFrameTHandleRef.current?.(tt)
+          },
+          renderViz: () => v.toCanvas({ pixelRatio: 1 }),
+          renderFull: () => f.toCanvas({ pixelRatio: 1 })
         })
       }
     }, 500)
@@ -93,7 +108,7 @@ export function ExportStageHost(props: ExportStageHostProps): React.JSX.Element 
           analyzer={analyzer}
           canvasSize={{ width, height }}
           layers={['background', 'main', 'text']}
-          layerFxRef={layerFxHandleRef}
+          layerFxRef={fxStaticHandleRef}
           mediaDurationSec={mediaDurationSec}
         />
       </Stage>
@@ -113,6 +128,26 @@ export function ExportStageHost(props: ExportStageHostProps): React.JSX.Element 
           layers={['visualizer', 'fx']}
           barsHandleRef={barsHandleRef}
           frameTRef={frameTHandleRef}
+          layerFxRef={fxVizHandleRef}
+          mediaDurationSec={mediaDurationSec}
+        />
+      </Stage>
+      <Stage ref={fullRef} width={width} height={height}>
+        <SceneLayers
+          layout={layout}
+          coverElement={coverElement}
+          bgElement={bgElement}
+          selectedId={null}
+          onSelect={noop}
+          onMainRectChange={noop}
+          onTextRectChange={noop}
+          onVisualizerRectChange={noop}
+          bars={Array(layout.visualizer.barCount).fill(0)}
+          analyzer={analyzer}
+          canvasSize={{ width, height }}
+          barsHandleRef={fullBarsHandleRef}
+          frameTRef={fullFrameTHandleRef}
+          layerFxRef={fullFxHandleRef}
           mediaDurationSec={mediaDurationSec}
         />
       </Stage>
