@@ -27,23 +27,23 @@ npm run build:win
 
 构建产物位于 `dist/`：
 
-| 文件 | 说明 |
-| ---- | ---- |
-| `niko-karaoke-video-maker-0.2.0-portable.exe` | 便携版，双击即用，免安装 |
-| `niko-karaoke-video-maker-0.2.0-setup.exe` | NSIS 安装包，可自定义安装目录 |
-| `win-unpacked/` | 未打包目录（开发者调试用） |
+| 文件                                          | 说明                          |
+| --------------------------------------------- | ----------------------------- |
+| `niko-karaoke-video-maker-0.2.0-portable.exe` | 便携版，双击即用，免安装      |
+| `niko-karaoke-video-maker-0.2.0-setup.exe`    | NSIS 安装包，可自定义安装目录 |
+| `win-unpacked/`                               | 未打包目录（开发者调试用）    |
 
 ### 项目脚本速查
 
-| 命令 | 说明 |
-| ---- | ---- |
-| `npm run dev` | 开发模式（HMR） |
-| `npm test` | 单元测试（vitest，布局模型 + 频谱算法） |
-| `npm run typecheck` | TypeScript 类型检查（node + web 两套） |
-| `npm run lint` | ESLint |
-| `npm run build:win` | 打包 Windows 安装包与便携版 |
-| `npx electron . --smoke-visual` | 无头自测：像素校验 + 频谱链路（11 项） |
-| `npx electron . --smoke-export=720p@6` | 无头端到端导出自测 |
+| 命令                                   | 说明                                    |
+| -------------------------------------- | --------------------------------------- |
+| `npm run dev`                          | 开发模式（HMR）                         |
+| `npm test`                             | 单元测试（vitest，布局模型 + 频谱算法） |
+| `npm run typecheck`                    | TypeScript 类型检查（node + web 两套）  |
+| `npm run lint`                         | ESLint                                  |
+| `npm run build:win`                    | 打包 Windows 安装包与便携版             |
+| `npx electron . --smoke-visual`        | 无头自测：像素校验 + 频谱链路（11 项）  |
+| `npx electron . --smoke-export=720p@6` | 无头端到端导出自测                      |
 
 > 国内网络下，`npm install` 的 Electron 二进制下载已配置 npmmirror 镜像（`.npmrc`），如遇超时可重新执行。
 
@@ -52,6 +52,12 @@ npm run build:win
 - 应用**不捆绑 ffmpeg**。首次使用时通过「设置 → ffmpeg」一键下载托管版，或指定本机已有的 ffmpeg.exe；
 - 导出使用 WebCodecs H.264 编码 + ffmpeg 混流与音频编码；
 - 项目文件为 `.niko` 后缀，布局、样式、封面内嵌其中。
+
+### 动效与后期（0.5.0）
+
+- 左侧「动效与后期」页签：背景（Ken Burns 慢速缩放平移、低音呼吸亮度/色相）、主图（呼吸缩放/微旋转/发光脉冲/形状遮罩/边框）、文本入场（淡入/滑入/打字机/弹跳，可调时长与延迟）、全局后期（暗角/胶片颗粒/扫描线/踩点闪光/光斑漏光）、片头片尾（黑场淡入/标题卡/片尾淡出）；
+- 所有特效**默认关闭**（默认画面与历史版本一致），随时可调、可撤销；
+- 预览与导出使用同一套时间函数与绘制代码（所见即所得）；动效序列对 30/60fps 导出一致。
 
 ## 更新计划
 

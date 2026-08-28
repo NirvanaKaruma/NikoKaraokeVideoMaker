@@ -868,9 +868,14 @@ function App(): React.JSX.Element {
           ]
         }
       }
-      for (const rid of resolutions) {
-        project.updateText('songTitle', { text: 'smoke-' + rid })
-        project.updateExport({ resolutionId: rid, fps: 30 })
+      const runExportOnce = async (): Promise<{
+        resolution: string
+        phase: string
+        seconds: number
+        error: string | null
+        message: string
+        outputPath: string
+      }> => {
         await sleep(400)
         exporterRef.current.reset()
         // 等状态真正回到 idle（React 异步更新，否则读到上一轮的 done）
@@ -892,15 +897,43 @@ function App(): React.JSX.Element {
           phase = exporterStateRef.current.phase
         }
         const st = exporterStateRef.current
-        results.push({
-          resolution: rid,
+        return {
+          resolution: '',
           phase: st.phase,
           seconds: Math.round((performance.now() - started) / 100) / 10,
           error: st.error,
-          message: st.encodeInfo ?? st.message
-        })
-        if (st.phase !== 'done') break
+          message: st.encodeInfo ?? st.message,
+          outputPath: st.outputPath ?? ''
+        }
       }
+      for (const rid of resolutions) {
+        project.updateText('songTitle', { text: 'smoke-' + rid })
+        project.updateExport({ resolutionId: rid, fps: 30 })
+        const done = await runExportOnce()
+        results.push(done)
+        if (done.phase !== 'done') break
+      }
+      // 0.5.0：含特效导出（动效组合默认关→全开一次）——动态路径与 WYSIWYG 端到端
+      project.updateBackgroundFx({ kenBurns: 0.05, kenBurnsDuration: 30, bassBrightness: 0.4 })
+      project.updateImageFx({ breathe: 0.3, rotateDeg: 1.5, glowPulse: 0.4, border: 0.008 })
+      project.updateTextEntry('songTitle', { type: 'typewriter', durationSec: 1.2 })
+      project.updateCanvasFx({ vignette: 0.5, grain: 0.2, scanline: 0.15, lightLeak: 0.3 })
+      project.updateIntroOutro({ introFade: 1, introTitleCard: 2, outroFade: 1 })
+      project.updateExport({ resolutionId: '1080p', fps: 30 })
+      await sleep(400)
+      const fxDone = await runExportOnce()
+      results.push({ ...fxDone, resolution: '1080p+fx' })
+      // 复位（防污染）
+      project.updateBackgroundFx({
+        kenBurns: 0,
+        kenBurnsDuration: 30,
+        bassBrightness: 0,
+        bassHue: 0
+      })
+      project.updateImageFx({ breathe: 0, rotateDeg: 0, glowPulse: 0, border: 0 })
+      project.updateTextEntry('songTitle', { type: 'none' })
+      project.updateCanvasFx({ vignette: 0, grain: 0, scanline: 0, beatFlash: 0, lightLeak: 0 })
+      project.updateIntroOutro({ introFade: 0, introTitleCard: 0, outroFade: 0 })
       return { ok: results.every((r) => r.phase === 'done'), results }
     }
 

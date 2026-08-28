@@ -1,5 +1,5 @@
 import { app, dialog, shell, BrowserWindow, ipcMain } from 'electron'
-import { writeFile } from 'fs/promises'
+import { writeFile, mkdir } from 'fs/promises'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
@@ -8,7 +8,13 @@ import { setLocale, t } from '../shared/i18n'
 import { getConfig, setConfig } from './config'
 import { registerFfmpegIpc } from './ffmpegIpc'
 import { registerProjectIpc } from './projectIpc'
-import { detectFfmpegStatus, detectManagedFfmpeg, installManagedFfmpeg } from './ffmpeg'
+import {
+  detectFfmpegStatus,
+  detectManagedFfmpeg,
+  getFFmpegPath,
+  installManagedFfmpeg
+} from './ffmpeg'
+import { spawn } from 'child_process'
 
 /** smoke 自测模式：加载渲染页后执行一次 ping 往返，结果写入 smoke-result.txt 并退出 */
 /** 环境变量 smoke 通道：portable 启动器不转发 argv，env 会被继承（NIKO_SMOKE=detect|bench|project|visual|export:720p@8|download:default） */
@@ -237,6 +243,53 @@ async function runSmokeBench(win: BrowserWindow): Promise<void> {
   }
 }
 
+/** ffprobe/ffmpeg 提取：验证含特效导出的时长与帧存在（0.5.0 T11 端到端） */
+async function verifyFxExport(outputPath: string, durationSec: number): Promise<boolean> {
+  const ff = await getFFmpegPath()
+  if (!ff) {
+    console.log('[smoke-export] fx 校验: 跳过（无 ffmpeg）')
+    return true
+  }
+  try {
+    const probe = await new Promise<string>((resolve, reject) => {
+      const p = spawn(ff, ['-i', outputPath, '-hide_banner'])
+      let out = ''
+      p.stderr.on('data', (d) => (out += String(d)))
+      p.on('close', (code) =>
+        code === 1 ? resolve(out) : reject(new Error('probe 未按预期退出 ' + code))
+      )
+      p.on('error', reject)
+    })
+    const durMatch = probe.match(/Duration: (\d{2}):(\d{2}):(\d{2}\.\d{2})/)
+    if (!durMatch) {
+      console.log('[smoke-export] fx 校验: 失败（无法读取时长）')
+      return false
+    }
+    const h = Number(durMatch[1])
+    const m = Number(durMatch[2])
+    const s = Number(durMatch[3])
+    const dur = h * 3600 + m * 60 + s
+    if (Math.abs(dur - durationSec) > 1.2) {
+      console.log('[smoke-export] fx 校验: 失败（时长 ' + dur + 's ≠ ' + durationSec + 's）')
+      return false
+    }
+    // 抽帧 1.5s（片头淡入后、特效可见区）
+    const framePath = join(smokeDir, 'TEST-ARTIFACTS', 'fx-frame.png')
+    await mkdir(join(smokeDir, 'TEST-ARTIFACTS'), { recursive: true })
+    await new Promise<void>((resolve) => {
+      const p = spawn(ff, ['-y', '-ss', '1.5', '-i', outputPath, '-frames:v', '1', framePath])
+      p.on('close', () => resolve())
+    })
+    console.log(
+      '[smoke-export] fx 校验: 通过（时长 ' + dur.toFixed(2) + 's，抽帧 ' + framePath + '）'
+    )
+    return true
+  } catch (e) {
+    console.log('[smoke-export] fx 校验: 异常 ' + String(e))
+    return false
+  }
+}
+
 async function runSmokeExport(win: BrowserWindow): Promise<void> {
   try {
     const { resolutions, durationSec } = parseSmokeExport()
@@ -249,9 +302,16 @@ async function runSmokeExport(win: BrowserWindow): Promise<void> {
       JSON.stringify(report, null, 2),
       'utf-8'
     )
-    const ok = (report as { ok?: boolean })?.ok === true
+    let ok = (report as { ok?: boolean })?.ok === true
     console.log('[smoke-export] 结果:', ok ? '全部成功' : '存在失败')
     console.log(JSON.stringify(report, null, 2))
+    // 0.5.0：含特效导出校验（时长 + 抽帧）
+    const fxEntry = (
+      report as { results?: Array<{ resolution?: string; phase?: string; outputPath?: string }> }
+    )?.results?.find((r) => (r.resolution ?? '').includes('fx'))
+    if (ok && fxEntry?.phase === 'done' && fxEntry.outputPath) {
+      ok = await verifyFxExport(fxEntry.outputPath, durationSec)
+    }
     app.exit(ok ? 0 : 1)
   } catch (error) {
     console.error('[smoke-export] 失败:', error)
