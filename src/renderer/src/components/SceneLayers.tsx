@@ -3,6 +3,7 @@ import {
   Group,
   Image as KonvaImage,
   Layer,
+  Line as KonvaLine,
   Rect,
   Text as KonvaText,
   Transformer
@@ -23,6 +24,7 @@ import {
   type CanvasSize
 } from '@shared/layout'
 import { colorAt } from '@shared/color'
+import { barGeometry } from '@shared/fx'
 import { useLocale } from '../hooks/useLocale'
 
 /** 可选中元素：主图 / 歌名 / 作者 / 可视化 */
@@ -455,7 +457,9 @@ interface VisualizerLayerProps {
   barsHandleRef?: { current: ((bars: number[]) => void) | null }
 }
 
-/** 可视化层：可拖动选择位置；支持命令式逐帧更新（导出） */
+/** 可视化层：可拖动选择位置；支持命令式逐帧更新（导出）。
+ * 形态：bars（默认，旧几何）/ mirror / center / radial / wave / area / dots。
+ * 所有形态共享同一 bars[] 数据与同一命令式更新通道（核心约束 A）。 */
 function VisualizerLayer({
   config,
   bars,
@@ -468,11 +472,12 @@ function VisualizerLayer({
   const groupRef = useRef<Konva.Group>(null)
   const trRef = useRef<Konva.Transformer>(null)
   const barNodes = useRef<(Konva.Rect | null)[]>([])
+  const waveRef = useRef<Konva.Line | null>(null)
   const px = normToPixel(config.rect, canvas)
   const slot = px.w / config.barCount
-  const barW = slot * config.barWidthRatio
   const maxH = px.h * config.heightRatio
   const baseY = px.h
+  const style = config.style
 
   useEffect(() => {
     const tr = trRef.current
@@ -481,35 +486,98 @@ function VisualizerLayer({
       tr.nodes([node])
       tr.getLayer()?.batchDraw()
     }
-  }, [selected, config.rect])
+  }, [selected, config.rect, style])
 
-  // 导出专用：命令式更新柱高（同一批 Konva 节点 = 同一绘制代码）
+  // 命令式更新（预览 rAF 与导出逐帧共用同一函数；几何由 fx.barGeometry 纯函数给出）
   useEffect(() => {
     if (!barsHandleRef) return
     barsHandleRef.current = (next: number[]) => {
+      const g = groupRef.current?.getLayer()
+      if (style === 'wave') {
+        const line = waveRef.current
+        if (line) {
+          const pts: number[] = []
+          for (let i = 0; i < next.length; i++) {
+            const v = Math.min(Math.max(next[i] ?? 0, 0), 1)
+            pts.push(i * slot, baseY - Math.max(4, v * maxH))
+          }
+          line.points(pts)
+          line.getLayer()?.batchDraw()
+        }
+        return
+      }
       barNodes.current.forEach((node, i) => {
         if (!node) return
-        const v = Math.min(Math.max(next[i] ?? 0, 0), 1)
-        const h = Math.max(4, v * maxH)
-        node.y(baseY - h)
-        node.height(h)
+        const gGeo = barGeometry(
+          style,
+          i,
+          next[i] ?? 0,
+          config.barCount,
+          px.w,
+          px.h,
+          config.barWidthRatio,
+          config.gapRatio,
+          config.heightRatio
+        )
+        node.x(gGeo.x)
+        node.y(gGeo.y)
+        node.width(gGeo.w)
+        node.height(gGeo.h)
+        node.rotation(gGeo.rotation)
       })
-      groupRef.current?.getLayer()?.batchDraw()
+      g?.batchDraw()
     }
     return () => {
       barsHandleRef.current = null
     }
   }, [
     barsHandleRef,
+    style,
     config.rect,
     config.barCount,
     config.barWidthRatio,
+    config.gapRatio,
     config.heightRatio,
     px.w,
     px.h,
     maxH,
-    baseY
+    baseY,
+    slot
   ])
+
+  const isWave = style === 'wave'
+  // 渲染期几何（仅 bars 形态为"旧代码路径"：x/y/w/h 与 0.3.0 完全一致，保证默认基线不变）
+  const renderBar = (i: number): React.JSX.Element | null => {
+    const v = Math.min(Math.max(bars[i] ?? 0, 0), 1)
+    if (isWave) return null
+    const gGeo = barGeometry(
+      style,
+      i,
+      v,
+      config.barCount,
+      px.w,
+      px.h,
+      config.barWidthRatio,
+      config.gapRatio,
+      config.heightRatio
+    )
+    return (
+      <Rect
+        key={i}
+        ref={(el) => {
+          barNodes.current[i] = el
+        }}
+        x={gGeo.x}
+        y={gGeo.y}
+        width={gGeo.w}
+        height={gGeo.h}
+        rotation={gGeo.rotation}
+        fill={colorAt(config.colors, i / Math.max(1, config.barCount - 1))}
+        cornerRadius={style === 'bars' ? config.roundness : 0}
+        listening={false}
+      />
+    )
+  }
 
   return (
     <>
@@ -535,26 +603,19 @@ function VisualizerLayer({
       >
         {/* 透明命中区：整个矩形（含柱子间空隙）都可拖动/选中 */}
         <Rect width={px.w} height={px.h} fill="rgba(0,0,0,0.01)" />
-        {Array.from({ length: config.barCount }, (_, i) => {
-          const v = Math.min(Math.max(bars[i] ?? 0, 0), 1)
-          const h = Math.max(4, v * maxH)
-          const x = i * slot + (slot - barW) / 2
-          return (
-            <Rect
-              key={i}
-              ref={(el) => {
-                barNodes.current[i] = el
-              }}
-              x={x}
-              y={baseY - h}
-              width={barW}
-              height={h}
-              fill={colorAt(config.colors, i / Math.max(1, config.barCount - 1))}
-              cornerRadius={config.roundness}
-              listening={false}
-            />
-          )
-        })}
+        {isWave ? (
+          <KonvaLine
+            ref={waveRef}
+            points={[0, baseY]}
+            stroke={config.colors[0] ?? '#ff5f9e'}
+            strokeWidth={3}
+            lineCap="round"
+            lineJoin="round"
+            listening={false}
+          />
+        ) : (
+          Array.from({ length: config.barCount }, (_, i) => renderBar(i))
+        )}
       </Group>
       {selected && (
         <Transformer

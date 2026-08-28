@@ -197,6 +197,46 @@ export function spectrumAt(
   return out
 }
 
+/** 分带能量（对数感知切分 bass/lowMid/mid/treble），供动效层消费（0.4.0 频段驱动） */
+export interface BandEnergy {
+  bass: number
+  lowMid: number
+  mid: number
+  treble: number
+}
+
+/** 从时刻 t 的频谱计算分带能量（与 spectrumAt 同一 FFT 路径；导出侧每帧调用） */
+export function bandEnergiesAt(
+  analyzer: SpectrumAnalyzer,
+  t: number,
+  barCount: number,
+  gain = 4
+): BandEnergy {
+  const bars = spectrumAt(analyzer, t, barCount, null, gain)
+  const n = bars.length
+  if (n === 0) return { bass: 0, lowMid: 0, mid: 0, treble: 0 }
+  // 分带能量口径：段内峰值（软限幅后的幅度谱本身 0–1；峰值口径对"单音集中"与
+  // "宽频铺开"都灵敏，且天然适合驱动动效的"强度"语义）
+  const bandValue = (s: number, e: number): number => {
+    const s0 = Math.max(0, Math.floor(s))
+    const e0 = Math.min(n, Math.round(e))
+    if (e0 <= s0) return 0
+    let peak = 0
+    for (let i = s0; i < e0; i++) {
+      const v = bars[i]
+      if (v > peak) peak = v
+    }
+    return peak
+  }
+  // 对数感知：人耳低频分辨率高，等对数段分布更符合听感（频率范围已是对数分桶）
+  return {
+    bass: bandValue(0, n * 0.25),
+    lowMid: bandValue(n * 0.25, n * 0.5),
+    mid: bandValue(n * 0.5, n * 0.75),
+    treble: bandValue(n * 0.75, n)
+  }
+}
+
 /** 时间平滑：smoothing ∈ [0,1]，0 = 完全跟随新值；prev 为 null 时返回 target 副本 */
 export function smoothBars(
   prev: Float32Array | null,

@@ -1,6 +1,7 @@
 import { ArrayBufferTarget, Muxer } from 'mp4-muxer'
 import type { ProjectLayout, ResolutionOption } from '@shared/layout'
-import { smoothBars, spectrumAt, type SpectrumAnalyzer } from '@shared/spectrum'
+import { spectrumAt, type SpectrumAnalyzer } from '@shared/spectrum'
+import { smoothBarsFx, type SmoothFxState } from '@shared/fx'
 import type { ExportStageHandle } from '../components/ExportStageHost'
 import { t } from '@shared/i18n'
 
@@ -251,8 +252,9 @@ export async function encodeVideo(opts: EncodeVideoOptions): Promise<ArrayBuffer
   }
 
   const staticCanvas = stage.renderStatic()
-  let prevBars: Float32Array | null = null
+  const fxState: SmoothFxState = { prev: null, peak: null }
   const vizCfg = layout.visualizer
+  const tOffset = vizCfg.offsetMs > 0 ? vizCfg.offsetMs / 1000 : 0
   // 频率范围以布局快照为准（分析器字段为共享可变对象：防止导出中途改滑块导致前后帧不一致）
   if (analyzer) {
     const half = Math.max(analyzer.sampleRate / 2, 1000)
@@ -279,9 +281,15 @@ export async function encodeVideo(opts: EncodeVideoOptions): Promise<ArrayBuffer
       const f0 = performance.now()
       const tSec = i / fps
       if (analyzer) {
-        const target = spectrumAt(analyzer, tSec, vizCfg.barCount, null, vizCfg.sensitivity)
-        prevBars = smoothBars(prevBars, target, vizCfg.smoothing)
-        stage.setBars(Array.from(prevBars))
+        const target = spectrumAt(
+          analyzer,
+          tSec + tOffset,
+          vizCfg.barCount,
+          null,
+          vizCfg.sensitivity
+        )
+        const smoothed = smoothBarsFx(fxState, target, vizCfg.attack, vizCfg.decay, vizCfg.peakFall)
+        stage.setBars(Array.from(smoothed))
       }
       const viz = stage.renderViz()
       ctx.drawImage(staticCanvas, 0, 0)

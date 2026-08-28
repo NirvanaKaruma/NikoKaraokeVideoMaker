@@ -116,6 +116,21 @@ export function VisualizerPanel({ config, onChange }: VisualizerPanelProps): Rea
   return (
     <section className="panel-section">
       <h2>{t('visualizer.title')}</h2>
+      <label className="field">
+        <span>{t('visualizer.styleLabel')}</span>
+        <select
+          value={config.style}
+          onChange={(e) => onChange({ style: e.target.value as VisualizerConfig['style'] })}
+        >
+          <option value="bars">{t('visualizer.styleBars')}</option>
+          <option value="mirror">{t('visualizer.styleMirror')}</option>
+          <option value="center">{t('visualizer.styleCenter')}</option>
+          <option value="radial">{t('visualizer.styleRadial')}</option>
+          <option value="wave">{t('visualizer.styleWave')}</option>
+          <option value="area">{t('visualizer.styleArea')}</option>
+          <option value="dots">{t('visualizer.styleDots')}</option>
+        </select>
+      </label>
       <DeferredSlider
         label={(v) => t('visualizer.barCount', { v })}
         value={config.barCount}
@@ -189,6 +204,31 @@ export function VisualizerPanel({ config, onChange }: VisualizerPanelProps): Rea
         step={0.01}
         onCommit={(v) => onChange({ smoothing: v })}
       />
+      <DeferredSlider
+        label={(v) => t('visualizer.attack', { v: Math.round(v * 100) })}
+        value={config.attack}
+        min={0}
+        max={0.9}
+        step={0.01}
+        onCommit={(v) => onChange({ attack: v })}
+      />
+      <DeferredSlider
+        label={(v) => t('visualizer.decay', { v: Math.round(v * 100) })}
+        value={config.decay}
+        min={0}
+        max={0.9}
+        step={0.01}
+        onCommit={(v) => onChange({ decay: v })}
+      />
+      <DeferredSlider
+        label={(v) => t('visualizer.peakFall', { v: Math.round(v * 100) })}
+        value={config.peakFall}
+        min={0}
+        max={0.1}
+        step={0.001}
+        onCommit={(v) => onChange({ peakFall: v })}
+      />
+      <p className="panel-note">{t('visualizer.attackHint')}</p>
       <DeferredSlider
         label={(v) => t('visualizer.sensitivity', { v })}
         value={config.sensitivity}

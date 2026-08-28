@@ -3,10 +3,10 @@ import type { VisualizerConfig } from '@shared/layout'
 import {
   createSpectrumAnalyzer,
   mixToMono,
-  smoothBars,
   spectrumAt,
   type SpectrumAnalyzer
 } from '@shared/spectrum'
+import { smoothBarsFx, type SmoothFxState } from '@shared/fx'
 import { placeholderBars } from '@shared/color'
 import { t } from '@shared/i18n'
 
@@ -47,7 +47,7 @@ export function useAudioPlayback(
   const offsetRef = useRef(0)
   const playingRef = useRef(false)
   const manualStopRef = useRef(false)
-  const prevBarsRef = useRef<Float32Array | null>(null)
+  const smoothFxRef = useRef<SmoothFxState>({ prev: null, peak: null })
   const lastBarsRef = useRef<Float32Array | null>(null)
   const configRef = useRef(config)
   const sinkRef = useRef(barsSink)
@@ -92,9 +92,10 @@ export function useAudioPlayback(
     const an = analyzerRef.current
     if (!an) return
     const cfg = configRef.current
-    const target = spectrumAt(an, t, cfg.barCount, null, cfg.sensitivity)
-    const smoothed = smoothBars(prevBarsRef.current, target, cfg.smoothing)
-    prevBarsRef.current = smoothed
+    // 可视化-音频偏移校准：仅可视化时间轴偏移 ms，音频播放不动
+    const tVis = t + (cfg.offsetMs > 0 ? cfg.offsetMs / 1000 : 0)
+    const target = spectrumAt(an, tVis, cfg.barCount, null, cfg.sensitivity)
+    const smoothed = smoothBarsFx(smoothFxRef.current, target, cfg.attack, cfg.decay, cfg.peakFall)
     lastBarsRef.current = smoothed
     if (viaState) {
       setBars(Array.from(smoothed))
@@ -137,7 +138,7 @@ export function useAudioPlayback(
         bufferRef.current = null
         analyzerRef.current = null
         offsetRef.current = 0
-        prevBarsRef.current = null
+        smoothFxRef.current = { prev: null, peak: null }
         if (cancelled) return
         setStatus('empty')
         setDuration(0)

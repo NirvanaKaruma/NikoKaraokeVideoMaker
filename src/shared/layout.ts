@@ -59,8 +59,11 @@ export interface MainImageConfig {
   fillMode: 'contain' | 'cover' | 'stretch'
 }
 
+/** 可视化形态：bars=柱形（默认，历史行为）；其余为可选形态（0.4.0） */
+export type VisualizerStyle = 'bars' | 'mirror' | 'center' | 'radial' | 'wave' | 'area' | 'dots'
+
 export interface VisualizerConfig {
-  style: 'spectrum'
+  style: VisualizerStyle
   rect: NormRect
   /** 柱数 100–160，默认 128 */
   barCount: number
@@ -78,10 +81,20 @@ export interface VisualizerConfig {
   colors: string[]
   /** 柱顶圆角（逻辑像素） */
   roundness: number
-  /** 时间平滑 0–1（0=无平滑） */
+  /** 时间平滑 0–1（0=无平滑）——保留兼容：由 attack/decay 派生，UI 改双系数 */
   smoothing: number
+  /** 上升系数 0–1（越大上升越慢），默认 0.1（响应快） */
+  attack: number
+  /** 下降系数 0–1（越大回落越慢），默认平滑时间的近似（0.3，保留旧观感） */
+  decay: number
+  /** 频谱帽回落速率 0–1/帧（0=关闭下落动画=旧行为） */
+  peakFall: number
   /** 灵敏度增益 1–15，越大柱越高越灵敏（默认 7；原固定增益 4 经用户反馈偏低） */
   sensitivity: number
+  /** 节拍响应：bpm=null（默认）不检测；数字=手动 BPM；0.6.0 自动检测可写入 */
+  bpm: number | null
+  /** 可视化-音频偏移（ms，仅可视化时间轴，默认 0） */
+  offsetMs: number
 }
 
 export interface TextLayerConfig {
@@ -186,7 +199,7 @@ export const DEFAULT_LAYOUT: ProjectLayout = {
     }
   },
   visualizer: {
-    style: 'spectrum',
+    style: 'bars',
     // §4：横向 [49%, 97%]、中心 y≈49%（用户目视反馈后上移，中心 47%）
     rect: { x: 0.49, y: 0.38, w: 0.48, h: 0.18 },
     barCount: 128,
@@ -198,7 +211,12 @@ export const DEFAULT_LAYOUT: ProjectLayout = {
     colors: ['#ff5f9e', '#7ce3ff'],
     roundness: 2,
     smoothing: 0.2,
-    sensitivity: 7
+    attack: 0.1,
+    decay: 0.3,
+    peakFall: 0,
+    sensitivity: 7,
+    bpm: null,
+    offsetMs: 0
   },
   export: {
     resolutionId: '1080p',

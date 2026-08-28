@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { createSpectrumAnalyzer, mixToMono, smoothBars, spectrumAt } from './spectrum'
+import {
+  bandEnergiesAt,
+  createSpectrumAnalyzer,
+  mixToMono,
+  smoothBars,
+  spectrumAt
+} from './spectrum'
 
 function makeSine(freq: number, sr: number, seconds: number, amp = 0.8): Float32Array {
   const n = Math.round(sr * seconds)
@@ -120,5 +126,23 @@ describe('共享频谱分析器', () => {
     const analyzer = createSpectrumAnalyzer(makeSine(440, 8000, 1), 8000)
     expect(spectrumAt(analyzer, -1, 64).length).toBe(64)
     expect(spectrumAt(analyzer, 999, 64).length).toBe(64)
+  })
+
+  it('bandEnergiesAt：440Hz 正弦 mid 段主导；静音全 0', () => {
+    const sr = 44100
+    const an = createSpectrumAnalyzer(makeSine(440, sr, 2), sr, {
+      fftSize: 2048,
+      freqMin: 30,
+      freqMax: 8000
+    })
+    const e = bandEnergiesAt(an, 1.0, 128, 7)
+    expect(e.mid).toBeGreaterThan(e.bass)
+    expect(e.bass).toBeGreaterThan(e.treble)
+    expect(e.mid).toBeGreaterThan(0.1)
+    const silent = createSpectrumAnalyzer(new Float32Array(sr), sr, { fftSize: 2048 })
+    const es = bandEnergiesAt(silent, 0.5, 128, 7)
+    expect(es.bass).toBe(0)
+    expect(es.mid).toBe(0)
+    expect(es.treble).toBe(0)
   })
 })

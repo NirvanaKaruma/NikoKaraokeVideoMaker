@@ -407,10 +407,34 @@ async function runAudioSmoke(
   project.updateVisualizer({ freqMax: 8000 })
   await sleep(250)
 
+  // 形态可选（0.4.0）：切 mirror 后可视化区像素布局改变（镜像柱生效）且柱数组长度不变
+  const barsBeforeStyle = pbRef.current.bars.slice()
+  project.updateVisualizer({ style: 'mirror' })
+  await sleep(300)
+  const capMirror = captureRegion(stage, vizX0, vizY0, vizX1, vizY1)
+  const barsMirror = pbRef.current.bars.slice()
+  const diffStyle =
+    barsBeforeStyle.length === barsMirror.length ? countDiffPixels(cap1, capMirror) : -1
+  if (diffStyle > 50 && barsMirror.length === wideLen) {
+    pass('形态可选', 'mirror 像素差异 ' + diffStyle + '（柱数不变）')
+  } else {
+    fail('形态可选', '像素差异=' + diffStyle + ' 柱数=' + barsMirror.length)
+  }
+  project.updateVisualizer({ style: 'bars' })
+  await sleep(250)
+
   // 回归：播放中 seek 不得被旧音源 onended 误判为播完（曾跳到结尾并停止）
   pbRef.current.seek(0.2)
   pbRef.current.play()
-  await sleep(400)
+  // 起播等待：AudioContext resume 偶发延迟 0.5–2s，条件轮询直到 currentTime 前进（最多 2s）
+  const bootStart = Date.now()
+  while (pbRef.current.currentTime < 0.01 && Date.now() - bootStart < 2000) {
+    await sleep(100)
+    if (pbRef.current.currentTime < 0.01 && !pbRef.current.isPlaying) {
+      pbRef.current.seek(0.2)
+      pbRef.current.play()
+    }
+  }
   const tBeforeSeek = pbRef.current.currentTime
   pbRef.current.seek(1.1)
   await sleep(400)
