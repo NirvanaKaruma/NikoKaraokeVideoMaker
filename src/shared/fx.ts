@@ -201,8 +201,10 @@ export function energyAttack(
   return Math.min(1, Math.max(0, now - past))
 }
 
-/** Ken Burns：慢速缩放平移。返回 [scale, dx, dy]（相对画布中心，scale 1=原尺寸）。
- * 保证 |dx| ≤ (s−1)/2 且 |dy| ≤ (s−1)/2 → 任何时刻缩放后画面仍铺满画布（无露边）。
+/** Ken Burns：慢速缩放平移（0.5.0 用户选定「往复摇摆」）。返回 [scale, dx, dy]（相对画布中心，scale 1=原尺寸）。
+ * 往复：偶数周期推入（1→最大），奇数周期拉出（最大→1）；平移 = 方向 × margin × cos(π·x)，
+ * 端点与整周期边界处速度为零、位移连续 → 全程无突变、无静止（长歌曲后半程仍运镜）。
+ * 保证 |dx|/|dy| ≤ margin（缩放余量）→ 任何时刻画面铺满画布（无露边）。
  * tSec 同值 → 同值（确定性；30/60fps 导出序列一致）。 */
 export function kenBurns(
   tSec: number,
@@ -211,15 +213,18 @@ export function kenBurns(
   scaleAmp: number
 ): [number, number, number] {
   const rnd = seededRng(seed)
-  const zx = (rnd() - 0.5) * 2
-  const zy = (rnd() - 0.5) * 2
-  const dirX = rnd() > 0.5 ? 1 : -1
-  const dirY = rnd() > 0.5 ? 1 : -1
-  const p = tSec / Math.max(durationSec, 0.001)
-  const s = 1 + scaleAmp * easeInOutQuad(p)
+  const vx = (rnd() - 0.5) * 2 * (rnd() > 0.5 ? 1 : -1)
+  const vy = (rnd() - 0.5) * 2 * (rnd() > 0.5 ? 1 : -1)
+  const dur = Math.max(0.001, durationSec)
+  const full = tSec / dur
+  const cycle = Math.floor(full)
+  const x = cycle % 2 === 0 ? full - cycle : 1 - (full - cycle)
+  const p = easeInOutQuad(x)
+  const s = 1 + scaleAmp * p
   const margin = (s - 1) / 2
-  const dx = zx * dirX * margin * 0.85
-  const dy = zy * dirY * margin * 0.85
+  const sweep = Math.cos(Math.PI * x)
+  const dx = vx * margin * 0.85 * sweep
+  const dy = vy * margin * 0.85 * sweep
   return [s, dx, dy]
 }
 

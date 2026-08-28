@@ -8,6 +8,7 @@ import {
   energyAttack,
   entryProgress,
   introOutroAlpha,
+  kenBurns,
   lineHeights,
   seededRng,
   smoothBarsFx,
@@ -226,6 +227,35 @@ describe('fx 时间函数库', () => {
     expect(off.outro).toBe(0)
     // 确定性
     expect(introOutroAlpha(1.234, 10, cfg)).toEqual(introOutroAlpha(1.234, 10, cfg))
+  })
+
+  it('kenBurns：往复摇摆——周期边界连续无突变、推拉对称、无露边', () => {
+    const seed = 42
+    const amp = 0.1
+    const dur = 4
+    // 往复：半周期处最大；四分之一周期时推入 < 四分之三（推入/拉出对称）
+    const s25 = kenBurns(dur * 0.25, seed, dur, amp)[0]
+    const s75 = kenBurns(dur * 0.75, seed, dur, amp)[0]
+    const s125 = kenBurns(dur * 1.25, seed, dur, amp)[0]
+    const s175 = kenBurns(dur * 1.75, seed, dur, amp)[0]
+    expect(s25).toBeLessThan(s75)
+    expect(s125).toBeGreaterThan(s175) // 第二周期方向相反
+    expect(s75).toBeCloseTo(s125, 9) // 每周期都到达同样最大缩放
+    // 整周期边界：前后 1ms 的 scale/位移连续（无突变）
+    const a0 = kenBurns(dur, seed, dur, amp)
+    const a1 = kenBurns(dur + 0.001, seed, dur, amp)
+    expect(Math.abs(a0[0] - a1[0])).toBeLessThan(0.002)
+    expect(Math.abs(a0[1] - a1[1])).toBeLessThan(0.002)
+    expect(Math.abs(a0[2] - a1[2])).toBeLessThan(0.002)
+    // 无露边：|dx| ≤ (s−1)/2 × 1（含 0.85 系数），任意时刻
+    for (const t of [0, 0.5, 1, 2.2, 4.33, 9.9]) {
+      const [s, dx, dy] = kenBurns(t, seed, dur, amp)
+      expect(Math.abs(dx)).toBeLessThanOrEqual((s - 1) / 2 + 1e-9)
+      expect(Math.abs(dy)).toBeLessThanOrEqual((s - 1) / 2 + 1e-9)
+      expect(s).toBeGreaterThanOrEqual(1)
+    }
+    // 起始=原尺寸（无跳变入场）
+    expect(kenBurns(0, seed, dur, amp)[0]).toBeCloseTo(1, 9)
   })
 
   it('wedgeGeometry：radial 楔形 4 顶点 8 数值，弧长随半径增长均匀', () => {
