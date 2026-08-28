@@ -223,18 +223,25 @@ export function wedgePointsToLine(points: number[]): number[] {
 export type LineMode = 'wave' | 'flow'
 
 /** 连续折线：每列取 v 的高度，追加"流动"相位偏移（flow 用 tSec 推动）。
- * 返回与 bars 等长的 0–1 高度数组。
+ * flow 返回 [主波, 副波] 两套（副波相位滞后 → 双层流动视觉）；
+ * wave 返回单套（与频谱一致）。
  */
-export function lineHeights(mode: LineMode, bars: ArrayLike<number>, tSec: number): number[] {
+export function lineHeights(
+  mode: LineMode,
+  bars: ArrayLike<number>,
+  tSec: number,
+  phaseShift = 0
+): number[] {
   const n = bars.length
   const out: number[] = new Array(n)
   for (let i = 0; i < n; i++) {
     const v = Math.min(Math.max(bars[i] ?? 0, 0), 1)
     if (mode === 'flow') {
-      // 流动感：相邻柱相位差 → 正弦扰动叠加缓慢移动
-      const phase = (i / Math.max(1, n - 1)) * Math.PI * 2 - tSec * 2.4
-      const ripple = Math.max(0, Math.sin(phase)) * 0.35
-      out[i] = Math.min(1, v * 0.75 + ripple)
+      // 流动感：相位沿 x 轴前进；扰动 = sin 包络 × 频谱混合
+      const phase = (i / Math.max(1, n - 1)) * Math.PI * 4 - tSec * 3.0 - phaseShift
+      const ripple = 0.5 + 0.5 * Math.sin(phase)
+      const ripple2 = 0.5 + 0.5 * Math.sin(phase + Math.PI * 0.5)
+      out[i] = Math.min(1, v * 0.6 + (ripple * 0.5 + 0.15) * (0.4 + 0.6 * v) + ripple2 * 0.12)
     } else {
       out[i] = v
     }

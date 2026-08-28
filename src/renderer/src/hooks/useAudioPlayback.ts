@@ -104,10 +104,11 @@ export function useAudioPlayback(
     const target = spectrumAt(an, tVis, cfg.barCount, null, cfg.sensitivity)
     const smoothed = smoothBarsFx(smoothFxRef.current, target, cfg.attack, cfg.decay, cfg.peakFall)
     lastBarsRef.current = smoothed
-    if (viaState) {
-      setBars(Array.from(smoothed))
+    const arr = Array.from(smoothed)
+    if (viaState || !sinkRef.current?.current) {
+      setBars(arr) // 命令式通道失效时回退 React state（预览始终更新）
     } else {
-      sinkRef.current?.current?.(Array.from(smoothed))
+      sinkRef.current.current(arr)
     }
   }, [])
 

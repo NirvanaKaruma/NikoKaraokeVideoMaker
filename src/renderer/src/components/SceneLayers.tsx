@@ -25,7 +25,7 @@ import {
   type CanvasSize
 } from '@shared/layout'
 import { colorAt } from '@shared/color'
-import { barGeometry, lineHeights, wedgeGeometry, type LineMode } from '@shared/fx'
+import { barGeometry, lineHeights, wedgeGeometry } from '@shared/fx'
 import { useLocale } from '../hooks/useLocale'
 
 /** 可选中元素：主图 / 歌名 / 作者 / 可视化 */
@@ -465,6 +465,18 @@ interface VisualizerLayerProps {
  * 形态：bars（默认，旧几何）/ radial / wave / area / dots / flow（0.4.0）。
  * 全部形态共享同一 bars[] 数据与同一命令式更新通道（核心约束 A）。 */
 const DOT_LEVELS = 6
+/** Line 的 points 稳定空引用：React 渲染期仅用于建节点，实际值由命令式路径独占更新 */
+const NO_POINTS: number[] = []
+
+/** 折线高度 → 像素坐标点（纯函数；slot/baseY/maxH 由调用方传入） */
+function linePts(heights: number[], slot: number, baseY: number, maxH: number): number[] {
+  const pts: number[] = []
+  for (let i = 0; i < heights.length; i++) {
+    const v = Math.min(Math.max(heights[i] ?? 0, 0), 1)
+    pts.push(i * slot, baseY - Math.max(4, v * maxH))
+  }
+  return pts
+}
 
 function VisualizerLayer({
   config,
@@ -482,14 +494,18 @@ function VisualizerLayer({
   const wedgeNodes = useRef<(Konva.Line | null)[]>([])
   const dotGroups = useRef<(Konva.Group | null)[]>([])
   const lineRef = useRef<Konva.Line | null>(null)
+  const line2Ref = useRef<Konva.Line | null>(null)
   const lastTRef = useRef(0)
+  const barsRef = useRef<number[]>(bars)
+  useEffect(() => {
+    barsRef.current = bars
+  }, [bars])
   const px = normToPixel(config.rect, canvas)
   const slot = px.w / config.barCount
   const maxH = px.h * config.heightRatio
   const baseY = px.h
   const style = config.style
   const isLine = style === 'wave' || style === 'flow'
-  const colorsKey = config.colors.join('')
 
   useEffect(() => {
     const tr = trRef.current
@@ -503,16 +519,26 @@ function VisualizerLayer({
   const applyBars = (next: number[]): void => {
     const g = groupRef.current?.getLayer()
     if (isLine) {
-      const line = lineRef.current
-      if (line) {
-        const heights = lineHeights(style as LineMode, next, lastTRef.current)
-        const pts: number[] = []
-        for (let i = 0; i < next.length; i++) {
-          const v = Math.min(Math.max(heights[i] ?? 0, 0), 1)
-          pts.push(i * slot, baseY - Math.max(4, v * maxH))
+      if (style === 'flow') {
+        const line = lineRef.current
+        const line2 = line2Ref.current
+        if (line) {
+          line.points(linePts(lineHeights('flow', next, lastTRef.current, 0), slot, baseY, maxH))
+          line.getLayer()?.batchDraw()
         }
-        line.points(pts)
-        line.getLayer()?.batchDraw()
+        if (line2) {
+          // 副波：半周期相位滞后 → 双层流动
+          line2.points(
+            linePts(lineHeights('flow', next, lastTRef.current, Math.PI), slot, baseY, maxH)
+          )
+          line2.getLayer()?.batchDraw()
+        }
+      } else {
+        const line = lineRef.current
+        if (line) {
+          line.points(linePts(lineHeights('wave', next, 0), slot, baseY, maxH))
+          line.getLayer()?.batchDraw()
+        }
       }
       return
     }
@@ -567,70 +593,113 @@ function VisualizerLayer({
     g?.batchDraw()
   }
 
-  // 命令式更新（预览 rAF 与导出逐帧共用）
+  // 命令式更新注册（一次）——内部读 implRef 的最新实现，任何重渲染不丢 sink
+  const implRef = useRef<{ bars: (b: number[]) => void; frame: (t: number) => void }>({
+    bars: () => undefined,
+    frame: () => undefined
+  })
   useEffect(() => {
-    if (!barsHandleRef) return
-    barsHandleRef.current = applyBars
-    return () => {
-      barsHandleRef.current = null
+    implRef.current.bars = applyBars
+    implRef.current.frame = (t: number) => {
+      lastTRef.current = t
+      if (style === 'flow') applyBars(barsRef.current)
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+  })
+
+  // 首绘：style/几何变化后，等 refs 绑定完成再跑一次全量更新（React props 不驱动 Line points）。
+  useEffect(() => {
+    const id = requestAnimationFrame(() => implRef.current.bars(barsRef.current))
+    return () => cancelAnimationFrame(id)
   }, [
-    barsHandleRef,
     style,
     config.rect,
     config.barCount,
     config.barWidthRatio,
     config.gapRatio,
     config.heightRatio,
-    px.w,
-    px.h,
-    maxH,
-    baseY,
-    slot,
-    colorsKey
+    config.colors
   ])
 
-  // 帧时间通道：flow 等随时间变化形态使用
+  useEffect(() => {
+    if (!barsHandleRef) return
+    barsHandleRef.current = (b: number[]) => implRef.current.bars(b)
+    return () => {
+      barsHandleRef.current = null
+    }
+  }, [barsHandleRef])
+
   useEffect(() => {
     if (!frameTRef) return
-    frameTRef.current = (t: number) => {
-      lastTRef.current = t
-      if (style === 'flow') {
-        const line = lineRef.current
-        if (line) {
-          const heights = lineHeights('flow', bars, t)
-          const pts: number[] = []
-          for (let i = 0; i < bars.length; i++) {
-            const v = Math.min(Math.max(heights[i] ?? 0, 0), 1)
-            pts.push(i * slot, baseY - Math.max(4, v * maxH))
-          }
-          line.points(pts)
-          line.getLayer()?.batchDraw()
-        }
-      }
-    }
+    frameTRef.current = (t: number) => implRef.current.frame(t)
     return () => {
       frameTRef.current = null
     }
-  }, [frameTRef, style, bars, slot, baseY, maxH])
+  }, [frameTRef])
 
-  // 渲染期几何：bars/radial 用 Rect；dots 用点组；wave/area/flow 用折线
+  // 渲染期几何：bars/radial 用 Rect；dots 用点组；wave 单线、flow 双线。
+  // ⚠ Line 的 points 不由 React props 提供（数组新引用会覆盖命令式更新）：
+  // React 只建节点，points 由命令式路径（applyBars）独占，绑定后立即首绘。
+  const bindLine = (
+    node: Konva.Line | null,
+    ref: React.MutableRefObject<Konva.Line | null>
+  ): void => {
+    ref.current = node
+  }
+
+  // 渲染期 points（useMemo 稳定：bars state 更新 → 重算 → React 更新节点；
+  // 命令式更新期间 bars 引用不变 → 返回旧引用 → react-konva 判未变 → 不覆盖命令式值）
+  const renderPts = useMemo(() => {
+    if (style !== 'wave') return NO_POINTS
+    return linePts(lineHeights('wave', bars, 0), slot, baseY, maxH)
+  }, [style, bars, slot, baseY, maxH])
+
+  const renderFlowPts1 = useMemo(() => {
+    if (style !== 'flow') return NO_POINTS
+    return linePts(lineHeights('flow', bars, 0, 0), slot, baseY, maxH)
+  }, [style, bars, slot, baseY, maxH])
+
+  const renderFlowPts2 = useMemo(() => {
+    if (style !== 'flow') return NO_POINTS
+    return linePts(lineHeights('flow', bars, 0, Math.PI), slot, baseY, maxH)
+  }, [style, bars, slot, baseY, maxH])
+
   const renderShape = (): React.JSX.Element[] | React.JSX.Element => {
     if (isLine) {
-      const heights = lineHeights(style as LineMode, bars, 0)
-      const pts: number[] = []
-      for (let i = 0; i < bars.length; i++) {
-        const v = Math.min(Math.max(heights[i] ?? 0, 0), 1)
-        pts.push(i * slot, baseY - Math.max(4, v * maxH))
-      }
       const firstColor = config.colors[0] ?? '#ff5f9e'
+      const lastColor = config.colors[config.colors.length - 1] ?? firstColor
+      if (style === 'flow') {
+        return (
+          <>
+            <KonvaLine
+              key="flow-secondary"
+              ref={(el) => bindLine(el, line2Ref)}
+              points={renderFlowPts2}
+              stroke={lastColor}
+              strokeWidth={2}
+              opacity={0.55}
+              lineCap="round"
+              lineJoin="round"
+              listening={false}
+            />
+            <KonvaLine
+              key="flow-primary"
+              ref={(el) => bindLine(el, lineRef)}
+              points={renderFlowPts1}
+              stroke={firstColor}
+              strokeWidth={3}
+              lineCap="round"
+              lineJoin="round"
+              listening={false}
+            />
+          </>
+        )
+      }
       return (
         <KonvaLine
-          ref={lineRef}
-          points={pts}
+          ref={(el) => bindLine(el, lineRef)}
+          points={renderPts}
           stroke={firstColor}
-          strokeWidth={style === 'wave' ? 3 : 2}
+          strokeWidth={3}
           lineCap="round"
           lineJoin="round"
           listening={false}
@@ -664,13 +733,14 @@ function VisualizerLayer({
       return arr
     }
     if (style === 'radial') {
+      const bindWedge = (node: Konva.Line | null, i: number): void => {
+        wedgeNodes.current[i] = node
+      }
       return Array.from({ length: config.barCount }, (_, i) => (
         <KonvaLine
           key={i}
-          ref={(el) => {
-            wedgeNodes.current[i] = el
-          }}
-          points={wedgeGeometry(i, bars[i] ?? 0, config.barCount, px.w, px.h, config.barWidthRatio)}
+          ref={(el) => bindWedge(el, i)}
+          points={NO_POINTS}
           closed
           fill={colorAt(config.colors, i / Math.max(1, config.barCount - 1))}
           listening={false}

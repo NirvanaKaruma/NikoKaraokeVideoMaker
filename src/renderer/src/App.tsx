@@ -422,6 +422,35 @@ async function runAudioSmoke(
   project.updateVisualizer({ style: 'bars' })
   await sleep(250)
 
+  // 播放中折线动态（0.4.0 回归）：wave 播放中 p1/p2 两时刻可视化区应随频谱变化。
+  // 等待 currentTime 前进（AudioContext resume 慢则频谱未动）确保采样点在音频播发中。
+  project.updateVisualizer({ style: 'wave' })
+  await sleep(300)
+  pbRef.current.seek(0.2)
+  pbRef.current.play()
+  const wBoot = Date.now()
+  while (pbRef.current.currentTime < 0.35 && Date.now() - wBoot < 3000) {
+    await sleep(120)
+    if (!pbRef.current.isPlaying && pbRef.current.currentTime < 0.1) {
+      pbRef.current.seek(0.2)
+      pbRef.current.play()
+    }
+  }
+  const capW1 = captureRegion(stage, vizX0, vizY0, vizX1, vizY1)
+  // 等待跨过 440→1200Hz 段切换点（音频前 1/2=440Hz 稳态段在 0.2–0.35s 波形几乎不变，
+  // 需采样到 1.0s 之后的 1200Hz 段才能证明"波形随时间更新"）
+  await sleep(1000)
+  const capW2 = captureRegion(stage, vizX0, vizY0, vizX1, vizY1)
+  pbRef.current.pause()
+  const diffW = countDiffPixels(capW1, capW2)
+  if (diffW > 100) {
+    pass('播放中折线更新', 'wave 两时刻差异像素 ' + diffW)
+  } else {
+    fail('播放中折线更新', '两时刻像素差异=' + diffW + '（>100 预期）')
+  }
+  project.updateVisualizer({ style: 'bars' })
+  await sleep(250)
+
   // 回归：播放中 seek 不得被旧音源 onended 误判为播完（曾跳到结尾并停止）
   pbRef.current.seek(0.2)
   pbRef.current.play()
@@ -990,6 +1019,7 @@ function App(): React.JSX.Element {
             onVisualizerRectChange={(rect) => project.updateVisualizer({ rect })}
             bars={pb.bars}
             barsHandleRef={barsHandleRef}
+            frameTRef={frameTRef}
             onStageReady={(s) => {
               stageRef.current = s
             }}
