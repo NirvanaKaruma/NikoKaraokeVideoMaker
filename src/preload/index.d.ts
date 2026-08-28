@@ -45,6 +45,13 @@ declare global {
         }>
         readFile: (path: string) => Promise<{ ok: boolean; buffer?: ArrayBuffer; error?: string }>
         readBytes: (path: string) => Promise<Uint8Array>
+        audioDecode: (path: string) => Promise<{
+          ok: boolean
+          samples: ArrayBuffer | null
+          sampleRate: number
+          channels: number
+          error: string | null
+        }>
       }
       exportApi: {
         pickOutput: (defaultName: string) => Promise<string | null>

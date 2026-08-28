@@ -218,20 +218,59 @@ export function useAudioPlayback(
         const ctx = ensureCtx()
         if (!ctx) throw new Error(t('playback.noWebAudio'))
         let decoded: AudioBuffer | null = null
-        try {
-          const res = await decodeAudioViaWorker(ab)
-          if (!cancelled && res) {
-            // Worker 解码：把多声道灌入 AudioBuffer（播放保持立体声），混单声道做分析
-            decoded = ctx.createBuffer(res.channels.length, res.channels[0].length, res.sampleRate)
-            for (let c = 0; c < res.channels.length; c++) {
-              decoded.copyToChannel(res.channels[c] as Float32Array<ArrayBuffer>, c)
-            }
+        // 路径①：ffmpeg 子进程解码（渲染进程零解码 CPU，UI 永不卡；内存恒定 44.1kHz PCM）。
+        // 拖放文件走磁盘路径；无路径来源（内存生成/粘贴）先写临时文件再交给 ffmpeg。
+        let decodePath = window.api.getFilePath(audioFile)
+        if (!decodePath) {
+          try {
+            decodePath = await window.api.exportApi.saveAudio(
+              ab,
+              'decode-' + Date.now() + '.' + (audioFile.name.split('.').pop() ?? 'bin')
+            )
+          } catch {
+            decodePath = ''
           }
-        } catch {
-          decoded = null
         }
+        if (decodePath) {
+          try {
+            const ffr = await window.api.project.audioDecode(decodePath)
+            if (!cancelled && ffr.ok && ffr.samples && ffr.channels > 0 && ffr.sampleRate > 0) {
+              const data = new Float32Array(ffr.samples)
+              const chN = ffr.channels
+              const len = Math.floor(data.length / chN)
+              if (len > 0) {
+                decoded = ctx.createBuffer(chN, len, ffr.sampleRate)
+                for (let c = 0; c < chN; c++) {
+                  const ch = new Float32Array(len)
+                  for (let i = 0; i < len; i++) ch[i] = data[i * chN + c]
+                  decoded.copyToChannel(ch as Float32Array<ArrayBuffer>, c)
+                }
+              }
+            }
+          } catch {
+            decoded = null
+          }
+        }
+        // 路径②：Worker + OfflineAudioContext（无 ffmpeg / ffmpeg 失败时）
         if (!decoded) {
-          // 回退：主线程解码（Worker 不可用/失败）
+          try {
+            const res = await decodeAudioViaWorker(ab)
+            if (!cancelled && res) {
+              decoded = ctx.createBuffer(
+                res.channels.length,
+                res.channels[0].length,
+                res.sampleRate
+              )
+              for (let c = 0; c < res.channels.length; c++) {
+                decoded.copyToChannel(res.channels[c] as Float32Array<ArrayBuffer>, c)
+              }
+            }
+          } catch {
+            decoded = null
+          }
+        }
+        // 路径③：最后兜底——主线程 WebAudio 解码（仅在无可用的 ffmpeg 且 Worker 失败时）
+        if (!decoded) {
           decoded = await ctx.decodeAudioData(ab)
         }
         if (cancelled) return

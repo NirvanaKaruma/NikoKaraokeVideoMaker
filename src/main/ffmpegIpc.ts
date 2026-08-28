@@ -1,4 +1,5 @@
 import { BrowserWindow, app, dialog, ipcMain } from 'electron'
+import { spawn } from 'child_process'
 import { promises as fs } from 'fs'
 import { join } from 'path'
 import { IPC } from '../shared/ipc'
@@ -25,6 +26,69 @@ interface MergeInvoke extends MergeRequest {
 
 /** 合并任务句柄（按 mergeId 取消） */
 const mergeHandles = new Map<string, { kill: () => void }>()
+
+/** 音频解码请求：任何 ffmpeg 可读的媒体（mp3/flac/wav/m4a/mp4…）→ 44.1kHz 立体声 f32 交错 PCM */
+interface AudioDecodeResult {
+  ok: boolean
+  samples: ArrayBuffer | null
+  sampleRate: number
+  channels: number
+  error: string | null
+}
+
+let audioDecodeProc: import('child_process').ChildProcess | null = null
+
+/** 音频解码（预览用）：ffmpeg 子进程解码到内存——渲染进程完全不参与解码（UI 永不卡）。
+ * 新请求会终止进行中的旧请求（重复导入不再叠加内存）。 */
+async function handleAudioDecode(path: string): Promise<AudioDecodeResult> {
+  const ff = await getFFmpegPath()
+  if (!ff) return { ok: false, samples: null, sampleRate: 0, channels: 0, error: 'no-ffmpeg' }
+  audioDecodeProc?.kill()
+  const chunks: Buffer[] = []
+  let errTail = ''
+  const ok = await new Promise<boolean>((resolve) => {
+    const p = spawn(
+      ff,
+      [
+        '-hide_banner',
+        '-nostdin',
+        '-i',
+        path,
+        '-vn',
+        '-f',
+        'f32le',
+        '-acodec',
+        'pcm_f32le',
+        '-ar',
+        '44100',
+        '-ac',
+        '2',
+        'pipe:1'
+      ],
+      { windowsHide: true }
+    )
+    audioDecodeProc = p
+    p.stdout.on('data', (d: Buffer) => chunks.push(d))
+    p.stderr.on('data', (d: Buffer) => {
+      errTail = String(d).slice(-500)
+    })
+    p.on('error', () => resolve(false))
+    p.on('close', (code) => resolve(code === 0))
+  })
+  if (audioDecodeProc) audioDecodeProc = null
+  if (!ok || chunks.length === 0) {
+    return {
+      ok: false,
+      samples: null,
+      sampleRate: 0,
+      channels: 0,
+      error: errTail || 'decode-failed'
+    }
+  }
+  const buf = Buffer.concat(chunks)
+  const samples = buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength) as ArrayBuffer
+  return { ok: true, samples, sampleRate: 44100, channels: 2, error: null }
+}
 
 /** 注册 ffmpeg 三源管理 + 导出合并的全部 IPC（规格 §3.4/§3.3） */
 export function registerFfmpegIpc(): void {
@@ -69,6 +133,13 @@ export function registerFfmpegIpc(): void {
   ipcMain.handle(IPC.ffmpegDownloadCancel, (_e, token: string) => {
     cancelDownload(token)
     return true
+  })
+
+  ipcMain.handle('audio:decode', async (_e, path: string) => {
+    if (typeof path !== 'string' || !path) {
+      return { ok: false, samples: null, sampleRate: 0, channels: 0, error: 'bad-path' }
+    }
+    return handleAudioDecode(path)
   })
 
   ipcMain.handle(IPC.exportPickOutput, async (e, defaultName: string) => {

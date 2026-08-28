@@ -59,7 +59,16 @@ const api = {
       ipcRenderer.invoke(IPC.projectLoad),
     readFile: (path: string): Promise<{ ok: boolean; buffer?: ArrayBuffer; error?: string }> =>
       ipcRenderer.invoke(IPC.projectReadFile, path),
-    readBytes: (path: string): Promise<Uint8Array> => ipcRenderer.invoke('fs:read-bytes', path)
+    readBytes: (path: string): Promise<Uint8Array> => ipcRenderer.invoke('fs:read-bytes', path),
+    audioDecode: (
+      path: string
+    ): Promise<{
+      ok: boolean
+      samples: ArrayBuffer | null
+      sampleRate: number
+      channels: number
+      error: string | null
+    }> => ipcRenderer.invoke('audio:decode', path)
   },
 
   exportApi: {
