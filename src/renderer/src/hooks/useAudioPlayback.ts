@@ -37,7 +37,9 @@ export function useAudioPlayback(
   audioFile: File | null,
   config: VisualizerConfig,
   /** 播放中走命令式更新（绕过 React 每帧重渲染）；缺省回退 setBars */
-  barsSink?: { current: ((bars: number[]) => void) | null }
+  barsSink?: { current: ((bars: number[]) => void) | null },
+  /** 播放中同步帧时间（动效：flow 相位等） */
+  frameTSink?: { current: ((t: number) => void) | null }
 ): PlaybackApi {
   const ctxRef = useRef<AudioContext | null>(null)
   const bufferRef = useRef<AudioBuffer | null>(null)
@@ -51,10 +53,15 @@ export function useAudioPlayback(
   const lastBarsRef = useRef<Float32Array | null>(null)
   const configRef = useRef(config)
   const sinkRef = useRef(barsSink)
+  const frameTSinkRef = useRef(frameTSink)
 
   useEffect(() => {
     sinkRef.current = barsSink
   }, [barsSink])
+
+  useEffect(() => {
+    frameTSinkRef.current = frameTSink
+  }, [frameTSink])
 
   const [status, setStatus] = useState<AudioStatus>('empty')
   const [error, setError] = useState<string | null>(null)
@@ -250,6 +257,7 @@ export function useAudioPlayback(
       const dur = bufferRef.current?.duration ?? t
       setCurrentTime(Math.min(t, dur))
       computeBars(t, false)
+      frameTSinkRef.current?.current?.(t)
       raf = requestAnimationFrame(tick)
     }
     raf = requestAnimationFrame(tick)

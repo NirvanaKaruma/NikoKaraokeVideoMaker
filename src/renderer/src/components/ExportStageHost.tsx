@@ -9,6 +9,8 @@ export interface ExportStageHandle {
   renderStatic: () => HTMLCanvasElement
   /** 命令式更新频谱柱（同一批 Konva 节点 = 同一绘制代码） */
   setBars: (bars: number[]) => void
+  /** 动效帧时间（秒）：flow 等随时间形态 */
+  setFrame: (t: number) => void
   /** 可视化层画布 */
   renderViz: () => HTMLCanvasElement
 }
@@ -31,6 +33,7 @@ export function ExportStageHost(props: ExportStageHostProps): React.JSX.Element 
   const staticRef = useRef<Konva.Stage>(null)
   const vizRef = useRef<Konva.Stage>(null)
   const barsHandleRef = useRef<((bars: number[]) => void) | null>(null)
+  const frameTHandleRef = useRef<((t: number) => void) | null>(null)
 
   useEffect(() => {
     // 等 Konva 挂载 + 背景模糊缓存完成后交付句柄
@@ -42,6 +45,7 @@ export function ExportStageHost(props: ExportStageHostProps): React.JSX.Element 
         onReady({
           renderStatic: () => s.toCanvas({ pixelRatio: 1 }),
           setBars: (bars) => barsHandleRef.current?.(bars),
+          setFrame: (t) => frameTHandleRef.current?.(t),
           renderViz: () => v.toCanvas({ pixelRatio: 1 })
         })
       }
@@ -91,6 +95,7 @@ export function ExportStageHost(props: ExportStageHostProps): React.JSX.Element 
           canvasSize={{ width, height }}
           layers={['visualizer']}
           barsHandleRef={barsHandleRef}
+          frameTRef={frameTHandleRef}
         />
       </Stage>
     </div>

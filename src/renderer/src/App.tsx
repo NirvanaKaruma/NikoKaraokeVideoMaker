@@ -407,18 +407,17 @@ async function runAudioSmoke(
   project.updateVisualizer({ freqMax: 8000 })
   await sleep(250)
 
-  // 形态可选（0.4.0）：切 mirror 后可视化区像素布局改变（镜像柱生效）且柱数组长度不变
+  // 形态可选（0.4.0）：切 flow 后可视化区像素布局改变（流动光带生效）且柱数组长度不变
   const barsBeforeStyle = pbRef.current.bars.slice()
-  project.updateVisualizer({ style: 'mirror' })
+  project.updateVisualizer({ style: 'flow' })
   await sleep(300)
-  const capMirror = captureRegion(stage, vizX0, vizY0, vizX1, vizY1)
-  const barsMirror = pbRef.current.bars.slice()
-  const diffStyle =
-    barsBeforeStyle.length === barsMirror.length ? countDiffPixels(cap1, capMirror) : -1
-  if (diffStyle > 50 && barsMirror.length === wideLen) {
-    pass('形态可选', 'mirror 像素差异 ' + diffStyle + '（柱数不变）')
+  const capFlow = captureRegion(stage, vizX0, vizY0, vizX1, vizY1)
+  const barsFlow = pbRef.current.bars.slice()
+  const diffStyle = barsBeforeStyle.length === barsFlow.length ? countDiffPixels(cap1, capFlow) : -1
+  if (diffStyle > 50 && barsFlow.length === wideLen) {
+    pass('形态可选', 'flow 像素差异 ' + diffStyle + '（柱数不变）')
   } else {
-    fail('形态可选', '像素差异=' + diffStyle + ' 柱数=' + barsMirror.length)
+    fail('形态可选', '像素差异=' + diffStyle + ' 柱数=' + barsFlow.length)
   }
   project.updateVisualizer({ style: 'bars' })
   await sleep(250)
@@ -475,7 +474,13 @@ function App(): React.JSX.Element {
     projectRef.current = project
   }, [project])
   const barsHandleRef = useRef<((bars: number[]) => void) | null>(null)
-  const pb = useAudioPlayback(project.assets.audioFile, project.layout.visualizer, barsHandleRef)
+  const frameTRef = useRef<((t: number) => void) | null>(null)
+  const pb = useAudioPlayback(
+    project.assets.audioFile,
+    project.layout.visualizer,
+    barsHandleRef,
+    frameTRef
+  )
   const pbRef = useRef<PlaybackApi>(pb)
 
   const ffmpeg = useFfmpegStatus()

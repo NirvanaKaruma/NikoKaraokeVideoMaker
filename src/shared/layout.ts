@@ -59,8 +59,8 @@ export interface MainImageConfig {
   fillMode: 'contain' | 'cover' | 'stretch'
 }
 
-/** 可视化形态：bars=柱形（默认，历史行为）；其余为可选形态（0.4.0） */
-export type VisualizerStyle = 'bars' | 'mirror' | 'center' | 'radial' | 'wave' | 'area' | 'dots'
+/** 可视化形态：bars=柱形（默认，历史行为）；radial/wave/area/dots/flow=可选形态（0.4.0） */
+export type VisualizerStyle = 'bars' | 'radial' | 'wave' | 'area' | 'dots' | 'flow'
 
 export interface VisualizerConfig {
   style: VisualizerStyle

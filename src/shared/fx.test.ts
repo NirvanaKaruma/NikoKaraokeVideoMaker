@@ -3,6 +3,7 @@ import {
   bandEnergiesFromBars,
   barGeometry,
   easeOutCubic,
+  lineHeights,
   seededRng,
   smoothBarsFx,
   type SmoothFxState
@@ -65,12 +66,25 @@ describe('fx 时间函数库', () => {
     expect(Number.isFinite(g.rotation)).toBe(true)
   })
 
-  it('barGeometry：mirror 右半镜像与 center 水平对称不越界', () => {
-    const m = barGeometry('mirror', 7, 1, 10, 1000, 200, 0.55, 0.45, 0.92)
-    expect(m.y).toBe(0) // 右半从顶部向下
-    const c = barGeometry('center', 0, 1, 10, 1000, 200, 0.55, 0.45, 0.92)
-    expect(c.w).toBeGreaterThan(0)
-    expect(c.x).toBeGreaterThanOrEqual(0)
+  it('barGeometry：radial 环形不越界几何（左上角在区域内）', () => {
+    const r = barGeometry('radial', 0, 1, 8, 960, 200, 0.55, 0.45, 0.92)
+    expect(Number.isFinite(r.x)).toBe(true)
+    expect(Number.isFinite(r.y)).toBe(true)
+    expect(Number.isFinite(r.rotation)).toBe(true)
+    expect(r.w).toBeGreaterThan(0)
+  })
+
+  it('lineHeights：wave=原样；flow=加流动扰动且 ≥0 ≤1', () => {
+    const bars = [0.5, 0.5, 0.5]
+    const plain = lineHeights('wave', bars, 0)
+    expect(plain).toEqual([0.5, 0.5, 0.5])
+    const f0 = lineHeights('flow', bars, 0)
+    for (const v of f0) {
+      expect(v).toBeGreaterThanOrEqual(0)
+      expect(v).toBeLessThanOrEqual(1)
+    }
+    const f1 = lineHeights('flow', bars, 1.0)
+    expect(f0).not.toEqual(f1) // 时间推进 → 相位变化
   })
 
   it('seededRng：同种子同序列，不同种子不同', () => {

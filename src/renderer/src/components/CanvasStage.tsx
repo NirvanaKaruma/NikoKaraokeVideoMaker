@@ -16,6 +16,8 @@ export interface CanvasStageProps {
   bars: number[]
   /** 播放中命令式更新频谱柱（性能优化：绕过 React 每帧重渲染） */
   barsHandleRef?: { current: ((bars: number[]) => void) | null }
+  /** 播放中命令式更新帧时间（动效：flow 相位等） */
+  frameTRef?: { current: ((t: number) => void) | null }
   onStageReady?: (stage: Konva.Stage | null) => void
 }
 
@@ -32,6 +34,7 @@ export function CanvasStage(props: CanvasStageProps): React.JSX.Element {
     onVisualizerRectChange,
     bars,
     barsHandleRef,
+    frameTRef,
     onStageReady
   } = props
   const containerRef = useRef<HTMLDivElement>(null)
@@ -95,6 +98,7 @@ export function CanvasStage(props: CanvasStageProps): React.JSX.Element {
           onVisualizerRectChange={onVisualizerRectChange}
           bars={bars}
           barsHandleRef={barsHandleRef}
+          frameTRef={frameTRef}
         />
       </Stage>
     </div>

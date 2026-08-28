@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef } from 'react'
 import {
+  Circle,
   Group,
   Image as KonvaImage,
   Layer,
@@ -24,7 +25,7 @@ import {
   type CanvasSize
 } from '@shared/layout'
 import { colorAt } from '@shared/color'
-import { barGeometry } from '@shared/fx'
+import { barGeometry, lineHeights, type LineMode } from '@shared/fx'
 import { useLocale } from '../hooks/useLocale'
 
 /** 可选中元素：主图 / 歌名 / 作者 / 可视化 */
@@ -50,6 +51,8 @@ export interface SceneLayersProps {
   layers?: SceneLayerName[]
   /** 导出专用：命令式更新频谱柱（绕过 React 每帧渲染，绘制代码仍是本组件） */
   barsHandleRef?: { current: ((bars: number[]) => void) | null }
+  /** 动效帧时间（秒）：命令式更新随时间变化的元素（flow 相位等） */
+  frameTRef?: { current: ((t: number) => void) | null }
 }
 
 const SELECT_BORDER = '#ff5f9e'
@@ -455,11 +458,14 @@ interface VisualizerLayerProps {
   onSelect: (id: SelectableId) => void
   onRectChange: (rect: NormRect) => void
   barsHandleRef?: { current: ((bars: number[]) => void) | null }
+  frameTRef?: { current: ((t: number) => void) | null }
 }
 
 /** 可视化层：可拖动选择位置；支持命令式逐帧更新（导出）。
- * 形态：bars（默认，旧几何）/ mirror / center / radial / wave / area / dots。
- * 所有形态共享同一 bars[] 数据与同一命令式更新通道（核心约束 A）。 */
+ * 形态：bars（默认，旧几何）/ radial / wave / area / dots / flow（0.4.0）。
+ * 全部形态共享同一 bars[] 数据与同一命令式更新通道（核心约束 A）。 */
+const DOT_LEVELS = 6
+
 function VisualizerLayer({
   config,
   bars,
@@ -467,17 +473,21 @@ function VisualizerLayer({
   selected,
   onSelect,
   onRectChange,
-  barsHandleRef
+  barsHandleRef,
+  frameTRef
 }: VisualizerLayerProps): React.JSX.Element {
   const groupRef = useRef<Konva.Group>(null)
   const trRef = useRef<Konva.Transformer>(null)
   const barNodes = useRef<(Konva.Rect | null)[]>([])
-  const waveRef = useRef<Konva.Line | null>(null)
+  const dotGroups = useRef<(Konva.Group | null)[]>([])
+  const lineRef = useRef<Konva.Line | null>(null)
+  const lastTRef = useRef(0)
   const px = normToPixel(config.rect, canvas)
   const slot = px.w / config.barCount
   const maxH = px.h * config.heightRatio
   const baseY = px.h
   const style = config.style
+  const isLine = style === 'wave' || style === 'area' || style === 'flow'
 
   useEffect(() => {
     const tr = trRef.current
@@ -488,48 +498,71 @@ function VisualizerLayer({
     }
   }, [selected, config.rect, style])
 
-  // 命令式更新（预览 rAF 与导出逐帧共用同一函数；几何由 fx.barGeometry 纯函数给出）
-  useEffect(() => {
-    if (!barsHandleRef) return
-    barsHandleRef.current = (next: number[]) => {
-      const g = groupRef.current?.getLayer()
-      if (style === 'wave') {
-        const line = waveRef.current
-        if (line) {
-          const pts: number[] = []
-          for (let i = 0; i < next.length; i++) {
-            const v = Math.min(Math.max(next[i] ?? 0, 0), 1)
-            pts.push(i * slot, baseY - Math.max(4, v * maxH))
-          }
-          line.points(pts)
-          line.getLayer()?.batchDraw()
+  const applyBars = (next: number[]): void => {
+    const g = groupRef.current?.getLayer()
+    if (isLine) {
+      const line = lineRef.current
+      if (line) {
+        const heights = lineHeights(style as LineMode, next, lastTRef.current)
+        const pts: number[] = []
+        for (let i = 0; i < next.length; i++) {
+          const v = Math.min(Math.max(heights[i] ?? 0, 0), 1)
+          pts.push(i * slot, baseY - Math.max(4, v * maxH))
         }
-        return
+        line.points(pts)
+        line.getLayer()?.batchDraw()
       }
-      barNodes.current.forEach((node, i) => {
-        if (!node) return
-        const gGeo = barGeometry(
-          style,
-          i,
-          next[i] ?? 0,
-          config.barCount,
-          px.w,
-          px.h,
-          config.barWidthRatio,
-          config.gapRatio,
-          config.heightRatio
-        )
-        node.x(gGeo.x)
-        node.y(gGeo.y)
-        node.width(gGeo.w)
-        node.height(gGeo.h)
-        node.rotation(gGeo.rotation)
+      return
+    }
+    if (style === 'dots') {
+      dotGroups.current.forEach((group, i) => {
+        if (!group) return
+        const v = Math.min(Math.max(next[i] ?? 0, 0), 1)
+        const h = v * maxH
+        const dotH = maxH / DOT_LEVELS
+        for (let lvl = 0; lvl < DOT_LEVELS; lvl++) {
+          const dot = group.children[lvl] as Konva.Circle | undefined
+          if (!dot) continue
+          const y = baseY - dotH * (lvl + 0.5)
+          dot.y(y)
+          const active = h > dotH * lvl
+          dot.visible(active)
+          if (active) dot.opacity(Math.min(1, (h - dotH * lvl) / dotH + 0.4))
+        }
       })
       g?.batchDraw()
+      return
     }
+    barNodes.current.forEach((node, i) => {
+      if (!node) return
+      const gGeo = barGeometry(
+        style,
+        i,
+        next[i] ?? 0,
+        config.barCount,
+        px.w,
+        px.h,
+        config.barWidthRatio,
+        config.gapRatio,
+        config.heightRatio
+      )
+      node.x(gGeo.x)
+      node.y(gGeo.y)
+      node.width(gGeo.w)
+      node.height(gGeo.h)
+      node.rotation(gGeo.rotation)
+    })
+    g?.batchDraw()
+  }
+
+  // 命令式更新（预览 rAF 与导出逐帧共用）
+  useEffect(() => {
+    if (!barsHandleRef) return
+    barsHandleRef.current = applyBars
     return () => {
       barsHandleRef.current = null
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     barsHandleRef,
     style,
@@ -545,38 +578,111 @@ function VisualizerLayer({
     slot
   ])
 
-  const isWave = style === 'wave'
-  // 渲染期几何（仅 bars 形态为"旧代码路径"：x/y/w/h 与 0.3.0 完全一致，保证默认基线不变）
-  const renderBar = (i: number): React.JSX.Element | null => {
-    const v = Math.min(Math.max(bars[i] ?? 0, 0), 1)
-    if (isWave) return null
-    const gGeo = barGeometry(
-      style,
-      i,
-      v,
-      config.barCount,
-      px.w,
-      px.h,
-      config.barWidthRatio,
-      config.gapRatio,
-      config.heightRatio
-    )
-    return (
-      <Rect
-        key={i}
-        ref={(el) => {
-          barNodes.current[i] = el
-        }}
-        x={gGeo.x}
-        y={gGeo.y}
-        width={gGeo.w}
-        height={gGeo.h}
-        rotation={gGeo.rotation}
-        fill={colorAt(config.colors, i / Math.max(1, config.barCount - 1))}
-        cornerRadius={style === 'bars' ? config.roundness : 0}
-        listening={false}
-      />
-    )
+  // 帧时间通道：flow 等随时间变化形态使用
+  useEffect(() => {
+    if (!frameTRef) return
+    frameTRef.current = (t: number) => {
+      lastTRef.current = t
+      if (style === 'flow') {
+        const line = lineRef.current
+        if (line) {
+          const heights = lineHeights('flow', bars, t)
+          const pts: number[] = []
+          for (let i = 0; i < bars.length; i++) {
+            const v = Math.min(Math.max(heights[i] ?? 0, 0), 1)
+            pts.push(i * slot, baseY - Math.max(4, v * maxH))
+          }
+          line.points(pts)
+          line.getLayer()?.batchDraw()
+        }
+      }
+    }
+    return () => {
+      frameTRef.current = null
+    }
+  }, [frameTRef, style, bars, slot, baseY, maxH])
+
+  // 渲染期几何：bars/radial 用 Rect；dots 用点组；wave/area/flow 用折线
+  const renderShape = (): React.JSX.Element[] | React.JSX.Element => {
+    if (isLine) {
+      const heights = lineHeights(style as LineMode, bars, 0)
+      const pts: number[] = []
+      for (let i = 0; i < bars.length; i++) {
+        const v = Math.min(Math.max(heights[i] ?? 0, 0), 1)
+        pts.push(i * slot, baseY - Math.max(4, v * maxH))
+      }
+      const firstColor = config.colors[0] ?? '#ff5f9e'
+      return (
+        <KonvaLine
+          ref={lineRef}
+          points={pts}
+          stroke={firstColor}
+          strokeWidth={style === 'wave' ? 3 : 0}
+          fill={style === 'area' ? firstColor : undefined}
+          fillOpacity={style === 'area' ? 0.45 : undefined}
+          lineCap="round"
+          lineJoin="round"
+          closed={style === 'area'}
+          listening={false}
+        />
+      )
+    }
+    if (style === 'dots') {
+      const dotR = Math.max(2, Math.min(slot, maxH / DOT_LEVELS) * 0.32)
+      const arr: React.JSX.Element[] = []
+      for (let i = 0; i < config.barCount; i++) {
+        arr.push(
+          <Group
+            key={i}
+            ref={(el) => {
+              dotGroups.current[i] = el
+            }}
+            x={i * slot + slot / 2}
+          >
+            {Array.from({ length: DOT_LEVELS }, (_, lvl) => (
+              <Circle
+                key={lvl}
+                radius={dotR}
+                y={baseY - (maxH / DOT_LEVELS) * (lvl + 0.5)}
+                fill={colorAt(config.colors, i / Math.max(1, config.barCount - 1))}
+                listening={false}
+              />
+            ))}
+          </Group>
+        )
+      }
+      return arr
+    }
+    return Array.from({ length: config.barCount }, (_, i) => {
+      const v = Math.min(Math.max(bars[i] ?? 0, 0), 1)
+      const gGeo = barGeometry(
+        style,
+        i,
+        v,
+        config.barCount,
+        px.w,
+        px.h,
+        config.barWidthRatio,
+        config.gapRatio,
+        config.heightRatio
+      )
+      return (
+        <Rect
+          key={i}
+          ref={(el) => {
+            barNodes.current[i] = el
+          }}
+          x={gGeo.x}
+          y={gGeo.y}
+          width={gGeo.w}
+          height={gGeo.h}
+          rotation={gGeo.rotation}
+          fill={colorAt(config.colors, i / Math.max(1, config.barCount - 1))}
+          cornerRadius={style === 'bars' ? config.roundness : 0}
+          listening={false}
+        />
+      )
+    })
   }
 
   return (
@@ -593,7 +699,9 @@ function VisualizerLayer({
         onDragStart={() => onSelect('visualizer')}
         onDragEnd={(e: KonvaEventObject<DragEvent>) => {
           const node = e.target as Konva.Group
-          onRectChange(pixelToNorm({ x: node.x(), y: node.y(), w: px.w, h: px.h }, canvas))
+          const w = Math.max(40, node.width())
+          const h = Math.max(20, node.height())
+          onRectChange(pixelToNorm({ x: node.x(), y: node.y(), w, h }, canvas))
         }}
         dragBoundFunc={(pos) => {
           const node = groupRef.current
@@ -603,28 +711,39 @@ function VisualizerLayer({
       >
         {/* 透明命中区：整个矩形（含柱子间空隙）都可拖动/选中 */}
         <Rect width={px.w} height={px.h} fill="rgba(0,0,0,0.01)" />
-        {isWave ? (
-          <KonvaLine
-            ref={waveRef}
-            points={[0, baseY]}
-            stroke={config.colors[0] ?? '#ff5f9e'}
-            strokeWidth={3}
-            lineCap="round"
-            lineJoin="round"
-            listening={false}
-          />
-        ) : (
-          Array.from({ length: config.barCount }, (_, i) => renderBar(i))
-        )}
+        {renderShape()}
       </Group>
       {selected && (
         <Transformer
           ref={trRef}
-          enabledAnchors={[]}
           rotateEnabled={false}
-          resizeEnabled={false}
+          resizeEnabled={true}
+          keepRatio={false}
+          enabledAnchors={['top-left', 'top-right', 'bottom-left', 'bottom-right']}
           borderStroke={SELECT_BORDER}
           borderDash={[6, 4]}
+          anchorStroke={SELECT_BORDER}
+          anchorFill="#ffffff"
+          anchorSize={10}
+          boundBoxFunc={(oldBox, newBox) => {
+            if (newBox.width < 40 || newBox.height < 20) return oldBox
+            return newBox
+          }}
+          onTransformEnd={(e) => {
+            const node = e.target as Konva.Group
+            onRectChange(
+              pixelToNorm(
+                {
+                  x: node.x(),
+                  y: node.y(),
+                  w: Math.max(40, node.width() * node.scaleX()),
+                  h: Math.max(20, node.height() * node.scaleY())
+                },
+                canvas
+              )
+            )
+            node.scale({ x: 1, y: 1 })
+          }}
         />
       )}
     </>
@@ -645,7 +764,8 @@ export function SceneLayers(props: SceneLayersProps): React.JSX.Element {
     bars,
     canvasSize,
     layers,
-    barsHandleRef
+    barsHandleRef,
+    frameTRef
   } = props
   const canvas = canvasSize ?? { width: LOGICAL_WIDTH, height: LOGICAL_HEIGHT }
   const show = (name: SceneLayerName): boolean => !layers || layers.includes(name)
@@ -703,6 +823,7 @@ export function SceneLayers(props: SceneLayersProps): React.JSX.Element {
             onSelect={onSelect}
             onRectChange={onVisualizerRectChange}
             barsHandleRef={barsHandleRef}
+            frameTRef={frameTRef}
           />
         </Layer>
       )}

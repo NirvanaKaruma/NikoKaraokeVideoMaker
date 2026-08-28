@@ -123,12 +123,11 @@ export function VisualizerPanel({ config, onChange }: VisualizerPanelProps): Rea
           onChange={(e) => onChange({ style: e.target.value as VisualizerConfig['style'] })}
         >
           <option value="bars">{t('visualizer.styleBars')}</option>
-          <option value="mirror">{t('visualizer.styleMirror')}</option>
-          <option value="center">{t('visualizer.styleCenter')}</option>
           <option value="radial">{t('visualizer.styleRadial')}</option>
           <option value="wave">{t('visualizer.styleWave')}</option>
           <option value="area">{t('visualizer.styleArea')}</option>
           <option value="dots">{t('visualizer.styleDots')}</option>
+          <option value="flow">{t('visualizer.styleFlow')}</option>
         </select>
       </label>
       <DeferredSlider

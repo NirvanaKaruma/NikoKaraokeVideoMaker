@@ -145,8 +145,9 @@ export interface BarGeometry {
   rotation: number
 }
 
-export type VizStyle = 'bars' | 'mirror' | 'center' | 'radial' | 'wave' | 'area' | 'dots'
+export type VizStyle = 'bars' | 'radial' | 'wave' | 'area' | 'dots' | 'flow'
 
+/** 柱形与径向环形共用的矩形几何；wave/area/flow 为连续折线（linePoints），dots 为点阵（点几何在组件内） */
 export function barGeometry(
   style: VizStyle,
   i: number,
@@ -165,39 +166,15 @@ export function barGeometry(
   const h = Math.max(4, v0 * maxH)
 
   switch (style) {
-    case 'bars':
-    case 'area':
-    case 'dots': {
-      // 柱形（默认）：底部向上 / area 复用柱形（渐变填充由颜色层处理）/ dots 高量化
-      const hh = style === 'dots' ? Math.max(4, Math.ceil(v0 * 12) * (maxH / 12)) : h
+    case 'bars': {
+      // 柱形（默认）：底部向上（0.3.0 历史几何，保持逐像素一致）
       return {
         x: i * slotW + (slotW - barW) / 2,
-        y: pxH - hh,
+        y: pxH - h,
         w: barW,
-        h: hh,
+        h,
         rotation: 0
       }
-    }
-    case 'mirror': {
-      // 左右镜像：左半向上、右半向下（以中线为对称轴）
-      const half = Math.round(n / 2)
-      if (i < half) {
-        return { x: i * slotW + (slotW - barW) / 2, y: pxH - h, w: barW, h, rotation: 0 }
-      }
-      return { x: i * slotW + (slotW - barW) / 2, y: 0, w: barW, h, rotation: 0 }
-    }
-    case 'center': {
-      // 中心对称：以竖直中线为轴，左半向左伸展、右半向右伸展（水平条）
-      const half = Math.round(n / 2)
-      const cx = pxW / 2
-      const len = Math.max(4, v0 * (pxW / 2) * heightRatio)
-      if (i < half) {
-        const y = (i / Math.max(1, half)) * pxH + (pxH / half - Math.max(1, barW)) / 2
-        return { x: cx - len, y, w: len, h: Math.max(1, barW), rotation: 0 }
-      }
-      const j = i - half
-      const y = (j / Math.max(1, n - half)) * pxH + (pxH / (n - half) - Math.max(1, barW)) / 2
-      return { x: cx, y, w: len, h: Math.max(1, barW), rotation: 0 }
     }
     case 'radial': {
       // 径向环形：柱绕区域中心放射（柱长=len，柱厚=barW）。
@@ -211,7 +188,6 @@ export function barGeometry(
       const midR = innerR + len / 2
       const midX = cx + Math.cos(rad) * midR
       const midY = cy + Math.sin(rad) * midR
-      // 中心点在柱体长轴上且距中心内端 len/2：矩形中心 = midX/midY
       return {
         x: midX - len / 2,
         y: midY - barW / 2,
@@ -223,4 +199,29 @@ export function barGeometry(
     default:
       return { x: 0, y: pxH - h, w: barW, h, rotation: 0 }
   }
+}
+
+/** 折线形态的归一化控制点（wave=原始、area=带亮度轴、flow=随时间流动的相位叠加）。
+ * 返回 0–1 的列高度数组；组件负责换算像素。
+ */
+export type LineMode = 'wave' | 'area' | 'flow'
+
+/** 连续折线：每列取 v 的高度，追加"流动"相位偏移（flow 用 tSec 推动）。
+ * 返回与 bars 等长的 0–1 高度数组。
+ */
+export function lineHeights(mode: LineMode, bars: ArrayLike<number>, tSec: number): number[] {
+  const n = bars.length
+  const out: number[] = new Array(n)
+  for (let i = 0; i < n; i++) {
+    const v = Math.min(Math.max(bars[i] ?? 0, 0), 1)
+    if (mode === 'flow') {
+      // 流动感：相邻柱相位差 → 正弦扰动叠加缓慢移动
+      const phase = (i / Math.max(1, n - 1)) * Math.PI * 2 - tSec * 2.4
+      const ripple = Math.max(0, Math.sin(phase)) * 0.35
+      out[i] = Math.min(1, v * 0.75 + ripple)
+    } else {
+      out[i] = v
+    }
+  }
+  return out
 }

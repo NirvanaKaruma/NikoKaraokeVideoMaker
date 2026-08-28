@@ -291,6 +291,7 @@ export async function encodeVideo(opts: EncodeVideoOptions): Promise<ArrayBuffer
         const smoothed = smoothBarsFx(fxState, target, vizCfg.attack, vizCfg.decay, vizCfg.peakFall)
         stage.setBars(Array.from(smoothed))
       }
+      stage.setFrame(tSec)
       const viz = stage.renderViz()
       ctx.drawImage(staticCanvas, 0, 0)
       ctx.drawImage(viz, 0, 0)
