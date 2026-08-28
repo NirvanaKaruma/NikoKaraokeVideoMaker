@@ -258,6 +258,32 @@ function makeSyntheticCoverFile(): Promise<File | null> {
   })
 }
 
+/** 大图封面（4000×3000 渐变，模拟手机照片）：图片导入性能探针用 */
+function makeBigCoverFile(): Promise<File | null> {
+  return new Promise((resolve) => {
+    const c = document.createElement('canvas')
+    c.width = 4000
+    c.height = 3000
+    const ctx = c.getContext('2d')
+    if (!ctx) {
+      resolve(null)
+      return
+    }
+    const g = ctx.createLinearGradient(0, 0, 4000, 3000)
+    g.addColorStop(0, '#ff5f9e')
+    g.addColorStop(1, '#7c3aed')
+    ctx.fillStyle = g
+    ctx.fillRect(0, 0, 4000, 3000)
+    ctx.fillStyle = '#ffffff'
+    ctx.beginPath()
+    ctx.arc(2000, 1500, 900, 0, Math.PI * 2)
+    ctx.fill()
+    c.toBlob((blob) => {
+      resolve(blob ? new File([blob], 'big-cover-4000x3000.png', { type: 'image/png' }) : null)
+    }, 'image/png')
+  })
+}
+
 /** 双音调 WAV：前半 440Hz、后半 1200Hz（验证频谱随音频内容变化 / 导出测试素材） */
 function makeTwoToneWavFile(durationSec = 2, sampleRate = 8000): File {
   const sr = sampleRate
@@ -300,7 +326,8 @@ function maxBarIndex(bars: number[]): number {
 async function runAudioSmoke(
   project: ReturnType<typeof useProject>,
   pbRef: React.RefObject<PlaybackApi>,
-  stage: Konva.Stage
+  stage: Konva.Stage,
+  projectRefArg: React.RefObject<ReturnType<typeof useProject>>
 ): Promise<VisualCheckReport> {
   const checks: VisualCheckItem[] = []
   const fail = (label: string, detail: string): void => {
@@ -488,13 +515,21 @@ async function runAudioSmoke(
   }
   let flowPeakB = -1
   let flowPeakBSeen = -1
+  let retried = false
   const fB0 = Date.now()
-  while (Date.now() - fB0 < 25000) {
+  while (Date.now() - fB0 < 30000) {
     await sleep(250)
     flowPeakB = flowPeakColumn()
     if (flowPeakB > flowPeakA + 3) {
       flowPeakBSeen = flowPeakB
       break
+    }
+    // AudioContext resume 偶发假起（isPlaying=true 但时钟不动）：6s 未推进则重启一次
+    if (!retried && Date.now() - fB0 > 6000) {
+      retried = true
+      pbRef.current.pause()
+      pbRef.current.seek(0.2)
+      pbRef.current.play()
     }
   }
   pbRef.current.pause()
@@ -712,20 +747,50 @@ async function runAudioSmoke(
   await sleep(200)
   pbRef.current.seek(0.02)
   await sleep(250)
-  // 纯背景区（下半部中央：避开主图/文本；脉冲叠色作用于全画布）
-  const beatA = captureRegion(stage, 0.5 * 1920, 0.86 * 1080, 0.9 * 1920, 0.97 * 1080)
+  // 纯背景区（右侧下方：避开主图/文本/合成封面的白色圆盘——白色底上白闪无对比；
+  // 该区为模糊粉紫渐变，白色脉冲叠色对比明显）
+  // 等待脉冲叠色真的到达 beat 起点值（≥0.3）再采样（防绘制调度抖动）
+  const opWait = Date.now()
+  await sleep(200)
+  while (
+    Date.now() - opWait < 2000 &&
+    stage.find('.bg-pulse').length &&
+    stage.find('.bg-pulse')[0].opacity() < 0.3
+  ) {
+    await sleep(80)
+    pbRef.current.seek(0.02)
+  }
+  const beatA = captureRegion(stage, 0.8 * 1920, 0.6 * 1080, 0.96 * 1920, 0.94 * 1080)
+  const opA = stage.find('.bg-pulse').length ? stage.find('.bg-pulse')[0].opacity() : -1
   pbRef.current.seek(0.46)
   await sleep(250)
-  const beatB = captureRegion(stage, 0.5 * 1920, 0.86 * 1080, 0.9 * 1920, 0.97 * 1080)
+  const beatB = captureRegion(stage, 0.8 * 1920, 0.6 * 1080, 0.96 * 1920, 0.94 * 1080)
+  const opB = stage.find('.bg-pulse').length ? stage.find('.bg-pulse')[0].opacity() : -1
   if (meanSum(beatA) - meanSum(beatB) > 15) {
     pass(
       '手动节拍脉冲',
-      'beat 起点背景亮度 ' + meanSum(beatA).toFixed(0) + ' > 末段 ' + meanSum(beatB).toFixed(0)
+      'beat 起点背景亮度 ' +
+        meanSum(beatA).toFixed(0) +
+        ' > 末段 ' +
+        meanSum(beatB).toFixed(0) +
+        '（A op=' +
+        opA.toFixed(2) +
+        ' B op=' +
+        opB.toFixed(2) +
+        '）'
     )
   } else {
     fail(
       '手动节拍脉冲',
-      '亮度 ' + meanSum(beatA).toFixed(0) + ' vs ' + meanSum(beatB).toFixed(0) + '（>15 预期）'
+      '亮度 ' +
+        meanSum(beatA).toFixed(0) +
+        ' vs ' +
+        meanSum(beatB).toFixed(0) +
+        '（A op=' +
+        opA.toFixed(2) +
+        ' B op=' +
+        opB.toFixed(2) +
+        '）'
     )
   }
 
@@ -823,6 +888,36 @@ async function runAudioSmoke(
     fail('长音频导入耗时', 'status=' + pbRef.current.status + ' 等待 ' + decodeMs + 'ms')
   }
 
+  // 图片导入性能探针（用户反馈：导入大图卡顿）：4000×3000 封面 → 就绪耗时
+  // 注意：轮询必须走 projectRef.current（闭包里的 project 是调用时的旧对象，看不到资产更新）
+  const bigCover = await makeBigCoverFile()
+  if (bigCover) {
+    const imgT0 = Date.now()
+    project.setCoverFile(bigCover)
+    // 先等 coverFile 换成大图（避免用旧封面残留过早退出），再等 coverElement 就绪
+    let cf = projectRefArg.current.assets.coverFile
+    while (cf?.name !== 'big-cover-4000x3000.png' && Date.now() - imgT0 < 30000) {
+      await sleep(60)
+      cf = projectRefArg.current.assets.coverFile
+    }
+    let el = projectRefArg.current.assets.coverElement
+    while (el == null && Date.now() - imgT0 < 30000) {
+      await sleep(60)
+      el = projectRefArg.current.assets.coverElement
+    }
+    const imgMs = Date.now() - imgT0
+    const nat = el
+      ? ((el as HTMLImageElement).naturalWidth || el.width) +
+        'x' +
+        ((el as HTMLImageElement).naturalHeight || el.height)
+      : '-'
+    if (el) {
+      pass('大图导入耗时', imgMs + 'ms（4000×3000 封面就绪 ' + nat + '）')
+    } else {
+      fail('大图导入耗时', '等待 ' + imgMs + 'ms 仍未就绪')
+    }
+  }
+
   return { ok: checks.every((c) => c.pass), checks }
 }
 
@@ -897,7 +992,11 @@ function App(): React.JSX.Element {
         coverFile: projectRef.current.assets.coverFile?.name ?? null,
         coverUrl: projectRef.current.assets.coverUrl,
         coverElement: ce != null,
-        naturalSize: ce ? ce.naturalWidth + 'x' + ce.naturalHeight : null,
+        naturalSize: ce
+          ? ((ce as HTMLImageElement).naturalWidth || ce.width) +
+            'x' +
+            ((ce as HTMLImageElement).naturalHeight || ce.height)
+          : null,
         mainImageNodes: mainLayer ? mainLayer.find('Image').length : -1,
         fillMode: projectRef.current.layout.mainImage.fillMode,
         mainRect: JSON.stringify(projectRef.current.layout.mainImage.rect)
@@ -905,7 +1004,7 @@ function App(): React.JSX.Element {
     }
     window.__runAudioSmoke = () =>
       stageRef.current
-        ? runAudioSmoke(project, pbRef, stageRef.current)
+        ? runAudioSmoke(project, pbRef, stageRef.current, projectRef)
         : Promise.resolve({ ok: false, checks: [] })
     window.__runEncodeBenchmark = () => benchmarkEncoder(1920, 1080)
     return () => {

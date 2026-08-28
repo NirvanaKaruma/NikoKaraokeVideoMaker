@@ -4,6 +4,7 @@ import type Konva from 'konva'
 import type { ProjectLayout } from '@shared/layout'
 import type { SpectrumAnalyzer } from '@shared/spectrum'
 import { SceneLayers } from './SceneLayers'
+import type { CanvasImageElement } from '../hooks/useProject'
 
 export interface ExportStageHandle {
   /** 静态层（背景/主图/文本）合成画布（无动态动效的快速路径） */
@@ -20,8 +21,8 @@ export interface ExportStageHandle {
 
 interface ExportStageHostProps {
   layout: ProjectLayout
-  coverElement: HTMLImageElement | null
-  bgElement: HTMLImageElement | null
+  coverElement: CanvasImageElement | null
+  bgElement: CanvasImageElement | null
   /** 共享频谱分析器（动效层按 t 计算分带能量） */
   analyzer?: SpectrumAnalyzer | null
   /** 音频总时长秒（片尾时间轴用） */

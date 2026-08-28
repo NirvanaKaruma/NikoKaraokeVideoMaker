@@ -41,6 +41,7 @@ import {
 } from '@shared/fx'
 import { bandEnergiesAt, type SpectrumAnalyzer } from '@shared/spectrum'
 import { useLocale } from '../hooks/useLocale'
+import type { CanvasImageElement } from '../hooks/useProject'
 
 /** 背景动效种子（确定性；Ken Burns 随时间推进） */
 const SEED_BG_FX = 987654321
@@ -50,11 +51,19 @@ export type SelectableId = 'mainImage' | 'songTitle' | 'artist' | 'visualizer' |
 
 export type SceneLayerName = 'background' | 'main' | 'text' | 'visualizer' | 'fx'
 
+/** 图像源尺寸（Image 用 naturalWidth，Canvas 用 width） */
+function imgW(el: CanvasImageElement): number {
+  return (el as HTMLImageElement).naturalWidth || el.width
+}
+function imgH(el: CanvasImageElement): number {
+  return (el as HTMLImageElement).naturalHeight || el.height
+}
+
 export interface SceneLayersProps {
   layout: ProjectLayout
-  coverElement: HTMLImageElement | null
+  coverElement: CanvasImageElement | null
   /** 独立背景图（用户额外上传）；null 时按 imageSource 回退封面图 */
-  bgElement: HTMLImageElement | null
+  bgElement: CanvasImageElement | null
   selectedId: SelectableId
   onSelect: (id: SelectableId) => void
   onMainRectChange: (rect: NormRect) => void
@@ -120,8 +129,8 @@ function BackgroundLayer({
   layerFxSlotRef
 }: {
   layout: ProjectLayout
-  coverElement: HTMLImageElement | null
-  bgElement: HTMLImageElement | null
+  coverElement: CanvasImageElement | null
+  bgElement: CanvasImageElement | null
   /** 共享频谱分析器（0.5.0：bass 呼吸等按 t 采样） */
   analyzer?: SpectrumAnalyzer | null
   canvas: CanvasSize
@@ -144,8 +153,8 @@ function BackgroundLayer({
   // 因此背景永远使用自己的私有副本，主图继续用原始图片（性能与正确性兼得）
   const bgSource = useMemo(() => {
     if (!sourceImage) return null
-    const iw = sourceImage.naturalWidth || sourceImage.width
-    const ih = sourceImage.naturalHeight || sourceImage.height
+    const iw = imgW(sourceImage)
+    const ih = imgH(sourceImage)
     if (iw === 0 || ih === 0) return null
     const c = document.createElement('canvas')
     c.width = Math.max(1, Math.round(iw * 0.5))
@@ -268,6 +277,7 @@ function BackgroundLayer({
       </Group>
       <Rect
         ref={breatheBrightRef}
+        name="bg-pulse"
         x={0}
         y={0}
         width={canvas.width}
@@ -574,7 +584,7 @@ function TextNode({
 }
 interface MainImageLayerProps {
   layout: ProjectLayout
-  coverElement: HTMLImageElement | null
+  coverElement: CanvasImageElement | null
   canvas: CanvasSize
   selectedId: SelectableId
   onSelect: (id: SelectableId) => void
@@ -627,8 +637,8 @@ function MainImageLayer({
   let dw = 0
   let dh = 0
   if (coverElement) {
-    const iw = coverElement.naturalWidth || coverElement.width
-    const ih = coverElement.naturalHeight || coverElement.height
+    const iw = imgW(coverElement)
+    const ih = imgH(coverElement)
     if (iw > 0 && ih > 0) {
       if (fillMode === 'stretch') {
         dw = px.w

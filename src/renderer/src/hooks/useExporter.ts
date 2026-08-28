@@ -15,7 +15,7 @@ export interface ExporterState extends ExportProgressInfo {
 
 export interface UseExporterArgs {
   layout: ProjectLayout
-  coverElement: HTMLImageElement | null
+  coverElement: import('./useProject').CanvasImageElement | null
   analyzer: SpectrumAnalyzer | null
   audioFile: File | null
   durationMs: number

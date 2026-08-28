@@ -15,6 +15,9 @@ import {
 import type { ProjectFile } from '@shared/project'
 import { t } from '@shared/i18n'
 
+/** 图像源元素统一类型：解码后的 Image 或"超大图缩放后的 Canvas"（Konva 均可绘制） */
+export type CanvasImageElement = HTMLImageElement | HTMLCanvasElement
+
 export const COVER_EXTENSIONS = ['png', 'jpg', 'jpeg', 'webp']
 /** 音频 + 可提取音轨的视频（预览解码由 Chromium 支持，导出由 ffmpeg 提取音轨） */
 export const AUDIO_EXTENSIONS = ['mp3', 'wav', 'flac', 'm4a', 'ogg', 'mp4', 'm4v', 'mov', 'webm']
@@ -22,12 +25,12 @@ export const AUDIO_EXTENSIONS = ['mp3', 'wav', 'flac', 'm4a', 'ogg', 'mp4', 'm4v
 export interface ProjectAssets {
   coverUrl: string | null
   coverFile: File | null
-  /** 已解码的封面 Image 元素（Konva 绘制用） */
-  coverElement: HTMLImageElement | null
+  /** 已解码的封面图像（HTMLImageElement；超大图则缩放为 HTMLCanvasElement；Konva 绘制用） */
+  coverElement: CanvasImageElement | null
   /** 独立背景图（用户额外上传，替代封面做背景后处理） */
   bgUrl: string | null
   bgFile: File | null
-  bgElement: HTMLImageElement | null
+  bgElement: CanvasImageElement | null
   audioUrl: string | null
   audioFile: File | null
 }
@@ -41,6 +44,24 @@ const EMPTY_ASSETS: ProjectAssets = {
   bgElement: null,
   audioUrl: null,
   audioFile: null
+}
+
+/** 大图解码上限（长边像素）：超过则在解码后缩放一次——12MP 原图直接给 Konva
+ * 会造成纹理上传/绘制卡顿（导入冻结），且 1080p 导出下 2400px 已无肉眼差异。 */
+const MAX_IMAGE_EDGE = 2400
+
+/** 解码后按上限缩放（保持透明通道；≤上限则原样返回） */
+function capImage(img: HTMLImageElement): HTMLImageElement | HTMLCanvasElement {
+  const iw = img.naturalWidth || img.width
+  const ih = img.naturalHeight || img.height
+  if (Math.max(iw, ih) <= MAX_IMAGE_EDGE || iw <= 0 || ih <= 0) return img
+  const s = MAX_IMAGE_EDGE / Math.max(iw, ih)
+  const c = document.createElement('canvas')
+  c.width = Math.max(1, Math.round(iw * s))
+  c.height = Math.max(1, Math.round(ih * s))
+  const ctx = c.getContext('2d')
+  if (ctx) ctx.drawImage(img, 0, 0, c.width, c.height)
+  return c
 }
 
 /** 统一快照：脏比较与保存点写入共用同一构建逻辑（防止字段漂移） */
@@ -269,7 +290,7 @@ export function useProject(): {
       return { ...prev, coverUrl: url, coverFile: file, coverElement: null }
     })
     const img = new Image()
-    img.onload = () => setAssets((prev) => ({ ...prev, coverElement: img }))
+    img.onload = () => setAssets((prev) => ({ ...prev, coverElement: capImage(img) }))
     img.onerror = () => setFileError(t('project.coverLoadFail'))
     img.src = url
   }, [])
@@ -312,7 +333,7 @@ export function useProject(): {
 
   /** 图片 → dataURL（优先原文件字节，无文件则从已解码元素转画布） */
   const imageToDataUrl = useCallback(
-    async (file: File | null, el: HTMLImageElement | null): Promise<string | null> => {
+    async (file: File | null, el: CanvasImageElement | null): Promise<string | null> => {
       if (file) {
         const buf = await file.arrayBuffer()
         const bytes = new Uint8Array(buf)
@@ -324,8 +345,8 @@ export function useProject(): {
       }
       if (el) {
         const c = document.createElement('canvas')
-        c.width = el.naturalWidth || el.width
-        c.height = el.naturalHeight || el.height
+        c.width = (el as HTMLImageElement).naturalWidth || el.width
+        c.height = (el as HTMLImageElement).naturalHeight || el.height
         const ctx = c.getContext('2d')
         if (ctx) {
           ctx.drawImage(el, 0, 0)
@@ -403,7 +424,7 @@ export function useProject(): {
           return { ...prev, bgUrl: url, bgFile: null, bgElement: null }
         })
         const img = new Image()
-        img.onload = () => setAssets((prev) => ({ ...prev, bgElement: img }))
+        img.onload = () => setAssets((prev) => ({ ...prev, bgElement: capImage(img) }))
         img.src = url
       } else {
         setAssets((prev) => {
@@ -562,7 +583,7 @@ export function useProject(): {
         return { ...prev, bgUrl: url, bgFile: file, bgElement: null }
       })
       const img = new Image()
-      img.onload = () => setAssets((prev) => ({ ...prev, bgElement: img }))
+      img.onload = () => setAssets((prev) => ({ ...prev, bgElement: capImage(img) }))
       img.onerror = () => setFileError(t('project.bgLoadFail'))
       img.src = url
       // 来源切换进历史栈（可 Ctrl+Z 撤销回默认封面图行为）

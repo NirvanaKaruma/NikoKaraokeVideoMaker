@@ -15,6 +15,7 @@ import { drawCanvasFx, type CanvasFxDrawOpts } from '@shared/canvasfx'
 import { beatEnvelope, beatPeriod } from '@shared/fx'
 import { drawParticles, particlesAt } from '@shared/particles'
 import { SceneLayers, SelectableId } from './SceneLayers'
+import type { CanvasImageElement } from '../hooks/useProject'
 
 /** 非可视化动效帧分发（背景/主图/文本每帧更新） */
 export type LayerFxRef = { current: ((t: number) => void) | null }
@@ -132,8 +133,8 @@ function CanvasFxOverlay({
 
 export interface CanvasStageProps {
   layout: ProjectLayout
-  coverElement: HTMLImageElement | null
-  bgElement: HTMLImageElement | null
+  coverElement: CanvasImageElement | null
+  bgElement: CanvasImageElement | null
   selectedId: SelectableId
   onSelect: (id: SelectableId) => void
   onMainRectChange: (rect: NormRect) => void
