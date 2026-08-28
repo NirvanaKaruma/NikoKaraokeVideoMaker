@@ -27,6 +27,13 @@ function guessSampleRate(bytes: Uint8Array): number {
     const rate = bytes[24] | (bytes[25] << 8) | (bytes[26] << 16) | (bytes[27] << 24)
     if (rate >= 8000 && rate <= 96000) return rate
   }
+  // FLAC: "fLaC" + STREAMINFO，采样率 20 bit（STREAMINFO[10..12]：SI[10]<<12 | SI[11]<<4 | SI[12]>>4）
+  if (bytes[0] === 0x66 && bytes[1] === 0x4c && bytes[2] === 0x61 && bytes[3] === 0x43) {
+    if (bytes.length > 21) {
+      const rate = (bytes[18] << 12) | (bytes[19] << 4) | (bytes[20] >> 4)
+      if (rate >= 8000 && rate <= 192000) return rate
+    }
+  }
   // MP3: 找 11 位同步 0xFFE.. 帧头（必须跳过 ID3v2——标签内文本可能含假 0xFF 0xE0 同步字）
   let start = 0
   if (bytes[0] === 0x49 && bytes[1] === 0x44 && bytes[2] === 0x33) {
@@ -56,7 +63,11 @@ self.onmessage = (e: MessageEvent<ArrayBuffer>): void => {
   const bytes = e.data
   void (async () => {
     try {
-      const rate = guessSampleRate(new Uint8Array(bytes))
+      // 按 ≤48kHz 解码：96k/192k 高解析文件以 48k 通道输出（Chromium 内部按上下文采样率
+      // 解码，天然抗混叠）→ 内存上限 ~2×10.6M×4B/声道，避免 21M+ 样本双声道全量驻留
+      // 把 V8 堆打到 4GB（用户实测：Deep Blue 96k FLAC OOM，近堆上限 4058MB）。
+      const nativeRate = guessSampleRate(new Uint8Array(bytes))
+      const rate = Math.min(nativeRate, 48000)
       const octx = new OfflineAudioContext(1, 1, rate)
       const decoded = await octx.decodeAudioData(bytes)
       const channels: Float32Array[] = []

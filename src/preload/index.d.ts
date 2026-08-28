@@ -44,6 +44,7 @@ declare global {
           error?: string
         }>
         readFile: (path: string) => Promise<{ ok: boolean; buffer?: ArrayBuffer; error?: string }>
+        readBytes: (path: string) => Promise<Uint8Array>
       }
       exportApi: {
         pickOutput: (defaultName: string) => Promise<string | null>

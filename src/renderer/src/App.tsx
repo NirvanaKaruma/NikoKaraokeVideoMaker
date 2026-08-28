@@ -911,25 +911,46 @@ async function runAudioSmoke(
     fail('长音频导入耗时', 'status=' + longRes.st + ' 等待 ' + decodeMs + 'ms')
   }
 
-  // 真实音频导入探针（NIKO_AUDIO_PROBE 注入 base64）：用户提供的长 MP3 走真实导入路径计时
-  const probeB64 = (window as unknown as { __NIKO_PROBE_AUDIO_B64?: string }).__NIKO_PROBE_AUDIO_B64
-  if (probeB64) {
-    const buf = Uint8Array.from(atob(probeB64), (ch) => ch.charCodeAt(0))
-    project.setAudioFile(new File([buf], 'probe.mp3', { type: 'audio/mpeg' }))
-    const mp3Res = await waitLoadingThenReady(60000)
-    const mp3Ms = mp3Res.ms
-    if (mp3Res.st === 'ready') {
+  // 真实音频导入探针（NIKO_AUDIO_PROBE=路径，经 IPC 读字节）：用户提供的长音频走真实导入路径计时。
+  // 附带堆采样（performance.memory）：验证解码期 V8 堆不再飙升到数 GB（曾 OOM 4058MB）。
+  const probePath = (window as unknown as { __NIKO_PROBE_AUDIO_PATH?: string })
+    .__NIKO_PROBE_AUDIO_PATH
+  if (probePath) {
+    const probeBytes = await window.api.project.readBytes(probePath)
+    const name = probePath.split(/[\\/]/).pop() ?? 'probe'
+    const heapNow = (): number => {
+      const m = (performance as unknown as { memory?: { usedJSHeapSize?: number } }).memory
+      return m?.usedJSHeapSize ?? 0
+    }
+    let heapMax = heapNow()
+    const heapTimer = setInterval(() => {
+      heapMax = Math.max(heapMax, heapNow())
+    }, 200)
+    project.setAudioFile(
+      new File([probeBytes as Uint8Array<ArrayBuffer>], name, { type: 'audio/mpeg' })
+    )
+    const res = await waitLoadingThenReady(90000)
+    clearInterval(heapTimer)
+    const ms = res.ms
+    if (res.st === 'ready') {
       pass(
         '真实音频导入耗时',
-        mp3Ms +
+        ms +
           'ms（' +
-          ((probeB64.length * 0.75) / 1048576).toFixed(1) +
-          'MB mp3 → 就绪，时长 ' +
+          (probeBytes.length / 1048576).toFixed(1) +
+          'MB ' +
+          name +
+          ' → 就绪，时长 ' +
           pbRef.current.duration.toFixed(0) +
-          's（Worker 解码路径）'
+          's，解码期堆峰值 ' +
+          (heapMax / 1048576).toFixed(0) +
+          'MB）'
       )
     } else {
-      fail('真实音频导入耗时', 'status=' + mp3Res.st + ' 等待 ' + mp3Ms + 'ms')
+      fail(
+        '真实音频导入耗时',
+        'status=' + res.st + ' 等待 ' + ms + 'ms，堆峰值 ' + (heapMax / 1048576).toFixed(0) + 'MB'
+      )
     }
   }
 

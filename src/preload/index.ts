@@ -58,7 +58,8 @@ const api = {
     load: (): Promise<{ ok: boolean; canceled?: boolean; json: string | null; error?: string }> =>
       ipcRenderer.invoke(IPC.projectLoad),
     readFile: (path: string): Promise<{ ok: boolean; buffer?: ArrayBuffer; error?: string }> =>
-      ipcRenderer.invoke(IPC.projectReadFile, path)
+      ipcRenderer.invoke(IPC.projectReadFile, path),
+    readBytes: (path: string): Promise<Uint8Array> => ipcRenderer.invoke('fs:read-bytes', path)
   },
 
   exportApi: {

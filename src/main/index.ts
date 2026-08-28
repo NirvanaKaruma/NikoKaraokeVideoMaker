@@ -154,6 +154,12 @@ function registerIpcHandlers(): void {
   // M1 hello：验证 renderer → main 往返链路
   ipcMain.handle(IPC.appPing, () => 'pong')
 
+  // 探针：读取本地文件字节（仅 smoke 诊断用：NIKO_AUDIO_PROBE 真实音频导入计时）
+  ipcMain.handle('fs:read-bytes', async (_e, p: string) => {
+    const b = await readFile(p)
+    return new Uint8Array(b)
+  })
+
   // i18n：读取/保存界面语言偏好（renderer 启动时读取，切换时写回）
   ipcMain.handle(IPC.appGetLocale, async () => (await getConfig()).locale)
   ipcMain.handle(IPC.appSetLocale, async (_e, locale: unknown) => {
@@ -169,13 +175,12 @@ function registerIpcHandlers(): void {
 
 async function runSmokeVisual(win: BrowserWindow): Promise<void> {
   try {
-    // 真实音频导入探针（NIKO_AUDIO_PROBE=某 mp3 路径）：base64 注入 → smoke 解码计时
+    // 真实音频导入探针（NIKO_AUDIO_PROBE=音频路径）：注入路径 → smoke 经 IPC 读字节并计时
     const probePath = process.env['NIKO_AUDIO_PROBE']
     if (probePath) {
       try {
-        const b64 = (await readFile(probePath)).toString('base64')
         await win.webContents.executeJavaScript(
-          'window.__NIKO_PROBE_AUDIO_B64 = ' + JSON.stringify(b64) + '; true'
+          'window.__NIKO_PROBE_AUDIO_PATH = ' + JSON.stringify(probePath) + '; true'
         )
         console.log('[smoke-visual] 音频探针已注入:', probePath)
       } catch (err) {
