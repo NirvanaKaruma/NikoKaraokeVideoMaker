@@ -75,27 +75,33 @@ describe('fx 时间函数库', () => {
     expect(r.w).toBeGreaterThan(0)
   })
 
-  it('lineHeights：wave=原样；flow=乘法包络（波形随频谱跳动）且 ≥0 ≤1', () => {
+  it('lineHeights：wave=原样；flow=频谱×波动调制（flowWave 可调）', () => {
     const bars = [0.5, 0.5, 0.5]
-    const plain = lineHeights('wave', bars, 0)
-    expect(plain).toEqual([0.5, 0.5, 0.5])
-    const flow = lineHeights('flow', bars, 0)
-    for (const v of flow) {
-      expect(v).toBeGreaterThanOrEqual(bars[0] * 0.65 - 1e-9)
-      expect(v).toBeLessThanOrEqual(bars[0] * 1.35 + 1e-9)
+    expect(lineHeights('wave', bars, 0)).toEqual([0.5, 0.5, 0.5])
+    // flowWave=0 → 纯频谱（细波关闭，波形完全跟随音乐）
+    const pure = lineHeights('flow', bars, 0, 0, 0)
+    for (const v of pure) expect(v).toBeCloseTo(0.5, 6)
+    // flowWave=1 → 调制 ∈ [0.25, 1.75]×v
+    const full = lineHeights('flow', bars, 0, 0, 1)
+    for (const v of full) {
+      expect(v).toBeGreaterThanOrEqual(0.5 * 0.25 - 1e-9)
+      expect(v).toBeLessThanOrEqual(0.5 * 1.75 + 1e-9)
     }
-    // 频谱成比例：v 翻倍 → 包络也翻倍（细波不变；v=0.6 时最高 0.81 不触顶）
-    const soft = lineHeights('flow', [0.3, 0.3, 0.3], 0)
-    const loud = lineHeights('flow', [0.6, 0.6, 0.6], 0)
+    // 波动越强，偏离纯频谱越大（滑块生效）
+    const ampA = lineHeights('flow', bars, 0, 0, 0.3)
+    const ampB = lineHeights('flow', bars, 0, 0, 1)
+    const dev = (arr: number[]): number => arr.reduce((s, v) => s + Math.abs(v - 0.5), 0)
+    expect(dev(ampB)).toBeGreaterThan(dev(ampA))
+    // 频谱成比例：v 翻倍 → 包络也翻倍（细波不变；0.4×1.375 不触顶）
+    const soft = lineHeights('flow', [0.2, 0.2, 0.2], 0, 0, 0.5)
+    const loud = lineHeights('flow', [0.4, 0.4, 0.4], 0, 0, 0.5)
     for (let i = 0; i < loud.length; i++) {
       expect(loud[i]).toBeCloseTo(soft[i] * 2, 6)
     }
     // 安静段贴底（波形随音乐消失）
-    const quiet = lineHeights('flow', [0, 0, 0], 0)
-    for (const v of quiet) expect(v).toBe(0)
+    for (const v of lineHeights('flow', [0, 0, 0], 0, 0, 1)) expect(v).toBe(0)
     // 时间推进 → 相位变化（光带流动）
-    const f1 = lineHeights('flow', bars, 1.0)
-    expect(flow).not.toEqual(f1)
+    expect(lineHeights('flow', bars, 0)).not.toEqual(lineHeights('flow', bars, 1.0))
   })
 
   it('wedgeGeometry：radial 楔形 4 顶点 8 数值，弧长随半径增长均匀', () => {

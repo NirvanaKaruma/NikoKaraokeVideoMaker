@@ -138,6 +138,16 @@ export function VisualizerPanel({ config, onChange }: VisualizerPanelProps): Rea
         step={1}
         onCommit={(v) => onChange({ barCount: v })}
       />
+      {config.style === 'flow' && (
+        <DeferredSlider
+          label={(v) => t('visualizer.flowWave', { v: Math.round(v * 100) })}
+          value={config.flowWave}
+          min={0}
+          max={1}
+          step={0.01}
+          onCommit={(v) => onChange({ flowWave: v })}
+        />
+      )}
       <div className="field">
         <span>{t('visualizer.freqRange', { min: config.freqMin, max: config.freqMax })}</span>
         <DeferredSlider

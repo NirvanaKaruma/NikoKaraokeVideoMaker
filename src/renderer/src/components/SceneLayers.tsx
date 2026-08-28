@@ -527,13 +527,25 @@ function VisualizerLayer({
         const line = lineRef.current
         const line2 = line2Ref.current
         if (line) {
-          line.points(linePts(lineHeights('flow', next, lastTRef.current, 0), slot, baseY, maxH))
+          line.points(
+            linePts(
+              lineHeights('flow', next, lastTRef.current, 0, config.flowWave),
+              slot,
+              baseY,
+              maxH
+            )
+          )
           line.getLayer()?.batchDraw()
         }
         if (line2) {
           // 副波：半周期相位滞后 → 双层流动
           line2.points(
-            linePts(lineHeights('flow', next, lastTRef.current, Math.PI), slot, baseY, maxH)
+            linePts(
+              lineHeights('flow', next, lastTRef.current, Math.PI, config.flowWave),
+              slot,
+              baseY,
+              maxH
+            )
           )
           line2.getLayer()?.batchDraw()
         }

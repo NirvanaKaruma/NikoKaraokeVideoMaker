@@ -95,6 +95,8 @@ export interface VisualizerConfig {
   bpm: number | null
   /** 可视化-音频偏移（ms，仅可视化时间轴，默认 0） */
   offsetMs: number
+  /** flow（流动光带）波动强度 0–1：0=纯频谱轮廓，1=±75% 强波动（默认 0.7） */
+  flowWave: number
 }
 
 export interface TextLayerConfig {
@@ -216,7 +218,8 @@ export const DEFAULT_LAYOUT: ProjectLayout = {
     peakFall: 0,
     sensitivity: 7,
     bpm: null,
-    offsetMs: 0
+    offsetMs: 0,
+    flowWave: 0.7
   },
   export: {
     resolutionId: '1080p',

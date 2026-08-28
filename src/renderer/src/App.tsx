@@ -473,9 +473,10 @@ async function runAudioSmoke(
   }
   pbRef.current.seek(0.2)
   pbRef.current.play()
-  // 直接轮询"绘制的包络"（不依赖 React currentTime state，躲避 resume 延迟期的假 0.2s）：
-  // A：等待 440Hz 包络峰值柱（#61±6）出现（暂停态 seek 或播放中都算，内容一致）；
-  // B：等待包络峰值移动到 1200Hz 段（>A+3 → 频谱本体随播放推进/拖动）。
+  // 全部基于"绘制的包络"轮询（不依赖 currentTime state：本环境其更新滞后/不可靠，
+  // 曾导致假 0.2s 与静默重启）。AudioContext resume 偶发 6–15s，预算放宽到 25s。
+  // A：等待 440Hz 包络峰值柱（#61±6）——seek 后立即绘制，起播前/后内容一致；
+  // B：等待包络峰值移动到 1200Hz 段（>A+3）= 频谱本体随时间轴真实推进。
   let flowPeakA = -1
   const fA0 = Date.now()
   while (Date.now() - fA0 < 6000 && flowPeakA < 0) {
@@ -486,8 +487,8 @@ async function runAudioSmoke(
   let flowPeakB = -1
   let flowPeakBSeen = -1
   const fB0 = Date.now()
-  while (Date.now() - fB0 < 10000) {
-    await sleep(200)
+  while (Date.now() - fB0 < 25000) {
+    await sleep(250)
     flowPeakB = flowPeakColumn()
     if (flowPeakB > flowPeakA + 3) {
       flowPeakBSeen = flowPeakB
@@ -495,6 +496,12 @@ async function runAudioSmoke(
     }
   }
   pbRef.current.pause()
+  // 诊断（仅失败时用）：暂停态 seek 到 1200Hz 段（state 路径 + 重绘 effect），
+  // 若 pause-seek 也画不出 #84 → 绘制/读取链路问题；否则=播放时钟未推进（环境 resume 卡滞）。
+  pbRef.current.seek(1.45)
+  await sleep(400)
+  const diagPeak = flowPeakColumn()
+  const diagTime = pbRef.current.currentTime
   const flowLines = stage.find('.viz-line').length
   if (flowPeakA >= 0 && flowPeakBSeen > flowPeakA + 3) {
     pass(
@@ -510,7 +517,11 @@ async function runAudioSmoke(
         flowPeakB +
         '（线节点 ' +
         flowLines +
-        '；预期包络峰值右移 >3：播放推进后频谱本体未更新）'
+        '，诊断 pause-seek1.45=' +
+        diagPeak +
+        ' t=' +
+        diagTime.toFixed(2) +
+        '；预期包络峰值右移 >3）'
     )
   }
   project.updateVisualizer({ style: 'bars' })

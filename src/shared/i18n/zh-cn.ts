@@ -131,6 +131,7 @@ export const zhCn = {
     styleArea: '连续面积',
     styleDots: '点阵',
     styleFlow: '流动光带',
+    flowWave: '波动强度：{v}%',
     attack: '上升速度：{v}%',
     decay: '下落速度：{v}%',
     peakFall: '频谱帽回落：{v}%',
