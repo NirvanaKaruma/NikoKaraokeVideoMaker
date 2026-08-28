@@ -1,5 +1,5 @@
 import { app, dialog, shell, BrowserWindow, ipcMain } from 'electron'
-import { writeFile, mkdir } from 'fs/promises'
+import { writeFile, mkdir, readFile } from 'fs/promises'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
@@ -169,6 +169,19 @@ function registerIpcHandlers(): void {
 
 async function runSmokeVisual(win: BrowserWindow): Promise<void> {
   try {
+    // 真实音频导入探针（NIKO_AUDIO_PROBE=某 mp3 路径）：base64 注入 → smoke 解码计时
+    const probePath = process.env['NIKO_AUDIO_PROBE']
+    if (probePath) {
+      try {
+        const b64 = (await readFile(probePath)).toString('base64')
+        await win.webContents.executeJavaScript(
+          'window.__NIKO_PROBE_AUDIO_B64 = ' + JSON.stringify(b64) + '; true'
+        )
+        console.log('[smoke-visual] 音频探针已注入:', probePath)
+      } catch (err) {
+        console.error('[smoke-visual] 音频探针读取失败:', err)
+      }
+    }
     const dataUrl: unknown = await win.webContents.executeJavaScript('window.__captureStage()')
     if (typeof dataUrl === 'string' && dataUrl.startsWith('data:image/png;base64,')) {
       await writeFile(

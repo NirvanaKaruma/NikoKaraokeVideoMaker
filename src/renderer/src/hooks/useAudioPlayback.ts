@@ -12,6 +12,45 @@ import { t } from '@shared/i18n'
 
 export type AudioStatus = 'empty' | 'loading' | 'ready' | 'error'
 
+/** Worker 解码结果：多声道原始数据（Transferable 回传） */
+interface WorkerDecodeResult {
+  channels: Float32Array[]
+  sampleRate: number
+}
+
+let decodeWorkerInst: Worker | null = null
+
+/** 用 Worker + OfflineAudioContext 解码（不阻塞主线程）；失败/不可用 → null（回退主线程） */
+function decodeAudioViaWorker(ab: ArrayBuffer): Promise<WorkerDecodeResult | null> {
+  return new Promise((resolve) => {
+    try {
+      decodeWorkerInst?.terminate()
+      const w = new Worker(new URL('../workers/audioDecode.worker.ts', import.meta.url), {
+        type: 'module'
+      })
+      decodeWorkerInst = w
+      const done = (r: WorkerDecodeResult | null): void => {
+        w.terminate()
+        if (decodeWorkerInst === w) decodeWorkerInst = null
+        resolve(r)
+      }
+      w.onmessage = (e: MessageEvent): void => {
+        const r = e.data as { ok?: boolean; channels?: Float32Array[]; sampleRate?: number }
+        if (r.ok && r.channels && r.channels.length > 0 && (r.sampleRate ?? 0) > 0) {
+          done({ channels: r.channels, sampleRate: r.sampleRate ?? 0 })
+        } else {
+          done(null)
+        }
+      }
+      w.onerror = (): void => done(null)
+      // 不 transfer：失败回退主线程解码时还要用原字节（12MB 拷贝仅数 ms）
+      w.postMessage(ab)
+    } catch {
+      resolve(null)
+    }
+  })
+}
+
 export interface PlaybackApi {
   status: AudioStatus
   error: string | null
@@ -152,7 +191,9 @@ export function useAudioPlayback(
     setIsPlaying(true)
   }, [])
 
-  // 解码（音频文件变化时）：统一走异步路径，cancelled 守护竞态
+  // 解码（音频文件变化时）：统一走异步路径，cancelled 守护竞态。
+  // 0.6.0 性能修复：先用 Worker + OfflineAudioContext 解码（不阻塞主线程——长 MP3 曾卡 1–3s），
+  // 失败时回退主线程 decodeAudioData。
   useEffect(() => {
     let cancelled = false
     void (async () => {
@@ -173,10 +214,26 @@ export function useAudioPlayback(
       setStatus('loading')
       setError(null)
       try {
+        const ab = await audioFile.arrayBuffer()
         const ctx = ensureCtx()
         if (!ctx) throw new Error(t('playback.noWebAudio'))
-        const ab = await audioFile.arrayBuffer()
-        const decoded = await ctx.decodeAudioData(ab)
+        let decoded: AudioBuffer | null = null
+        try {
+          const res = await decodeAudioViaWorker(ab)
+          if (!cancelled && res) {
+            // Worker 解码：把多声道灌入 AudioBuffer（播放保持立体声），混单声道做分析
+            decoded = ctx.createBuffer(res.channels.length, res.channels[0].length, res.sampleRate)
+            for (let c = 0; c < res.channels.length; c++) {
+              decoded.copyToChannel(res.channels[c] as Float32Array<ArrayBuffer>, c)
+            }
+          }
+        } catch {
+          decoded = null
+        }
+        if (!decoded) {
+          // 回退：主线程解码（Worker 不可用/失败）
+          decoded = await ctx.decodeAudioData(ab)
+        }
         if (cancelled) return
         const channels: Float32Array[] = []
         for (let c = 0; c < decoded.numberOfChannels; c++) {

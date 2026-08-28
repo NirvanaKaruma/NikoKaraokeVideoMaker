@@ -874,18 +874,54 @@ async function runAudioSmoke(
   project.updateVisualizer({ bpm: null, beatIntervalSec: null })
   project.updateBeatFx({ pulse: 0, burst: 0, particleDensity: 0 })
 
-  // 长音频导入性能探针（用户反馈：导入后长时间卡顿）：180s WAV → 解码耗时
+  // 长音频导入性能探针（用户反馈：导入后长时间卡顿）：180s WAV → 解码耗时。
+  // 注意：必须等 status 先进入 loading（否则读到就绪旧状态直接跳过）
   const pbStatus = (): string => pbRef.current.status
-  const longT0 = Date.now()
-  project.setAudioFile(makeTwoToneWavFile(180, 8000))
-  while ((pbStatus() === 'empty' || pbStatus() === 'loading') && Date.now() - longT0 < 30000) {
-    await sleep(120)
+  const waitLoadingThenReady = async (timeoutMs: number): Promise<{ st: string; ms: number }> => {
+    const t0 = Date.now()
+    let st = pbStatus()
+    while (st === 'ready' && Date.now() - t0 < timeoutMs) {
+      await sleep(30)
+      st = pbStatus()
+    }
+    while ((st === 'loading' || st === 'empty') && Date.now() - t0 < timeoutMs) {
+      await sleep(80)
+      st = pbStatus()
+    }
+    return { st, ms: Date.now() - t0 }
   }
-  const decodeMs = Date.now() - longT0
-  if (pbRef.current.status === 'ready') {
-    pass('长音频导入耗时', decodeMs + 'ms（180s WAV 解码至就绪）')
+  project.setAudioFile(makeTwoToneWavFile(180, 8000))
+  const longRes = await waitLoadingThenReady(30000)
+  const decodeMs = longRes.ms
+  if (longRes.st === 'ready') {
+    pass(
+      '长音频导入耗时',
+      decodeMs + 'ms（180s WAV 解码至就绪，时长 ' + pbRef.current.duration.toFixed(0) + 's）'
+    )
   } else {
-    fail('长音频导入耗时', 'status=' + pbRef.current.status + ' 等待 ' + decodeMs + 'ms')
+    fail('长音频导入耗时', 'status=' + longRes.st + ' 等待 ' + decodeMs + 'ms')
+  }
+
+  // 真实音频导入探针（NIKO_AUDIO_PROBE 注入 base64）：用户提供的长 MP3 走真实导入路径计时
+  const probeB64 = (window as unknown as { __NIKO_PROBE_AUDIO_B64?: string }).__NIKO_PROBE_AUDIO_B64
+  if (probeB64) {
+    const buf = Uint8Array.from(atob(probeB64), (ch) => ch.charCodeAt(0))
+    project.setAudioFile(new File([buf], 'probe.mp3', { type: 'audio/mpeg' }))
+    const mp3Res = await waitLoadingThenReady(60000)
+    const mp3Ms = mp3Res.ms
+    if (mp3Res.st === 'ready') {
+      pass(
+        '真实音频导入耗时',
+        mp3Ms +
+          'ms（' +
+          ((probeB64.length * 0.75) / 1048576).toFixed(1) +
+          'MB mp3 → 就绪，时长 ' +
+          pbRef.current.duration.toFixed(0) +
+          's（Worker 解码路径）'
+      )
+    } else {
+      fail('真实音频导入耗时', 'status=' + mp3Res.st + ' 等待 ' + mp3Ms + 'ms')
+    }
   }
 
   // 图片导入性能探针（用户反馈：导入大图卡顿）：4000×3000 封面 → 就绪耗时

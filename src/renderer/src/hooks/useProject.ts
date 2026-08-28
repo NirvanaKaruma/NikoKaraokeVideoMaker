@@ -47,8 +47,9 @@ const EMPTY_ASSETS: ProjectAssets = {
 }
 
 /** 大图解码上限（长边像素）：超过则在解码后缩放一次——12MP 原图直接给 Konva
- * 会造成纹理上传/绘制卡顿（导入冻结），且 1080p 导出下 2400px 已无肉眼差异。 */
-const MAX_IMAGE_EDGE = 2400
+ * 会造成纹理上传/绘制卡顿（导入冻结）。3200px 覆盖 2K（2560）无缩放损失，
+ * 仅对 4K 导出有轻微收紧（4K 图源本就常需放大，视觉影响可忽略）。 */
+const MAX_IMAGE_EDGE = 3200
 
 /** 解码后按上限缩放（保持透明通道；≤上限则原样返回） */
 function capImage(img: HTMLImageElement): HTMLImageElement | HTMLCanvasElement {
