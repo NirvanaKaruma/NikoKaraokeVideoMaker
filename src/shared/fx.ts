@@ -222,8 +222,8 @@ export function wedgePointsToLine(points: number[]): number[] {
  */
 export type LineMode = 'wave' | 'flow'
 
-/** 连续折线：每列取 v 的高度，追加"流动"相位偏移（flow 用 tSec 推动）。
- * flow 返回 [主波, 副波] 两套（副波相位滞后 → 双层流动视觉）；
+/** 连续折线：每列取 v 的高度；flow 把频谱包络乘以沿 x 前进的细波调制（随 tSec 流动）。
+ * 调用方用 phaseShift=0 / PI 各取一套 → 主/副波双层流动视觉。
  * wave 返回单套（与频谱一致）。
  */
 export function lineHeights(
@@ -237,11 +237,13 @@ export function lineHeights(
   for (let i = 0; i < n; i++) {
     const v = Math.min(Math.max(bars[i] ?? 0, 0), 1)
     if (mode === 'flow') {
-      // 流动感：频谱为主体（0.8），相位扰动为 ±0.25 的随附波动 → 波形轮廓清晰可见
-      const phase = (i / Math.max(1, n - 1)) * Math.PI * 4 - tSec * 2.2 - phaseShift
-      const ripple = Math.sin(phase) * 0.5 + 0.5
-      const ripple2 = Math.sin(phase + Math.PI * 0.5) * 0.5 + 0.5
-      out[i] = Math.min(1, v * 0.8 + (ripple * 0.5 + ripple2 * 0.2) * 0.5)
+      // 主波=频谱包络（乘法调制，波形轮廓随音乐跳动），细波（±35%）沿 x 前进 → 光带既"跳"又"流"。
+      // 安静段落包络=0 → 贴底，音乐一击即起，节奏感与 bars 一致。
+      const phase = (i / Math.max(1, n - 1)) * Math.PI * 4 - tSec * 4.5 - phaseShift
+      const ripple = 0.5 + 0.5 * Math.sin(phase)
+      const ripple2 = 0.5 + 0.5 * Math.sin(phase + Math.PI * 0.5)
+      const mix = ripple * 0.75 + ripple2 * 0.25
+      out[i] = Math.min(1, v * (0.65 + 0.7 * mix))
     } else {
       out[i] = v
     }
