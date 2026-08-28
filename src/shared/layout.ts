@@ -135,8 +135,11 @@ export interface VisualizerConfig {
   peakFall: number
   /** 灵敏度增益 1–15，越大柱越高越灵敏（默认 7；原固定增益 4 经用户反馈偏低） */
   sensitivity: number
-  /** 节拍响应：bpm=null（默认）不检测；数字=手动 BPM；0.6.0 自动检测可写入 */
+  /** 节拍响应（0.6.0 手动节拍源）：bpm=每分钟拍数（自由输入，仅校验>0 且有限；null=不使用 BPM）；
+   * 两者同时设置时 BPM 优先；均 null=节拍关闭 */
   bpm: number | null
+  /** 节拍响应：周期秒（自由输入，>0 且有限；null=不使用周期）——"每 N 秒一次"语义 */
+  beatIntervalSec: number | null
   /** 可视化-音频偏移（ms，仅可视化时间轴，默认 0） */
   offsetMs: number
   /** flow（流动光带）波动强度 0–1：0=纯频谱轮廓，1=±75% 强波动（默认 0.7） */
@@ -163,6 +166,21 @@ export interface CanvasFxConfig {
   beatFlash: number
   /** 光斑/漏光 0–1（0=关；内置素材 + globalCompositeOperation 叠加） */
   lightLeak: number
+}
+
+/** 粒子预设（0.6.0） */
+export type ParticlePreset = 'snow' | 'sakura' | 'star' | 'bubble'
+
+/** 音乐响应（0.6.0，默认全关；节拍源 = visualizer.bpm / visualizer.beatIntervalSec 手动输入） */
+export interface BeatFxConfig {
+  /** 全局踩点脉冲 0–1（0=关）：beat 起点背景亮度短闪 + 主图 Kick 缩放 */
+  pulse: number
+  /** 粒子爆发强度 0–1（0=关）：beat 起点喷发 */
+  burst: number
+  /** 粒子预设（0.6.0） */
+  particlePreset: ParticlePreset
+  /** 粒子密度 0–1（0=关） */
+  particleDensity: number
 }
 
 /** 片头/片尾（0.5.0，默认全关） */
@@ -211,6 +229,8 @@ export interface ProjectLayout {
   canvasFx: CanvasFxConfig
   /** 片头/片尾（0.5.0） */
   introOutro: IntroOutroConfig
+  /** 音乐响应（0.6.0） */
+  beat: BeatFxConfig
   export: ExportConfig
 }
 
@@ -304,11 +324,13 @@ export const DEFAULT_LAYOUT: ProjectLayout = {
     peakFall: 0,
     sensitivity: 7,
     bpm: null,
+    beatIntervalSec: null,
     offsetMs: 0,
     flowWave: 0.7
   },
   canvasFx: { vignette: 0, grain: 0, scanline: 0, beatFlash: 0, lightLeak: 0 },
   introOutro: { introFade: 0, introTitleCard: 0, outroFade: 0 },
+  beat: { pulse: 0, burst: 0, particlePreset: 'snow', particleDensity: 0 },
   export: {
     resolutionId: '1080p',
     fps: 30

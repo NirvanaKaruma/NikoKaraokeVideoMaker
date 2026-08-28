@@ -1,9 +1,13 @@
+import { useState } from 'react'
 import type {
   BackgroundConfig,
+  BeatFxConfig,
   CanvasFxConfig,
   IntroOutroConfig,
   MainImageConfig,
-  TextLayerConfig
+  ParticlePreset,
+  TextLayerConfig,
+  VisualizerConfig
 } from '@shared/layout'
 import type { EntryStyle } from '@shared/fx'
 import { useLocale } from '../../hooks/useLocale'
@@ -16,12 +20,67 @@ export interface FxPanelProps {
   artistEntry: TextLayerConfig['entry']
   canvasFx: CanvasFxConfig
   introOutro: IntroOutroConfig
+  beat: BeatFxConfig
+  visualizer: VisualizerConfig
   onBgFxChange: (p: Partial<BackgroundConfig['fx']>) => void
   onImageFxChange: (p: Partial<MainImageConfig['fx']>) => void
   onSongTitleEntryChange: (p: Partial<TextLayerConfig['entry']>) => void
   onArtistEntryChange: (p: Partial<TextLayerConfig['entry']>) => void
   onCanvasFxChange: (p: Partial<CanvasFxConfig>) => void
   onIntroOutroChange: (p: Partial<IntroOutroConfig>) => void
+  onBeatFxChange: (p: Partial<BeatFxConfig>) => void
+  onVisualizerChange: (p: Partial<VisualizerConfig>) => void
+}
+
+const PARTICLE_PRESETS: { value: ParticlePreset; labelKey: string }[] = [
+  { value: 'snow', labelKey: 'fx.beat.presetSnow' },
+  { value: 'sakura', labelKey: 'fx.beat.presetSakura' },
+  { value: 'star', labelKey: 'fx.beat.presetStar' },
+  { value: 'bubble', labelKey: 'fx.beat.presetBubble' }
+]
+
+/** 自由正数输入（BPM / 周期秒：不做范围限制，仅校验 >0 且有限；空串=null 关闭） */
+function FreeNumberField({
+  label,
+  value,
+  placeholder,
+  onCommit
+}: {
+  label: string
+  value: number | null
+  placeholder: string
+  onCommit: (v: number | null) => void
+}): React.JSX.Element {
+  const [draft, setDraft] = useState<string>(value == null ? '' : String(value))
+  const commit = (): void => {
+    const trimmed = draft.trim()
+    if (trimmed === '') {
+      onCommit(null)
+      return
+    }
+    const n = Number(trimmed)
+    if (Number.isFinite(n) && n > 0) {
+      onCommit(n)
+    } else {
+      setDraft(value == null ? '' : String(value)) // 非法输入回退
+    }
+  }
+  return (
+    <label className="field">
+      <span>{label}</span>
+      <input
+        type="number"
+        step="any"
+        value={draft}
+        placeholder={placeholder}
+        onChange={(e) => setDraft(e.currentTarget.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') commit()
+        }}
+      />
+    </label>
+  )
 }
 
 /** 入场动画类型选项（与 TextLayerConfig.entry.type 对齐；bounce=整体回弹，见偏差记录） */
@@ -82,7 +141,7 @@ function EntryBlock({
 /** 动效面板（0.5.0）：背景 / 主图 / 文本入场 / 全局后期 / 片头片尾（全部默认关闭） */
 export function FxPanel(props: FxPanelProps): React.JSX.Element {
   const { t } = useLocale()
-  const { backgroundFx, imageFx, canvasFx, introOutro } = props
+  const { backgroundFx, imageFx, canvasFx, introOutro, beat, visualizer } = props
   return (
     <section className="panel-section">
       <h2>{t('fx.bgTitle')}</h2>
@@ -265,6 +324,60 @@ export function FxPanel(props: FxPanelProps): React.JSX.Element {
         onCommit={(v) => props.onIntroOutroChange({ outroFade: v })}
       />
       <p className="panel-note">{t('fx.introOutro.note')}</p>
+
+      <h2>{t('fx.beatTitle')}</h2>
+      <FreeNumberField
+        label={t('fx.beat.bpm')}
+        value={visualizer.bpm}
+        placeholder={t('fx.beat.bpmPlaceholder')}
+        onCommit={(v) => props.onVisualizerChange({ bpm: v })}
+      />
+      <FreeNumberField
+        label={t('fx.beat.interval')}
+        value={visualizer.beatIntervalSec}
+        placeholder={t('fx.beat.intervalPlaceholder')}
+        onCommit={(v) => props.onVisualizerChange({ beatIntervalSec: v })}
+      />
+      <p className="panel-note">{t('fx.beat.note')}</p>
+      <DeferredSlider
+        label={(v) => t('fx.beat.pulse', { v: Math.round(v * 100) })}
+        value={beat.pulse}
+        min={0}
+        max={1}
+        step={0.01}
+        onCommit={(v) => props.onBeatFxChange({ pulse: v })}
+      />
+      <DeferredSlider
+        label={(v) => t('fx.beat.burst', { v: Math.round(v * 100) })}
+        value={beat.burst}
+        min={0}
+        max={1}
+        step={0.01}
+        onCommit={(v) => props.onBeatFxChange({ burst: v })}
+      />
+      <label className="field">
+        <span>{t('fx.beat.particlePreset')}</span>
+        <select
+          value={beat.particlePreset}
+          onChange={(e) =>
+            props.onBeatFxChange({ particlePreset: e.target.value as ParticlePreset })
+          }
+        >
+          {PARTICLE_PRESETS.map((o) => (
+            <option key={o.value} value={o.value}>
+              {t(o.labelKey)}
+            </option>
+          ))}
+        </select>
+      </label>
+      <DeferredSlider
+        label={(v) => t('fx.beat.particleDensity', { v: Math.round(v * 100) })}
+        value={beat.particleDensity}
+        min={0}
+        max={1}
+        step={0.01}
+        onCommit={(v) => props.onBeatFxChange({ particleDensity: v })}
+      />
     </section>
   )
 }

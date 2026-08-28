@@ -115,6 +115,30 @@ export function easeInOutQuad(t: number): number {
   return x < 0.5 ? 2 * x * x : 1 - Math.pow(-2 * x + 2, 2) / 2
 }
 
+/** 手动节拍源（0.6.0）：BPM（每分钟拍数）或周期秒 → 拍周期（秒）；返回 null = 节拍关闭。
+ * 任意合法正数（不做范围限制，用户可输入远超 30–240 的 BPM；仅校验 >0 且有限）。 */
+export function beatPeriod(bpm: number | null, intervalSec: number | null): number | null {
+  if (bpm != null && bpm > 0 && Number.isFinite(bpm)) return 60 / bpm
+  if (intervalSec != null && intervalSec > 0 && Number.isFinite(intervalSec)) return intervalSec
+  return null
+}
+
+/** 节拍内相位 0–1（beat 起点=0；period 无效时恒 0）——纯时刻函数 */
+export function beatPhase(t: number, period: number): number {
+  if (!(period > 0) || !Number.isFinite(period)) return 0
+  const x = (t / period) % 1
+  return x < 0 ? x + 1 : x
+}
+
+/** beat 包络（0–1）：每个 beat 起点 =1，按 tauSec 指数衰减（默认 0.18s）；
+ * 确定性（同 t 同值；30/60fps 网格一致）；period 无效 → 恒 0（关闭）。 */
+export function beatEnvelope(t: number, period: number, tauSec = 0.18): number {
+  if (!(period > 0) || !Number.isFinite(period)) return 0
+  const phase = (((t / period) % 1) + 1) % 1
+  const tau = Math.max(0.002, tauSec)
+  return Math.exp(-((phase * period) / tau))
+}
+
 /** 分带能量按时间窗口平滑（确定性采样：5 点窗口均值；30/60fps 同 t 同值）。
  * sample = (t) => 分带能量（预览与导出都传「bandEnergiesAt 包装」——与帧率无关）。 */
 export function bandEnergySmoothed(

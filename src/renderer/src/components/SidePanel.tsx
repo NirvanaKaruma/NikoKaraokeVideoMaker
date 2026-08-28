@@ -14,7 +14,7 @@ import { BackgroundPanel } from './panels/BackgroundPanel'
 import { TextPanel } from './panels/TextPanel'
 import { VisualizerPanel } from './panels/VisualizerPanel'
 import { FxPanel } from './panels/FxPanel'
-import type { CanvasFxConfig, IntroOutroConfig } from '@shared/layout'
+import type { BeatFxConfig, CanvasFxConfig, IntroOutroConfig } from '@shared/layout'
 
 export type SideTab = 'assets' | 'text' | 'visualizer' | 'fx'
 
@@ -70,6 +70,11 @@ export interface SidePanelProps {
   onArtistEntryChange: (patch: Partial<TextLayerConfig['entry']>) => void
   onCanvasFxChange: (patch: Partial<CanvasFxConfig>) => void
   onIntroOutroChange: (patch: Partial<IntroOutroConfig>) => void
+  // 音乐响应（0.5.0）
+  beat: BeatFxConfig
+  visualizerForBeat: VisualizerConfig
+  onBeatFxChange: (patch: Partial<BeatFxConfig>) => void
+  onVisualizerForBeatChange: (patch: Partial<VisualizerConfig>) => void
 }
 
 const TABS: { id: SideTab; labelKey: string }[] = [
@@ -159,6 +164,10 @@ export function SidePanel(props: SidePanelProps): React.JSX.Element {
             onArtistEntryChange={props.onArtistEntryChange}
             onCanvasFxChange={props.onCanvasFxChange}
             onIntroOutroChange={props.onIntroOutroChange}
+            beat={props.beat}
+            visualizer={props.visualizerForBeat}
+            onBeatFxChange={props.onBeatFxChange}
+            onVisualizerChange={props.onVisualizerForBeatChange}
           />
         )}
       </div>

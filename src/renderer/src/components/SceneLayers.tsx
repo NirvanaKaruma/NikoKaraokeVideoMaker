@@ -28,6 +28,8 @@ import { colorAt } from '@shared/color'
 import {
   bandEnergySmoothed,
   barGeometry,
+  beatEnvelope,
+  beatPeriod,
   bounceIn,
   easeOutCubic,
   entryProgress,
@@ -218,11 +220,15 @@ function BackgroundLayer({
         g.x(0)
         g.y(0)
       }
-      // bass 呼吸：0–0.4s 窗口平滑（灯光随低音起伏）
+      // bass 呼吸：0–0.4s 窗口平滑（灯光随低音起伏）+ 手动节拍脉冲（beat 起点短闪）
       const bassV = analyzer ? bandEnergySmoothed(sample, tVis, 'bass', 0.4) : 0
+      const period = beatPeriod(layout.visualizer.bpm, layout.visualizer.beatIntervalSec)
+      const env = period != null ? beatEnvelope(tVis, period) : 0
       const bright = breatheBrightRef.current
       if (bright) {
-        bright.opacity(Math.min(1, bassV * background.fx.bassBrightness * 1.4))
+        bright.opacity(
+          Math.min(1, bassV * background.fx.bassBrightness * 1.4 + env * layout.beat.pulse * 0.55)
+        )
       }
       const hue = breatheHueRef.current
       if (hue) {
@@ -233,7 +239,17 @@ function BackgroundLayer({
     return () => {
       layerFxSlotRef.current = null
     }
-  }, [layerFxSlotRef, layout.visualizer, background.fx, analyzer, canvas.width, canvas.height])
+  }, [
+    layerFxSlotRef,
+    layout,
+    analyzer,
+    canvas.width,
+    canvas.height,
+    background.fx.kenBurns,
+    background.fx.kenBurnsDuration,
+    background.fx.bassBrightness,
+    background.fx.bassHue
+  ])
 
   return (
     <>
@@ -691,7 +707,11 @@ function MainImageLayer({
           : 1
       // 微旋转：±rotateDeg° 慢速往复（16s 周期）
       const rotDeg = fx.rotateDeg > 0 ? fx.rotateDeg * Math.sin((twoPi * tt) / 16) : 0
-      fg.scale({ x: breatheS, y: breatheS })
+      // 手动节拍 Kick 缩放（beat 起点微弹）
+      const period = beatPeriod(layout.visualizer.bpm, layout.visualizer.beatIntervalSec)
+      const env = period != null ? beatEnvelope(tt, period) : 0
+      const kick = env * layout.beat.pulse * 0.04
+      fg.scale({ x: breatheS + kick, y: breatheS + kick })
       fg.rotation(rotDeg)
       // 发光脉冲：shadowBlur 0→强度×60px（2.4s 周期）；无脉冲时关阴影
       const glow =
@@ -710,7 +730,17 @@ function MainImageLayer({
     return () => {
       layerFxSlotRef.current = null
     }
-  }, [layerFxSlotRef, fx, coverElement, px.w, px.h])
+  }, [
+    layerFxSlotRef,
+    layout,
+    coverElement,
+    px.w,
+    px.h,
+    fx.breathe,
+    fx.breathePeriod,
+    fx.rotateDeg,
+    fx.glowPulse
+  ])
 
   return (
     <>

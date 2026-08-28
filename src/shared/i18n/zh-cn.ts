@@ -373,6 +373,22 @@ export const zhCn = {
       introTitleCard: '标题卡展示：{v}s',
       outroFade: '片尾淡出：{v}s',
       note: '片头/片尾按时间轴计算，预览与导出一致。'
+    },
+    beatTitle: '音乐响应',
+    beat: {
+      bpm: 'BPM（每分钟拍数）',
+      bpmPlaceholder: '如 120（留空=关闭）',
+      interval: '周期（秒/次）',
+      intervalPlaceholder: '如 0.5（留空=关闭）',
+      note: 'BPM 与周期同时填写时 BPM 优先；两者均为自由正数（不限制范围）。',
+      pulse: '踩点脉冲：{v}%',
+      burst: '粒子爆发：{v}%',
+      particlePreset: '粒子预设',
+      presetSnow: '雪',
+      presetSakura: '樱花',
+      presetStar: '星空',
+      presetBubble: '气泡',
+      particleDensity: '粒子密度：{v}%'
     }
   },
   closeGuard: {

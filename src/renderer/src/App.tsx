@@ -8,6 +8,7 @@ import { useFfmpegDownload, useFfmpegStatus } from './hooks/useFfmpeg'
 import { useExporter } from './hooks/useExporter'
 import { benchmarkEncoder } from './export/exportVideo'
 import { drawCanvasFx } from '@shared/canvasfx'
+import { drawParticles, particlesAt } from '@shared/particles'
 import { CanvasStage } from './components/CanvasStage'
 import { ExportStageHost } from './components/ExportStageHost'
 import { SidePanel } from './components/SidePanel'
@@ -704,10 +705,109 @@ async function runAudioSmoke(
     fail('打字机入场', '亮像素 ' + countBright(twA) + '→' + countBright(twB) + '（+20 预期）')
   }
 
+  // ── 0.6.0 音乐响应（手动节拍源：暂停态 seek 对齐 beat 网格，确定性）──
+  // 手动节拍脉冲（Konva 层可捕获）：beat 起点（t≈0）背景亮度高于 beat 末段（t≈0.46）
+  project.updateVisualizer({ bpm: 120 }) // 周期 0.5s
+  project.updateBeatFx({ pulse: 1, burst: 0, particleDensity: 0 })
+  await sleep(200)
+  pbRef.current.seek(0.02)
+  await sleep(250)
+  // 纯背景区（下半部中央：避开主图/文本；脉冲叠色作用于全画布）
+  const beatA = captureRegion(stage, 0.5 * 1920, 0.86 * 1080, 0.9 * 1920, 0.97 * 1080)
+  pbRef.current.seek(0.46)
+  await sleep(250)
+  const beatB = captureRegion(stage, 0.5 * 1920, 0.86 * 1080, 0.9 * 1920, 0.97 * 1080)
+  if (meanSum(beatA) - meanSum(beatB) > 15) {
+    pass(
+      '手动节拍脉冲',
+      'beat 起点背景亮度 ' + meanSum(beatA).toFixed(0) + ' > 末段 ' + meanSum(beatB).toFixed(0)
+    )
+  } else {
+    fail(
+      '手动节拍脉冲',
+      '亮度 ' + meanSum(beatA).toFixed(0) + ' vs ' + meanSum(beatB).toFixed(0) + '（>15 预期）'
+    )
+  }
+
+  // 粒子系统（离屏：粒子在 DOM overlay 层，stage.toCanvas 不可见 → 同函数离屏验证）
+  const pcanvas = document.createElement('canvas')
+  pcanvas.width = 320
+  pcanvas.height = 180
+  const pctx = pcanvas.getContext('2d')
+  if (pctx) {
+    pctx.clearRect(0, 0, 320, 180)
+    drawParticles(pctx, particlesAt(0.05, 'snow', 0.9, 1, 320, 180))
+    const snowN = countDiffPixels(
+      pctx.getImageData(0, 0, 320, 180).data,
+      new Uint8ClampedArray(320 * 180 * 4)
+    )
+    pctx.clearRect(0, 0, 320, 180)
+    drawParticles(pctx, particlesAt(0.25, 'snow', 0.9, 1, 320, 180))
+    const snowM = countDiffPixels(
+      pctx.getImageData(0, 0, 320, 180).data,
+      new Uint8ClampedArray(320 * 180 * 4)
+    )
+    pctx.clearRect(0, 0, 320, 180)
+    drawParticles(pctx, particlesAt(0.05, 'snow', 0, 1, 320, 180))
+    const snowOff = countDiffPixels(
+      pctx.getImageData(0, 0, 320, 180).data,
+      new Uint8ClampedArray(320 * 180 * 4)
+    )
+    if (snowN > 0 && snowM > 0 && snowOff === 0) {
+      pass('粒子系统', '雪：t 推进像素 ' + snowN + '→' + snowM + '；密度 0 = 空')
+    } else {
+      fail('粒子系统', 'n=' + snowN + ' m=' + snowM + ' off=' + snowOff)
+    }
+    // 手动节拍源踩点闪光（离屏同函数）：beat 起点白闪，beat 中间无闪
+    const fctx = pctx
+    ;(fctx as CanvasRenderingContext2D).clearRect(0, 0, 320, 180)
+    fctx.fillStyle = '#333333'
+    fctx.fillRect(0, 0, 320, 180)
+    drawCanvasFx(
+      fctx,
+      {
+        t: 0.0,
+        vignette: 0,
+        grain: 0,
+        scanline: 0,
+        beatFlash: 1,
+        lightLeak: 0,
+        beatPeriodSec: 0.5
+      },
+      320,
+      180
+    )
+    const flashOn = fctx.getImageData(160, 90, 1, 1).data[0]
+    fctx.fillStyle = '#333333'
+    fctx.fillRect(0, 0, 320, 180)
+    drawCanvasFx(
+      fctx,
+      {
+        t: 0.25,
+        vignette: 0,
+        grain: 0,
+        scanline: 0,
+        beatFlash: 1,
+        lightLeak: 0,
+        beatPeriodSec: 0.5
+      },
+      320,
+      180
+    )
+    const flashOff = fctx.getImageData(160, 90, 1, 1).data[0]
+    if (flashOn > flashOff + 60) {
+      pass('踩点闪光（手动源）', 'beat 起点 r=' + flashOn + ' > 中间 r=' + flashOff)
+    } else {
+      fail('踩点闪光（手动源）', flashOn + ' vs ' + flashOff + '（>60 预期）')
+    }
+  }
+
   // 复位全部动效（防污染后续检查/导出）
   project.updateCanvasFx({ vignette: 0, grain: 0, scanline: 0, beatFlash: 0, lightLeak: 0 })
   project.updateIntroOutro({ introFade: 0, introTitleCard: 0, outroFade: 0 })
   project.updateBackgroundFx({ kenBurns: 0, bassBrightness: 0, bassHue: 0 })
+  project.updateVisualizer({ bpm: null, beatIntervalSec: null })
+  project.updateBeatFx({ pulse: 0, burst: 0, particleDensity: 0 })
 
   return { ok: checks.every((c) => c.pass), checks }
 }
@@ -913,12 +1013,14 @@ function App(): React.JSX.Element {
         results.push(done)
         if (done.phase !== 'done') break
       }
-      // 0.5.0：含特效导出（动效组合默认关→全开一次）——动态路径与 WYSIWYG 端到端
+      // 0.5.0/0.6.0：含特效导出（动效+音乐响应默认关→全开一次）——动态路径与 WYSIWYG 端到端
       project.updateBackgroundFx({ kenBurns: 0.05, kenBurnsDuration: 30, bassBrightness: 0.4 })
       project.updateImageFx({ breathe: 0.3, rotateDeg: 1.5, glowPulse: 0.4, border: 0.008 })
       project.updateTextEntry('songTitle', { type: 'typewriter', durationSec: 1.2 })
       project.updateCanvasFx({ vignette: 0.5, grain: 0.2, scanline: 0.15, lightLeak: 0.3 })
       project.updateIntroOutro({ introFade: 1, introTitleCard: 2, outroFade: 1 })
+      project.updateVisualizer({ bpm: 120 })
+      project.updateBeatFx({ pulse: 0.8, burst: 1, particlePreset: 'snow', particleDensity: 0.6 })
       project.updateExport({ resolutionId: '1080p', fps: 30 })
       await sleep(400)
       const fxDone = await runExportOnce()
@@ -934,6 +1036,8 @@ function App(): React.JSX.Element {
       project.updateTextEntry('songTitle', { type: 'none' })
       project.updateCanvasFx({ vignette: 0, grain: 0, scanline: 0, beatFlash: 0, lightLeak: 0 })
       project.updateIntroOutro({ introFade: 0, introTitleCard: 0, outroFade: 0 })
+      project.updateVisualizer({ bpm: null, beatIntervalSec: null })
+      project.updateBeatFx({ pulse: 0, burst: 0, particleDensity: 0 })
       return { ok: results.every((r) => r.phase === 'done'), results }
     }
 
@@ -1268,6 +1372,10 @@ function App(): React.JSX.Element {
           onArtistEntryChange={(x) => project.updateTextEntry('artist', x)}
           onCanvasFxChange={project.updateCanvasFx}
           onIntroOutroChange={project.updateIntroOutro}
+          beat={project.layout.beat}
+          visualizerForBeat={project.layout.visualizer}
+          onBeatFxChange={project.updateBeatFx}
+          onVisualizerForBeatChange={project.updateVisualizer}
         />
         <main className="canvas-wrap">
           <CanvasStage

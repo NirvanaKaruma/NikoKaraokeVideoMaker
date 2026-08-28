@@ -3,6 +3,9 @@ import {
   bandEnergySmoothed,
   bandEnergiesFromBars,
   barGeometry,
+  beatEnvelope,
+  beatPhase,
+  beatPeriod,
   bounceIn,
   easeOutCubic,
   energyAttack,
@@ -227,6 +230,30 @@ describe('fx 时间函数库', () => {
     expect(off.outro).toBe(0)
     // 确定性
     expect(introOutroAlpha(1.234, 10, cfg)).toEqual(introOutroAlpha(1.234, 10, cfg))
+  })
+
+  it('手动节拍源：beatPeriod/beatPhase/beatEnvelope——BPM 优先、自由值、确定性、包络衰减', () => {
+    // BPM 优先（即使 interval 也给了）；合法正数不限范围（500 BPM 也不拒绝）
+    expect(beatPeriod(120, 1)).toBeCloseTo(0.5, 9)
+    expect(beatPeriod(500, 3)).toBeCloseTo(0.12, 9)
+    expect(beatPeriod(0, 2)).toBeCloseTo(2, 9) // 0/无效 BPM → 回退周期
+    expect(beatPeriod(null, null)).toBeNull()
+    expect(beatPeriod(-10, null)).toBeNull()
+    // 相位：beat 起点 0；半周期 0.5；确定性
+    const p = 0.5
+    expect(beatPhase(0, p)).toBeCloseTo(0, 9)
+    expect(beatPhase(0.25, p)).toBeCloseTo(0.5, 9)
+    expect(beatPhase(1.0, p)).toBeCloseTo(0, 9) // 整拍回零
+    expect(beatPhase(0.1234, p)).toBe(beatPhase(0.1234, p))
+    // 包络：beat 起点=1 → 衰减；下一 beat 前接近 0
+    expect(beatEnvelope(0, p, 0.18)).toBeCloseTo(1, 9)
+    expect(beatEnvelope(0.05, p, 0.18)).toBeLessThan(1)
+    expect(beatEnvelope(0.05, p, 0.18)).toBeGreaterThan(0.4)
+    expect(beatEnvelope(0.49, p, 0.18)).toBeLessThan(0.1) // 接近下一拍时基本衰减完
+    expect(beatEnvelope(0, p, 0.18)).toBe(beatEnvelope(0, p, 0.18))
+    // 关闭态：period 无效 → 包络 0
+    expect(beatEnvelope(1, 0, 0.18)).toBe(0)
+    expect(beatPhase(1, 0)).toBe(0)
   })
 
   it('kenBurns：往复摇摆——周期边界连续无突变、推拉对称、无露边', () => {

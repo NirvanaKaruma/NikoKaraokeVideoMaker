@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   BackgroundConfig,
+  BeatFxConfig,
   CanvasFxConfig,
   DEFAULT_LAYOUT,
   ExportConfig,
@@ -71,6 +72,7 @@ export function useProject(): {
   updateTextEntry: (kind: 'songTitle' | 'artist', patch: Partial<TextLayerConfig['entry']>) => void
   updateCanvasFx: (patch: Partial<CanvasFxConfig>) => void
   updateIntroOutro: (patch: Partial<IntroOutroConfig>) => void
+  updateBeatFx: (patch: Partial<BeatFxConfig>) => void
   updateExport: (patch: Partial<ExportConfig>) => void
   setCoverFile: (file: File | null) => void
   setCoverFromUrl: (url: string) => void
@@ -241,6 +243,14 @@ export function useProject(): {
         ...layoutRef.current,
         introOutro: { ...layoutRef.current.introOutro, ...patch }
       })
+    },
+    [pushHistory, applyLayout]
+  )
+
+  const updateBeatFx = useCallback(
+    (patch: Partial<BeatFxConfig>) => {
+      pushHistory()
+      applyLayout({ ...layoutRef.current, beat: { ...layoutRef.current.beat, ...patch } })
     },
     [pushHistory, applyLayout]
   )
@@ -593,6 +603,7 @@ export function useProject(): {
     updateTextEntry,
     updateCanvasFx,
     updateIntroOutro,
+    updateBeatFx,
     updateExport,
     setCoverFile,
     setCoverFromUrl,

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Layer, Rect, Stage } from 'react-konva'
 import type Konva from 'konva'
 import {
+  BeatFxConfig,
   CanvasFxConfig,
   LOGICAL_HEIGHT,
   LOGICAL_WIDTH,
@@ -11,6 +12,8 @@ import {
 } from '@shared/layout'
 import { bandEnergiesAt, type SpectrumAnalyzer } from '@shared/spectrum'
 import { drawCanvasFx, type CanvasFxDrawOpts } from '@shared/canvasfx'
+import { beatEnvelope, beatPeriod } from '@shared/fx'
+import { drawParticles, particlesAt } from '@shared/particles'
 import { SceneLayers, SelectableId } from './SceneLayers'
 
 /** 非可视化动效帧分发（背景/主图/文本每帧更新） */
@@ -20,6 +23,7 @@ export type LayerFxRef = { current: ((t: number) => void) | null }
  * 与导出 compose 共用 drawCanvasFx（核心约束 A）。 */
 function CanvasFxOverlay({
   canvasFx,
+  beat,
   visualizer,
   analyzer,
   playTimeRef,
@@ -28,6 +32,7 @@ function CanvasFxOverlay({
   offY
 }: {
   canvasFx: CanvasFxConfig
+  beat: BeatFxConfig
   visualizer: VisualizerConfig
   analyzer?: SpectrumAnalyzer | null
   playTimeRef?: { current: number }
@@ -41,7 +46,8 @@ function CanvasFxOverlay({
     canvasFx.grain > 0 ||
     canvasFx.scanline > 0 ||
     canvasFx.beatFlash > 0 ||
-    canvasFx.lightLeak > 0
+    canvasFx.lightLeak > 0 ||
+    beat.particleDensity > 0
 
   useEffect(() => {
     if (!enabled) return
@@ -55,6 +61,20 @@ function CanvasFxOverlay({
       ctx.clearRect(0, 0, c.width, c.height)
       const offset = visualizer.offsetMs > 0 ? visualizer.offsetMs / 1000 : 0
       const t = (playTimeRef?.current ?? 0) + offset
+      const period = beatPeriod(visualizer.bpm, visualizer.beatIntervalSec)
+      const env = period != null ? beatEnvelope(t, period) : 0
+      // 粒子：beat 爆发 boost（音乐响应）
+      if (beat.particleDensity > 0) {
+        const particles = particlesAt(
+          t,
+          beat.particlePreset,
+          beat.particleDensity,
+          env * beat.burst,
+          c.width,
+          c.height
+        )
+        drawParticles(ctx, particles)
+      }
       const feed: CanvasFxDrawOpts = {
         t,
         vignette: canvasFx.vignette,
@@ -66,13 +86,14 @@ function CanvasFxOverlay({
           ? (tt: number) =>
               bandEnergiesAt(analyzer, tt + offset, visualizer.barCount, visualizer.sensitivity)
           : undefined,
+        beatPeriodSec: period,
         leakSprite: undefined
       }
       drawCanvasFx(ctx, feed, c.width, c.height)
     }
     raf = requestAnimationFrame(draw)
     return () => cancelAnimationFrame(raf)
-  }, [enabled, canvasFx, visualizer, analyzer, playTimeRef])
+  }, [enabled, canvasFx, beat, visualizer, analyzer, playTimeRef])
 
   return (
     <canvas
@@ -162,6 +183,7 @@ export function CanvasStage(props: CanvasStageProps): React.JSX.Element {
     <div ref={containerRef} className="canvas-container">
       <CanvasFxOverlay
         canvasFx={layout.canvasFx}
+        beat={layout.beat}
         visualizer={layout.visualizer}
         analyzer={analyzer}
         playTimeRef={playTimeRef}

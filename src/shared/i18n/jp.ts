@@ -398,6 +398,22 @@ export const jp = {
       introTitleCard: 'タイトルカード：{v}s',
       outroFade: 'アウトロフェード：{v}s',
       note: 'イントロ/アウトロはタイムライン基準で、プレビューと書き出しが一致します。'
+    },
+    beatTitle: '音楽レスポンス',
+    beat: {
+      bpm: 'BPM（毎分拍数）',
+      bpmPlaceholder: '例 120（空欄=オフ）',
+      interval: '周期（秒/回）',
+      intervalPlaceholder: '例 0.5（空欄=オフ）',
+      note: 'BPM と周期が両方あれば BPM 優先。どちらも正数なら自由（範囲制限なし）。',
+      pulse: 'ビートパルス：{v}%',
+      burst: 'パーティクルバースト：{v}%',
+      particlePreset: 'パーティクルプリセット',
+      presetSnow: '雪',
+      presetSakura: '桜',
+      presetStar: '星空',
+      presetBubble: '泡',
+      particleDensity: 'パーティクル密度：{v}%'
     }
   },
   closeGuard: {

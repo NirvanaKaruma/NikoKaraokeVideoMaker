@@ -84,6 +84,11 @@ describe('归一化布局模型', () => {
     expect(DEFAULT_LAYOUT.introOutro.introFade).toBe(0)
     expect(DEFAULT_LAYOUT.introOutro.introTitleCard).toBe(0)
     expect(DEFAULT_LAYOUT.introOutro.outroFade).toBe(0)
+    expect(DEFAULT_LAYOUT.beat.pulse).toBe(0)
+    expect(DEFAULT_LAYOUT.beat.burst).toBe(0)
+    expect(DEFAULT_LAYOUT.beat.particleDensity).toBe(0)
+    expect(DEFAULT_LAYOUT.visualizer.bpm).toBeNull()
+    expect(DEFAULT_LAYOUT.visualizer.beatIntervalSec).toBeNull()
   })
 
   it('主图默认高≈90%、宽≈40%，左侧垂直居中（上移后 y=3%）', () => {

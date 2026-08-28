@@ -1,8 +1,9 @@
 import { ArrayBufferTarget, Muxer } from 'mp4-muxer'
 import { hasDynamicFx, type ProjectLayout, type ResolutionOption } from '@shared/layout'
 import { bandEnergiesAt, spectrumAt, type SpectrumAnalyzer } from '@shared/spectrum'
-import { smoothBarsFx, type SmoothFxState } from '@shared/fx'
+import { beatEnvelope, beatPeriod, smoothBarsFx, type SmoothFxState } from '@shared/fx'
 import { drawCanvasFx } from '@shared/canvasfx'
+import { drawParticles, particlesAt } from '@shared/particles'
 import type { ExportStageHandle } from '../components/ExportStageHost'
 import { t } from '@shared/i18n'
 
@@ -314,6 +315,23 @@ export async function encodeVideo(opts: EncodeVideoOptions): Promise<ArrayBuffer
         ctx.drawImage(staticCanvas!, 0, 0)
         ctx.drawImage(viz, 0, 0)
       }
+      // 0.6.0 音乐响应：手动节拍源（beat 包络）→ 粒子爆发 + 踩点闪光（同函数）
+      const period = beatPeriod(vizCfg.bpm, vizCfg.beatIntervalSec)
+      const env = period != null ? beatEnvelope(tSec + tOffset, period) : 0
+      const beatCfg = layout.beat
+      if (beatCfg.particleDensity > 0) {
+        drawParticles(
+          ctx,
+          particlesAt(
+            tSec + tOffset,
+            beatCfg.particlePreset,
+            beatCfg.particleDensity,
+            env * beatCfg.burst,
+            resolution.width,
+            resolution.height
+          )
+        )
+      }
       // 全局后期（CanvasFX 管线）：预览 overlay 与导出同函数（核心约束 A）
       if (cfxOn && analyzer) {
         drawCanvasFx(
@@ -325,7 +343,8 @@ export async function encodeVideo(opts: EncodeVideoOptions): Promise<ArrayBuffer
             scanline: cfxCfg.scanline,
             beatFlash: cfxCfg.beatFlash,
             lightLeak: cfxCfg.lightLeak,
-            energy: cfxEnergy
+            energy: cfxEnergy,
+            beatPeriodSec: period
           },
           resolution.width,
           resolution.height

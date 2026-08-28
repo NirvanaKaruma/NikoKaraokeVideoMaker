@@ -393,6 +393,22 @@ export const en = {
       introTitleCard: 'Title card: {v}s',
       outroFade: 'Outro fade out: {v}s',
       note: 'Intro/outro are timeline-based; preview and export stay consistent.'
+    },
+    beatTitle: 'Music response',
+    beat: {
+      bpm: 'BPM (beats per minute)',
+      bpmPlaceholder: 'e.g. 120 (blank = off)',
+      interval: 'Interval (sec / beat)',
+      intervalPlaceholder: 'e.g. 0.5 (blank = off)',
+      note: 'BPM wins when both are set; both accept any positive number (no range limit).',
+      pulse: 'Beat pulse: {v}%',
+      burst: 'Particle burst: {v}%',
+      particlePreset: 'Particle preset',
+      presetSnow: 'Snow',
+      presetSakura: 'Sakura',
+      presetStar: 'Stars',
+      presetBubble: 'Bubbles',
+      particleDensity: 'Particle density: {v}%'
     }
   },
   closeGuard: {
