@@ -115,7 +115,38 @@ export function easeInOutQuad(t: number): number {
   return x < 0.5 ? 2 * x * x : 1 - Math.pow(-2 * x + 2, 2) / 2
 }
 
-/** Ken Burns：慢速缩放平移。返回 [scale, dx, dy]（相对画布中心，scale 1=原尺寸） */
+/** 分带能量按时间窗口平滑（确定性采样：5 点窗口均值；30/60fps 同 t 同值）。
+ * sample = (t) => 分带能量（预览与导出都传「bandEnergiesAt 包装」——与帧率无关）。 */
+export function bandEnergySmoothed(
+  sample: (t: number) => BandEnergies,
+  t: number,
+  band: keyof BandEnergies,
+  windowSec = 0.3
+): number {
+  const steps = 5
+  let sum = 0
+  for (let i = steps - 1; i >= 0; i--) {
+    const tt = Math.max(0, t - (windowSec * (steps - 1 - i)) / (steps - 1))
+    sum += sample(tt)[band]
+  }
+  return sum / steps
+}
+
+/** 能量阶跃（踩点闪光）：band 能量在 windowSec 内的上升量 0–1；纯时刻函数、与帧率无关 */
+export function energyAttack(
+  sample: (t: number) => BandEnergies,
+  t: number,
+  band: keyof BandEnergies = 'bass',
+  windowSec = 0.15
+): number {
+  const now = sample(t)[band]
+  const past = sample(Math.max(0, t - windowSec))[band]
+  return Math.min(1, Math.max(0, now - past))
+}
+
+/** Ken Burns：慢速缩放平移。返回 [scale, dx, dy]（相对画布中心，scale 1=原尺寸）。
+ * 保证 |dx| ≤ (s−1)/2 且 |dy| ≤ (s−1)/2 → 任何时刻缩放后画面仍铺满画布（无露边）。
+ * tSec 同值 → 同值（确定性；30/60fps 导出序列一致）。 */
 export function kenBurns(
   tSec: number,
   seed: number,
@@ -129,8 +160,9 @@ export function kenBurns(
   const dirY = rnd() > 0.5 ? 1 : -1
   const p = tSec / Math.max(durationSec, 0.001)
   const s = 1 + scaleAmp * easeInOutQuad(p)
-  const dx = zx * scaleAmp * dirX * s
-  const dy = zy * scaleAmp * dirY * s
+  const margin = (s - 1) / 2
+  const dx = zx * dirX * margin * 0.85
+  const dy = zy * dirY * margin * 0.85
   return [s, dx, dy]
 }
 

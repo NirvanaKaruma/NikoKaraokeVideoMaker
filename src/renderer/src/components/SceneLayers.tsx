@@ -25,8 +25,19 @@ import {
   type CanvasSize
 } from '@shared/layout'
 import { colorAt } from '@shared/color'
-import { barGeometry, lineHeights, wedgeGeometry } from '@shared/fx'
+import {
+  bandEnergySmoothed,
+  barGeometry,
+  kenBurns,
+  lineHeights,
+  wedgeGeometry,
+  type BandEnergies
+} from '@shared/fx'
+import { bandEnergiesAt, type SpectrumAnalyzer } from '@shared/spectrum'
 import { useLocale } from '../hooks/useLocale'
+
+/** 背景动效种子（确定性；Ken Burns 随时间推进） */
+const SEED_BG_FX = 987654321
 
 /** 可选中元素：主图 / 歌名 / 作者 / 可视化 */
 export type SelectableId = 'mainImage' | 'songTitle' | 'artist' | 'visualizer' | null
@@ -53,6 +64,10 @@ export interface SceneLayersProps {
   barsHandleRef?: { current: ((bars: number[]) => void) | null }
   /** 动效帧时间（秒）：命令式更新随时间变化的元素（flow 相位等） */
   frameTRef?: { current: ((t: number) => void) | null }
+  /** 共享频谱分析器（动效层按时间 t 计算分带能量；预览/导出同一数据源） */
+  analyzer?: SpectrumAnalyzer | null
+  /** 非可视化动效帧分发（背景/主图/文本每帧更新；预览 rAF 与导出逐帧同源） */
+  layerFxRef?: { current: ((t: number) => void) | null }
 }
 
 const SELECT_BORDER = '#ff5f9e'
@@ -74,19 +89,30 @@ function clampPos(
   }
 }
 
-/** 背景层：背景色（透明图合成基底）+ 封面铺满 + 高斯模糊 + 压暗遮罩 */
+/** 背景层：背景色（透明图合成基底）+ 封面铺满 + 高斯模糊 + 压暗遮罩（0.5.0：Ken Burns + bass 呼吸）。
+ * 动效走命令式每帧更新（layerFxSlot）：Ken Burns 应用于缓存组变换（不触发重缓存），
+ * 呼吸用组外叠色 Rect（仅改 opacity，廉价且预览/导出同源）。 */
 function BackgroundLayer({
-  background,
+  layout,
   coverElement,
   bgElement,
-  canvas
+  analyzer,
+  canvas,
+  layerFxSlotRef
 }: {
-  background: ProjectLayout['background']
+  layout: ProjectLayout
   coverElement: HTMLImageElement | null
   bgElement: HTMLImageElement | null
+  /** 共享频谱分析器（0.5.0：bass 呼吸等按 t 采样） */
+  analyzer?: SpectrumAnalyzer | null
   canvas: CanvasSize
+  /** 每帧动效更新槽（SceneLayers 分发 frame(t)）；命名以 Ref 结尾（react-hooks 规范） */
+  layerFxSlotRef?: { current: ((t: number) => void) | null }
 }): React.JSX.Element {
+  const background = layout.background
   const bgRef = useRef<Konva.Group>(null)
+  const breatheBrightRef = useRef<Konva.Rect>(null)
+  const breatheHueRef = useRef<Konva.Rect>(null)
   /** 半分辨率缓存：模糊是低频效果，0.5 倍像素比视觉几乎无差、性能约 4 倍（模糊半径同步缩放） */
   const CACHE_RATIO = 0.5
   const blurRadius = (background.blur / 100) * 60 * CACHE_RATIO
@@ -145,6 +171,53 @@ function BackgroundLayer({
     canvas.height
   ])
 
+  // 每帧动效：Ken Burns（缓存组变换，中心锚定、无露边）+ bass 呼吸（brightness/hue 叠色 opacity）
+  useEffect(() => {
+    if (!layerFxSlotRef) return
+    layerFxSlotRef.current = (t: number): void => {
+      const g = bgRef.current
+      const offsetVis = layout.visualizer.offsetMs > 0 ? layout.visualizer.offsetMs / 1000 : 0
+      const sample = (tt: number): BandEnergies =>
+        bandEnergiesAt(
+          analyzer!,
+          tt + offsetVis,
+          layout.visualizer.barCount,
+          layout.visualizer.sensitivity
+        )
+      const tVis = t + offsetVis
+      // Ken Burns：仅在启用时施加变换；关闭时复位（防切开关后残留）
+      if (background.fx.kenBurns > 0 && g) {
+        const [s, dx, dy] = kenBurns(
+          tVis,
+          SEED_BG_FX,
+          Math.max(1, background.fx.kenBurnsDuration),
+          background.fx.kenBurns * 0.1
+        )
+        g.scale({ x: s, y: s })
+        g.x((canvas.width - canvas.width * s) / 2 + dx * canvas.width)
+        g.y((canvas.height - canvas.height * s) / 2 + dy * canvas.height)
+      } else if (g && g.scaleX() !== 1) {
+        g.scale({ x: 1, y: 1 })
+        g.x(0)
+        g.y(0)
+      }
+      // bass 呼吸：0–0.4s 窗口平滑（灯光随低音起伏）
+      const bassV = analyzer ? bandEnergySmoothed(sample, tVis, 'bass', 0.4) : 0
+      const bright = breatheBrightRef.current
+      if (bright) {
+        bright.opacity(Math.min(1, bassV * background.fx.bassBrightness * 1.4))
+      }
+      const hue = breatheHueRef.current
+      if (hue) {
+        hue.opacity(Math.min(0.7, bassV * background.fx.bassHue * 0.7))
+      }
+      g?.getLayer()?.batchDraw()
+    }
+    return () => {
+      layerFxSlotRef.current = null
+    }
+  }, [layerFxSlotRef, layout.visualizer, background.fx, analyzer, canvas.width, canvas.height])
+
   return (
     <>
       <Group ref={bgRef} filters={showBlur ? [Blur] : []} blurRadius={blurRadius}>
@@ -158,6 +231,27 @@ function BackgroundLayer({
         />
         {cover}
       </Group>
+      <Rect
+        ref={breatheBrightRef}
+        x={0}
+        y={0}
+        width={canvas.width}
+        height={canvas.height}
+        fill="#ffffff"
+        opacity={0}
+        listening={false}
+      />
+      <Rect
+        ref={breatheHueRef}
+        x={0}
+        y={0}
+        width={canvas.width}
+        height={canvas.height}
+        fill="#ff8a3d"
+        globalCompositeOperation="hue"
+        opacity={0}
+        listening={false}
+      />
       {background.dimOpacity > 0 && (
         <Rect
           x={0}
@@ -879,19 +973,40 @@ export function SceneLayers(props: SceneLayersProps): React.JSX.Element {
     canvasSize,
     layers,
     barsHandleRef,
-    frameTRef
+    frameTRef,
+    analyzer,
+    layerFxRef
   } = props
   const canvas = canvasSize ?? { width: LOGICAL_WIDTH, height: LOGICAL_HEIGHT }
   const show = (name: SceneLayerName): boolean => !layers || layers.includes(name)
+  // 非可视化动效每帧分发：SceneLayers 统一注册外部 layerFxRef，
+  // 各子层（背景/主图/文本）写入自己的 slot（getter 惰性读取不回退重绘）。
+  const bgFxSlot = useRef<((t: number) => void) | null>(null)
+  const imgFxSlot = useRef<((t: number) => void) | null>(null)
+  const textFxSlot = useRef<((t: number) => void) | null>(null)
+  useEffect(() => {
+    if (!layerFxRef) return
+    layerFxRef.current = (t: number) => {
+      bgFxSlot.current?.(t)
+      imgFxSlot.current?.(t)
+      textFxSlot.current?.(t)
+    }
+    return () => {
+      layerFxRef.current = null
+    }
+  }, [layerFxRef])
+
   return (
     <>
       {show('background') && (
         <Layer name="background" listening={false}>
           <BackgroundLayer
-            background={layout.background}
+            layout={layout}
             coverElement={coverElement}
             bgElement={bgElement}
+            analyzer={analyzer}
             canvas={canvas}
+            layerFxSlotRef={bgFxSlot}
           />
         </Layer>
       )}

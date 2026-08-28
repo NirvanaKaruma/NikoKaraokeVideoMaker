@@ -1,12 +1,15 @@
 import { describe, expect, it } from 'vitest'
 import {
+  bandEnergySmoothed,
   bandEnergiesFromBars,
   barGeometry,
   easeOutCubic,
+  energyAttack,
   lineHeights,
   seededRng,
   smoothBarsFx,
   wedgeGeometry,
+  type BandEnergies,
   type SmoothFxState
 } from './fx'
 
@@ -102,6 +105,60 @@ describe('fx 时间函数库', () => {
     for (const v of lineHeights('flow', [0, 0, 0], 0, 0, 1)) expect(v).toBe(0)
     // 时间推进 → 相位变化（光带流动）
     expect(lineHeights('flow', bars, 0)).not.toEqual(lineHeights('flow', bars, 1.0))
+  })
+
+  it('bandEnergySmoothed：窗口均值确定性——同 t 同值、连续、帧率无关', () => {
+    const sample = (tt: number): BandEnergies => ({
+      bass: 0.4 * tt,
+      lowMid: 0,
+      mid: 0,
+      treble: 0
+    })
+    // 窗口 [t-0.3, t] 内 5 点均值 = 中点值（线性函数）
+    expect(bandEnergySmoothed(sample, 1.5, 'bass', 0.3)).toBeCloseTo(0.4 * 1.35, 5)
+    // 确定性/帧率无关：30fps 与 60fps 网格在同一时刻 t 上调用得到完全相同结果
+    const a = bandEnergySmoothed(sample, 1.23, 'bass', 0.3)
+    const b = bandEnergySmoothed(sample, 1.23, 'bass', 0.3)
+    expect(a).toBe(b)
+    // 连续性：t 微小变化 → 值微小变化
+    const v1 = bandEnergySmoothed(sample, 1.5, 'bass', 0.3)
+    const v2 = bandEnergySmoothed(sample, 1.51, 'bass', 0.3)
+    expect(Math.abs(v2 - v1)).toBeLessThan(0.05)
+    // t<window 截断到 0（不越界）
+    expect(bandEnergySmoothed(sample, 0.1, 'bass', 0.3)).toBeGreaterThanOrEqual(0)
+  })
+
+  it('energyAttack：阶跃上升>0、平稳=0、下降=0、上限 1', () => {
+    const step = (tt: number): BandEnergies => ({
+      bass: tt >= 1 ? 1 : 0,
+      lowMid: 0,
+      mid: 0,
+      treble: 0
+    })
+    // 刚跨过阶跃（now=1.0>past=0）→ 触发 1
+    expect(energyAttack(step, 1.05, 'bass', 0.15)).toBeCloseTo(1, 6)
+    // 尚未到达阶跃 → 0；已稳定在 1 → 0（无新阶跃）
+    expect(energyAttack(step, 0.95, 'bass', 0.15)).toBe(0)
+    expect(energyAttack(step, 2.0, 'bass', 0.15)).toBe(0)
+    // 平稳高能量（鼓点长音，忽略时刻）→ 0（不会假触发）
+    const flat = (): BandEnergies => ({ bass: 0.8, lowMid: 0, mid: 0, treble: 0 })
+    expect(energyAttack(flat, 1.0, 'bass', 0.15)).toBe(0)
+    // 线性上升：攻击量 = 斜率×窗口（0.15s × 1.0/s）
+    const ramp = (tt: number): BandEnergies => ({
+      bass: Math.min(1, tt),
+      lowMid: 0,
+      mid: 0,
+      treble: 0
+    })
+    expect(energyAttack(ramp, 0.6, 'bass', 0.15)).toBeCloseTo(0.15, 6)
+    // 钳制上限 1
+    const jump = (tt: number): BandEnergies => ({
+      bass: tt > 0 ? 1 : 0,
+      lowMid: 0,
+      mid: 0,
+      treble: 0
+    })
+    expect(energyAttack(jump, 0.1, 'bass', 0.15)).toBe(1)
   })
 
   it('wedgeGeometry：radial 楔形 4 顶点 8 数值，弧长随半径增长均匀', () => {

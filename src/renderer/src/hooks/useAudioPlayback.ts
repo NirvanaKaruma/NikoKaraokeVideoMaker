@@ -39,7 +39,9 @@ export function useAudioPlayback(
   /** 播放中走命令式更新（绕过 React 每帧重渲染）；缺省回退 setBars */
   barsSink?: { current: ((bars: number[]) => void) | null },
   /** 播放中同步帧时间（动效：flow 相位等） */
-  frameTSink?: { current: ((t: number) => void) | null }
+  frameTSink?: { current: ((t: number) => void) | null },
+  /** 播放中同步帧时间（动效：背景/主图/文本层每帧更新） */
+  layerFxSink?: { current: ((t: number) => void) | null }
 ): PlaybackApi {
   const ctxRef = useRef<AudioContext | null>(null)
   const bufferRef = useRef<AudioBuffer | null>(null)
@@ -54,6 +56,7 @@ export function useAudioPlayback(
   const configRef = useRef(config)
   const sinkRef = useRef(barsSink)
   const frameTSinkRef = useRef(frameTSink)
+  const layerFxSinkRef = useRef(layerFxSink)
 
   useEffect(() => {
     sinkRef.current = barsSink
@@ -62,6 +65,10 @@ export function useAudioPlayback(
   useEffect(() => {
     frameTSinkRef.current = frameTSink
   }, [frameTSink])
+
+  useEffect(() => {
+    layerFxSinkRef.current = layerFxSink
+  }, [layerFxSink])
 
   const [status, setStatus] = useState<AudioStatus>('empty')
   const [error, setError] = useState<string | null>(null)
@@ -225,6 +232,7 @@ export function useAudioPlayback(
     // 避免后续声明式重渲染回退到旧值（flow 相位与暂停点一致，防突变）
     if (lastBarsRef.current) setBars(Array.from(lastBarsRef.current))
     frameTSinkRef.current?.current?.(offsetRef.current)
+    layerFxSinkRef.current?.current?.(offsetRef.current)
   }, [])
 
   const seek = useCallback(
@@ -243,8 +251,9 @@ export function useAudioPlayback(
       }
       offsetRef.current = clamped
       setCurrentTime(clamped)
-      // 同步可视化帧时间（flow 相位跟随 seek 后时间轴，避免突变）
+      // 同步可视化帧时间（flow 相位/动效跟随 seek 后时间轴，避免突变）
       frameTSinkRef.current?.current?.(clamped)
+      layerFxSinkRef.current?.current?.(clamped)
       computeBars(clamped, true)
     },
     [computeBars, startSource]
@@ -262,6 +271,7 @@ export function useAudioPlayback(
       setCurrentTime(Math.min(t, dur))
       computeBars(t, false)
       frameTSinkRef.current?.current?.(t)
+      layerFxSinkRef.current?.current?.(t)
       raf = requestAnimationFrame(tick)
     }
     raf = requestAnimationFrame(tick)

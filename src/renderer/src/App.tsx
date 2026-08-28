@@ -592,11 +592,13 @@ function App(): React.JSX.Element {
   }, [project])
   const barsHandleRef = useRef<((bars: number[]) => void) | null>(null)
   const frameTRef = useRef<((t: number) => void) | null>(null)
+  const layerFxRef = useRef<((t: number) => void) | null>(null)
   const pb = useAudioPlayback(
     project.assets.audioFile,
     project.layout.visualizer,
     barsHandleRef,
-    frameTRef
+    frameTRef,
+    layerFxRef
   )
   const pbRef = useRef<PlaybackApi>(pb)
 
@@ -1096,6 +1098,8 @@ function App(): React.JSX.Element {
             bars={pb.bars}
             barsHandleRef={barsHandleRef}
             frameTRef={frameTRef}
+            analyzer={pb.analyzer}
+            layerFxRef={layerFxRef}
             onStageReady={(s) => {
               stageRef.current = s
             }}
@@ -1136,6 +1140,7 @@ function App(): React.JSX.Element {
           layout={project.layout}
           coverElement={project.assets.coverElement}
           bgElement={project.assets.bgElement}
+          analyzer={pb.analyzer}
           width={exporter.stageRequest.width}
           height={exporter.stageRequest.height}
           onReady={exporter.onStageReady}

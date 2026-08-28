@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react'
 import { Stage } from 'react-konva'
 import type Konva from 'konva'
 import type { ProjectLayout } from '@shared/layout'
+import type { SpectrumAnalyzer } from '@shared/spectrum'
 import { SceneLayers } from './SceneLayers'
 
 export interface ExportStageHandle {
@@ -19,21 +20,27 @@ interface ExportStageHostProps {
   layout: ProjectLayout
   coverElement: HTMLImageElement | null
   bgElement: HTMLImageElement | null
+  /** 共享频谱分析器（动效层按 t 计算分带能量） */
+  analyzer?: SpectrumAnalyzer | null
   width: number
   height: number
   onReady: (handle: ExportStageHandle) => void
 }
+
+/** 导出场景内部动效分发（setFrame 驱动；与预览的 layerFxRef 相互独立） */
+export type LayerFxRef = { current: ((t: number) => void) | null }
 
 /**
  * 导出用隐藏舞台（离屏）：静态层与可视化层拆成两个 Stage，
  * 每帧 = 静态画布 + setBars 后的可视化画布。复用 SceneLayers（核心约束 A）。
  */
 export function ExportStageHost(props: ExportStageHostProps): React.JSX.Element {
-  const { layout, coverElement, bgElement, width, height, onReady } = props
+  const { layout, coverElement, bgElement, analyzer, width, height, onReady } = props
   const staticRef = useRef<Konva.Stage>(null)
   const vizRef = useRef<Konva.Stage>(null)
   const barsHandleRef = useRef<((bars: number[]) => void) | null>(null)
   const frameTHandleRef = useRef<((t: number) => void) | null>(null)
+  const layerFxHandleRef = useRef<((t: number) => void) | null>(null)
 
   useEffect(() => {
     // 等 Konva 挂载 + 背景模糊缓存完成后交付句柄
@@ -45,7 +52,10 @@ export function ExportStageHost(props: ExportStageHostProps): React.JSX.Element 
         onReady({
           renderStatic: () => s.toCanvas({ pixelRatio: 1 }),
           setBars: (bars) => barsHandleRef.current?.(bars),
-          setFrame: (t) => frameTHandleRef.current?.(t),
+          setFrame: (t) => {
+            layerFxHandleRef.current?.(t)
+            frameTHandleRef.current?.(t)
+          },
           renderViz: () => v.toCanvas({ pixelRatio: 1 })
         })
       }
@@ -77,8 +87,10 @@ export function ExportStageHost(props: ExportStageHostProps): React.JSX.Element 
           onTextRectChange={noop}
           onVisualizerRectChange={noop}
           bars={[]}
+          analyzer={analyzer}
           canvasSize={{ width, height }}
           layers={['background', 'main', 'text']}
+          layerFxRef={layerFxHandleRef}
         />
       </Stage>
       <Stage ref={vizRef} width={width} height={height}>
@@ -92,6 +104,7 @@ export function ExportStageHost(props: ExportStageHostProps): React.JSX.Element 
           onTextRectChange={noop}
           onVisualizerRectChange={noop}
           bars={Array(layout.visualizer.barCount).fill(0)}
+          analyzer={analyzer}
           canvasSize={{ width, height }}
           layers={['visualizer']}
           barsHandleRef={barsHandleRef}

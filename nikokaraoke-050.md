@@ -10,8 +10,8 @@
 ## 任务列表
 
 - [x] T1: 动效数据模型 + 版本号 0.5.0——layout.ts 新增 BackgroundFx/MainImageFx/TextEntryFx/CanvasFxConfig/IntroOutroConfig（全默认关闭，缺省=0.4.0 行为）；layout.test 更新；i18n 三语骨架
-- [ ] T2: 能量总线接线——bandEnergies 随 frameT 通道下发（预览 rAF 与导出逐帧同函数：bandEnergiesFromBars(原始频谱)），供 bass 呼吸/踩点闪光消费；单测连续性
-- [ ] T3: 背景特效——Ken Burns（fx.ts 已有 kenBurns 纯函数：慢速缩放平移）+ bass 呼吸（亮度/色相），SceneLayers BackgroundLayer 同源绘制
+- [x] T2: 能量总线接线——bandEnergies 随 frameT 通道下发（预览 rAF 与导出逐帧同函数：bandEnergiesFromBars(原始频谱)），供 bass 呼吸/踩点闪光消费；单测连续性
+- [x] T3: 背景特效——Ken Burns（fx.ts 已有 kenBurns 纯函数：慢速缩放平移）+ bass 呼吸（亮度/色相），SceneLayers BackgroundLayer 同源绘制
 - [ ] T4: 主图特效——呼吸缩放 / 微旋转 / 发光脉冲 / 形状遮罩（圆·星形 Clip）/ 边框装饰，MainImageLayer 同源
 - [ ] T5: 文本入场动画——淡入 / 滑入 / 打字机 / 逐字弹跳（TextLayerConfig.entry，TextNode 时间参数），预览/导出同函数
 - [ ] T6: CanvasFX 管线——src/shared/canvasfx.ts 纯函数 (ctx, tSec, params, W, H)：暗角/胶片颗粒/扫描线/踩点闪光/光斑·漏光（内置资源 + globalCompositeOperation）；时间种子确定性（30/60fps 同 tSec 同输出）
@@ -24,4 +24,6 @@
 
 ## 执行记录
 
-（开始执行后本段记录结果）
+- T1（fd4d4da）：动效数据模型——BackgroundFx/ImageFx/TextEntry/CanvasFx/IntroOutro 全默认关闭 + 版本号 0.5.0 + i18n 三语（fx 组）；layout.test 新增"动效默认关闭"回归（默认行为=0.4.0）。
+- T2：能量总线——fx.ts 新增 bandEnergySmoothed（0.4s 窗口 5 点均值，确定性）与 energyAttack（bass 阶跃 0–1）；analyzer 贯穿 CanvasStage/ExportStageHost → SceneLayers（动效层按 t 采样分带能量）；新增 2 组单测（窗口均值确定性/连续性、阶跃触发/平稳不触发/上限 1）；42 测试全绿。
+- T3：背景特效——kenBurns 改为"无露边"契约（|dx|≤(s−1)/2，覆盖保证）；BackgroundLayer 接 layout+layerFxSlotRef：Ken Burns 缓存组变换（不触发重缓存）、bass 呼吸=白亮+暖色 hue 叠色（仅 opacity）；层动效分发通道 layerFxRef（预览 rAF 与导出 setFrame 双源，导出内独立句柄）；默认全关 → smoke-visual 像素校验与 0.4.0 一致。
