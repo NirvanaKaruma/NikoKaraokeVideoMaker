@@ -51,12 +51,56 @@ export interface BackgroundConfig {
   blur: number
   /** 压暗不透明度 0–1 */
   dimOpacity: number
+  /** 背景动效（0.5.0，默认全关） */
+  fx: BackgroundFxConfig
+}
+
+/** 背景动效（0.5.0） */
+export interface BackgroundFxConfig {
+  /** Ken Burns 慢速缩放平移幅度 0–1（0=关；常用 0.02–0.1） */
+  kenBurns: number
+  /** Ken Burns 单程周期秒（越大越慢；默认 30） */
+  kenBurnsDuration: number
+  /** 随 bass 呼吸的亮度 0–1（0=关；正=随低音变亮） */
+  bassBrightness: number
+  /** 随 bass 呼吸的色相偏移 0–1（0=关；±强度×20°） */
+  bassHue: number
 }
 
 export interface MainImageConfig {
   rect: NormRect
   /** contain=等比适配留透明边（默认，永不变形）/ cover=等比铺满裁切 / stretch=拉伸填满（可能变形） */
   fillMode: 'contain' | 'cover' | 'stretch'
+  /** 主图动效（0.5.0，默认全关） */
+  fx: ImageFxConfig
+}
+
+/** 主图动效（0.5.0） */
+export interface ImageFxConfig {
+  /** 呼吸缩放 0–1（0=关；幅度 = 强度×4% 缩放） */
+  breathe: number
+  /** 呼吸周期秒（默认 4） */
+  breathePeriod: number
+  /** 微旋转幅度（度；0=关；缓慢往复 ±rotateDeg） */
+  rotateDeg: number
+  /** 发光脉冲 0–1（0=关；0–1 强度） */
+  glowPulse: number
+  /** 形状遮罩：none=关 | circle=圆形 | star=星形 */
+  mask: 'none' | 'circle' | 'star'
+  /** 边框装饰线宽（相对画布高 0–1；0=关） */
+  border: number
+  /** 边框颜色 */
+  borderColor: string
+}
+
+/** 文本入场动画（0.5.0） */
+export interface TextEntryConfig {
+  /** none=无（默认，连续显示）| fade=淡入 | slide=滑入 | typewriter=打字机 | bounce=逐字弹跳 */
+  type: 'none' | 'fade' | 'slide' | 'typewriter' | 'bounce'
+  /** 动画时长秒（0.3–5；默认 1.2） */
+  durationSec: number
+  /** 相对播放起点的延迟秒（默认 0） */
+  delaySec: number
 }
 
 /** 可视化形态：bars=柱形（默认，历史行为）；radial/wave/area/dots/flow=可选形态（0.4.0） */
@@ -103,6 +147,32 @@ export interface TextLayerConfig {
   text: string
   style: TextStyle
   rect: NormRect
+  /** 入场动画（0.5.0，默认 none） */
+  entry: TextEntryConfig
+}
+
+/** 全局后期（CanvasFX 管线，0.5.0，默认全关） */
+export interface CanvasFxConfig {
+  /** 暗角 0–1（0=关） */
+  vignette: number
+  /** 胶片颗粒 0–1（0=关；时间种子确定性） */
+  grain: number
+  /** 扫描线 0–1（0=关；透明度） */
+  scanline: number
+  /** 踩点闪光 0–1（0=关；bass 能量阶跃触发白闪） */
+  beatFlash: number
+  /** 光斑/漏光 0–1（0=关；内置素材 + globalCompositeOperation 叠加） */
+  lightLeak: number
+}
+
+/** 片头/片尾（0.5.0，默认全关） */
+export interface IntroOutroConfig {
+  /** 片头黑场淡入时长秒（0=关） */
+  introFade: number
+  /** 片头标题卡展示秒（0=关；淡入后叠加，复用歌名/作者样式居中） */
+  introTitleCard: number
+  /** 片尾淡出时长秒（0=关） */
+  outroFade: number
 }
 
 /** 可选分辨率（16:9）；未来扩展其他比例 = 在数组里加项即可 */
@@ -137,6 +207,10 @@ export interface ProjectLayout {
     artist: TextLayerConfig
   }
   visualizer: VisualizerConfig
+  /** 全局后期叠加（0.5.0） */
+  canvasFx: CanvasFxConfig
+  /** 片头/片尾（0.5.0） */
+  introOutro: IntroOutroConfig
   export: ExportConfig
 }
 
@@ -156,13 +230,23 @@ export const DEFAULT_LAYOUT: ProjectLayout = {
     imageSource: 'cover',
     color: '#ffffff',
     blur: 25,
-    dimOpacity: 0.3
+    dimOpacity: 0.3,
+    fx: { kenBurns: 0, kenBurnsDuration: 30, bassBrightness: 0, bassHue: 0 }
   },
   mainImage: {
     // 主图：左侧、垂直居中、高度≈画布 90%、宽≈画布 40%（用户目视反馈：整体上移 2%）
     rect: { x: 0.04, y: 0.03, w: 0.38, h: 0.9 },
     // 用户确认：等比适配，图片完整显示、永不变形（矩形内留透明边）
-    fillMode: 'contain'
+    fillMode: 'contain',
+    fx: {
+      breathe: 0,
+      breathePeriod: 4,
+      rotateDeg: 0,
+      glowPulse: 0,
+      mask: 'none',
+      border: 0,
+      borderColor: '#ffffff'
+    }
   },
   texts: {
     songTitle: {
@@ -180,7 +264,8 @@ export const DEFAULT_LAYOUT: ProjectLayout = {
         align: 'left'
       },
       // §4：x≈54%、y≈15%（用户目视反馈后上移至 13%）
-      rect: { x: 0.54, y: 0.13, w: 0.4, h: 0.12 }
+      rect: { x: 0.54, y: 0.13, w: 0.4, h: 0.12 },
+      entry: { type: 'none', durationSec: 1.2, delaySec: 0 }
     },
     artist: {
       text: '作者',
@@ -197,7 +282,8 @@ export const DEFAULT_LAYOUT: ProjectLayout = {
         align: 'left'
       },
       // §4：作者在歌名下方，y≈26%（上移后 24.5%）
-      rect: { x: 0.54, y: 0.245, w: 0.4, h: 0.07 }
+      rect: { x: 0.54, y: 0.245, w: 0.4, h: 0.07 },
+      entry: { type: 'none', durationSec: 1.2, delaySec: 0 }
     }
   },
   visualizer: {
@@ -221,6 +307,8 @@ export const DEFAULT_LAYOUT: ProjectLayout = {
     offsetMs: 0,
     flowWave: 0.7
   },
+  canvasFx: { vignette: 0, grain: 0, scanline: 0, beatFlash: 0, lightLeak: 0 },
+  introOutro: { introFade: 0, introTitleCard: 0, outroFade: 0 },
   export: {
     resolutionId: '1080p',
     fps: 30

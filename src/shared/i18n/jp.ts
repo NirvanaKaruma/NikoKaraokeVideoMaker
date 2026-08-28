@@ -351,6 +351,54 @@ export const jp = {
     openProject: 'プロジェクトを開く',
     projectFilter: 'NikoKaraokeVideoMaker プロジェクト'
   },
+  fx: {
+    bgTitle: '背景エフェクト',
+    imgTitle: '画像エフェクト',
+    entryTitle: 'テキスト登場',
+    canvasTitle: '全体ポストFX',
+    introTitle: 'イントロ / アウトロ',
+    bg: {
+      kenBurns: 'Ken Burns ストローク：{v}%',
+      kenBurnsDuration: 'Ken Burns 周期：{v}s',
+      bassBrightness: '低音ブレス明るさ：{v}%',
+      bassHue: '低音ブレス色相：{v}%'
+    },
+    img: {
+      breathe: 'ブレススケール：{v}%',
+      breathePeriod: 'ブレス周期：{v}s',
+      rotateDeg: 'マイクロ回転：{v}°',
+      glowPulse: 'グローパルス：{v}%',
+      mask: 'シェイプマスク',
+      maskNone: 'なし',
+      maskCircle: '円',
+      maskStar: '星',
+      border: 'ボーダー幅：{v}%',
+      borderColor: 'ボーダー色'
+    },
+    entry: {
+      none: 'なし',
+      fade: 'フェードイン',
+      slide: 'スライドイン',
+      typewriter: 'タイプライター',
+      bounce: '文字ごとバウンド',
+      durationSec: '長さ：{v}s',
+      delaySec: '遅延：{v}s'
+    },
+    canvas: {
+      vignette: 'ビネット：{v}%',
+      grain: 'フィルムグレイン：{v}%',
+      scanline: 'スキャンライン：{v}%',
+      beatFlash: 'ビートフラッシュ：{v}%',
+      lightLeak: 'ライトリーク：{v}%',
+      note: 'ビートフラッシュは低音エネルギーの立ち上がりで発火します（本格的なビート検出は 0.6.0）。'
+    },
+    introOutro: {
+      introFade: 'イントロ黒フェード：{v}s',
+      introTitleCard: 'タイトルカード：{v}s',
+      outroFade: 'アウトロフェード：{v}s',
+      note: 'イントロ/アウトロはタイムライン基準で、プレビューと書き出しが一致します。'
+    }
+  },
   closeGuard: {
     title: 'プロジェクトに未保存の変更があります',
     detail: '保存してから終了しますか？',

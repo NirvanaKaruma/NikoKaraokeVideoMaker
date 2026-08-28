@@ -346,6 +346,54 @@ export const en = {
     openProject: 'Open Project',
     projectFilter: 'NikoKaraokeVideoMaker project'
   },
+  fx: {
+    bgTitle: 'Background effects',
+    imgTitle: 'Image effects',
+    entryTitle: 'Text entry',
+    canvasTitle: 'Post FX',
+    introTitle: 'Intro / Outro',
+    bg: {
+      kenBurns: 'Ken Burns stroke: {v}%',
+      kenBurnsDuration: 'Ken Burns cycle: {v}s',
+      bassBrightness: 'Bass breathe brightness: {v}%',
+      bassHue: 'Bass breathe hue: {v}%'
+    },
+    img: {
+      breathe: 'Breathe scale: {v}%',
+      breathePeriod: 'Breathe period: {v}s',
+      rotateDeg: 'Micro rotation: {v}°',
+      glowPulse: 'Glow pulse: {v}%',
+      mask: 'Shape mask',
+      maskNone: 'None',
+      maskCircle: 'Circle',
+      maskStar: 'Star',
+      border: 'Border width: {v}%',
+      borderColor: 'Border color'
+    },
+    entry: {
+      none: 'None',
+      fade: 'Fade in',
+      slide: 'Slide in',
+      typewriter: 'Typewriter',
+      bounce: 'Bounce per char',
+      durationSec: 'Duration: {v}s',
+      delaySec: 'Delay: {v}s'
+    },
+    canvas: {
+      vignette: 'Vignette: {v}%',
+      grain: 'Film grain: {v}%',
+      scanline: 'Scanlines: {v}%',
+      beatFlash: 'Beat flash: {v}%',
+      lightLeak: 'Light leak: {v}%',
+      note: 'Beat flash is triggered by bass energy jumps (full beat detection lands in 0.6.0).'
+    },
+    introOutro: {
+      introFade: 'Intro fade from black: {v}s',
+      introTitleCard: 'Title card: {v}s',
+      outroFade: 'Outro fade out: {v}s',
+      note: 'Intro/outro are timeline-based; preview and export stay consistent.'
+    }
+  },
   closeGuard: {
     title: 'Project has unsaved changes',
     detail: 'Save before exiting?',

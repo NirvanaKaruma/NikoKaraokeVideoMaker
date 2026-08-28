@@ -62,6 +62,29 @@ describe('归一化布局模型', () => {
     expect(DEFAULT_LAYOUT.mainImage.fillMode).toBe('contain')
   })
 
+  it('0.5.0 动效全部默认关闭（默认行为与 0.4.0 一致）', () => {
+    const bg = DEFAULT_LAYOUT.background.fx
+    expect(bg.kenBurns).toBe(0)
+    expect(bg.bassBrightness).toBe(0)
+    expect(bg.bassHue).toBe(0)
+    const img = DEFAULT_LAYOUT.mainImage.fx
+    expect(img.breathe).toBe(0)
+    expect(img.rotateDeg).toBe(0)
+    expect(img.glowPulse).toBe(0)
+    expect(img.mask).toBe('none')
+    expect(img.border).toBe(0)
+    expect(DEFAULT_LAYOUT.texts.songTitle.entry.type).toBe('none')
+    expect(DEFAULT_LAYOUT.texts.artist.entry.type).toBe('none')
+    expect(DEFAULT_LAYOUT.canvasFx.vignette).toBe(0)
+    expect(DEFAULT_LAYOUT.canvasFx.grain).toBe(0)
+    expect(DEFAULT_LAYOUT.canvasFx.scanline).toBe(0)
+    expect(DEFAULT_LAYOUT.canvasFx.beatFlash).toBe(0)
+    expect(DEFAULT_LAYOUT.canvasFx.lightLeak).toBe(0)
+    expect(DEFAULT_LAYOUT.introOutro.introFade).toBe(0)
+    expect(DEFAULT_LAYOUT.introOutro.introTitleCard).toBe(0)
+    expect(DEFAULT_LAYOUT.introOutro.outroFade).toBe(0)
+  })
+
   it('主图默认高≈90%、宽≈40%，左侧垂直居中（上移后 y=3%）', () => {
     const r = DEFAULT_LAYOUT.mainImage.rect
     expect(r.h).toBeCloseTo(0.9, 5)

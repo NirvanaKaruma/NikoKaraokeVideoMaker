@@ -326,6 +326,54 @@ export const zhCn = {
     openProject: '打开项目',
     projectFilter: 'NikoKaraokeVideoMaker 项目'
   },
+  fx: {
+    bgTitle: '背景动效',
+    imgTitle: '主图动效',
+    entryTitle: '文本入场',
+    canvasTitle: '全局后期',
+    introTitle: '片头 / 片尾',
+    bg: {
+      kenBurns: 'Ken Burns 幅度：{v}%',
+      kenBurnsDuration: 'Ken Burns 周期：{v}s',
+      bassBrightness: '低音呼吸亮度：{v}%',
+      bassHue: '低音呼吸色相：{v}%'
+    },
+    img: {
+      breathe: '呼吸缩放：{v}%',
+      breathePeriod: '呼吸周期：{v}s',
+      rotateDeg: '微旋转：{v}°',
+      glowPulse: '发光脉冲：{v}%',
+      mask: '形状遮罩',
+      maskNone: '无',
+      maskCircle: '圆形',
+      maskStar: '星形',
+      border: '边框线宽：{v}%',
+      borderColor: '边框颜色'
+    },
+    entry: {
+      none: '无',
+      fade: '淡入',
+      slide: '滑入',
+      typewriter: '打字机',
+      bounce: '逐字弹跳',
+      durationSec: '时长：{v}s',
+      delaySec: '延迟：{v}s'
+    },
+    canvas: {
+      vignette: '暗角：{v}%',
+      grain: '胶片颗粒：{v}%',
+      scanline: '扫描线：{v}%',
+      beatFlash: '踩点闪光：{v}%',
+      lightLeak: '光斑 / 漏光：{v}%',
+      note: '踩点闪光由低音能量跃升触发（完整节拍检测在 0.6.0）。'
+    },
+    introOutro: {
+      introFade: '片头黑场淡入：{v}s',
+      introTitleCard: '标题卡展示：{v}s',
+      outroFade: '片尾淡出：{v}s',
+      note: '片头/片尾按时间轴计算，预览与导出一致。'
+    }
+  },
   closeGuard: {
     title: '项目有未保存的修改',
     detail: '是否保存后退出？',
