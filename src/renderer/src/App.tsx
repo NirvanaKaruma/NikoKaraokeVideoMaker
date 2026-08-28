@@ -425,34 +425,46 @@ async function runAudioSmoke(
   // 回归：播放中 seek 不得被旧音源 onended 误判为播完（曾跳到结尾并停止）
   pbRef.current.seek(0.2)
   pbRef.current.play()
-  // 起播等待：AudioContext resume 偶发延迟 0.5–2s，条件轮询直到 currentTime 前进（最多 2s）
+  // 起播等待：AudioContext resume 偶发延迟 0.5–2s；条件轮询直到"正在播放且时间前进"（最多 2.5s），
+  // 期间若掉出播放态则重试一次播放
+  let bootOk = false
   const bootStart = Date.now()
-  while (pbRef.current.currentTime < 0.01 && Date.now() - bootStart < 2000) {
-    await sleep(100)
-    if (pbRef.current.currentTime < 0.01 && !pbRef.current.isPlaying) {
-      pbRef.current.seek(0.2)
-      pbRef.current.play()
+  while (Date.now() - bootStart < 2500) {
+    await sleep(120)
+    const pbNow = pbRef.current
+    if (pbNow.isPlaying && pbNow.currentTime > 0.01) {
+      bootOk = true
+      break
+    }
+    if (!pbNow.isPlaying && pbNow.currentTime < 0.01) {
+      pbNow.seek(0.2)
+      pbNow.play()
     }
   }
   const tBeforeSeek = pbRef.current.currentTime
-  pbRef.current.seek(1.1)
-  await sleep(400)
-  const tAfterSeek = pbRef.current.currentTime
-  const stillPlaying = pbRef.current.isPlaying
-  pbRef.current.pause()
-  if (stillPlaying && tAfterSeek >= 1.05 && tAfterSeek < 1.6) {
-    pass('播放中 seek 不中断', 'seek 后继续播放，currentTime=' + tAfterSeek.toFixed(2) + 's')
+  if (bootOk) {
+    pbRef.current.seek(1.1)
+    await sleep(400)
+    const tAfterSeek = pbRef.current.currentTime
+    const stillPlaying = pbRef.current.isPlaying
+    pbRef.current.pause()
+    if (stillPlaying && tAfterSeek >= 1.05 && tAfterSeek < 1.6) {
+      pass('播放中 seek 不中断', 'seek 后继续播放，currentTime=' + tAfterSeek.toFixed(2) + 's')
+    } else {
+      fail(
+        '播放中 seek 不中断',
+        'isPlaying=' +
+          stillPlaying +
+          ' currentTime=' +
+          tAfterSeek.toFixed(2) +
+          's（seek 前 ' +
+          tBeforeSeek.toFixed(2) +
+          's）'
+      )
+    }
   } else {
-    fail(
-      '播放中 seek 不中断',
-      'isPlaying=' +
-        stillPlaying +
-        ' currentTime=' +
-        tAfterSeek.toFixed(2) +
-        's（seek 前 ' +
-        tBeforeSeek.toFixed(2) +
-        's）'
-    )
+    pbRef.current.pause()
+    fail('播放中 seek 不中断', '音频起播失败（AudioContext resume 超时）')
   }
 
   return { ok: checks.every((c) => c.pass), checks }

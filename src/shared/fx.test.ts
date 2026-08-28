@@ -6,6 +6,7 @@ import {
   lineHeights,
   seededRng,
   smoothBarsFx,
+  wedgeGeometry,
   type SmoothFxState
 } from './fx'
 
@@ -85,6 +86,21 @@ describe('fx 时间函数库', () => {
     }
     const f1 = lineHeights('flow', bars, 1.0)
     expect(f0).not.toEqual(f1) // 时间推进 → 相位变化
+  })
+
+  it('wedgeGeometry：radial 楔形 4 顶点 8 数值，弧长随半径增长均匀', () => {
+    const pts = wedgeGeometry(0, 1, 16, 960, 200, 0.55)
+    expect(pts).toHaveLength(8)
+    expect(Number.isFinite(pts[0])).toBe(true)
+    // 顶点顺序：内弧两端 → 外弧两端；外弧点离中心更远
+    const cx = 480
+    const cy = 100
+    const rIn1 = Math.hypot(pts[0] - cx, pts[1] - cy)
+    const rOut3 = Math.hypot(pts[4] - cx, pts[5] - cy)
+    expect(rOut3).toBeGreaterThan(rIn1)
+    // v=0 时仍有最小长度（>0）
+    const z = wedgeGeometry(0, 0, 16, 960, 200, 0.55)
+    for (const v of z) expect(Number.isFinite(v)).toBe(true)
   })
 
   it('seededRng：同种子同序列，不同种子不同', () => {

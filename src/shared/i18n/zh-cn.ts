@@ -128,7 +128,7 @@ export const zhCn = {
     styleBars: '柱形（默认）',
     styleRadial: '径向环形',
     styleWave: '示波器曲线',
-    styleArea: '面积渐变',
+    styleArea: '连续面积',
     styleDots: '点阵',
     styleFlow: '流动光带',
     attack: '上升速度：{v}%',

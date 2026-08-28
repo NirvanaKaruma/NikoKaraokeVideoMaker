@@ -147,7 +147,7 @@ export interface BarGeometry {
 
 export type VizStyle = 'bars' | 'radial' | 'wave' | 'area' | 'dots' | 'flow'
 
-/** 柱形与径向环形共用的矩形几何；wave/area/flow 为连续折线（linePoints），dots 为点阵（点几何在组件内） */
+/** 柱形（矩形几何）；radial 为楔形（wedgeGeometry）；wave/area/flow 为连续折线；dots 为点阵 */
 export function barGeometry(
   style: VizStyle,
   i: number,
@@ -165,46 +165,62 @@ export function barGeometry(
   const maxH = pxH * heightRatio
   const h = Math.max(4, v0 * maxH)
 
-  switch (style) {
-    case 'bars': {
-      // 柱形（默认）：底部向上（0.3.0 历史几何，保持逐像素一致）
-      return {
-        x: i * slotW + (slotW - barW) / 2,
-        y: pxH - h,
-        w: barW,
-        h,
-        rotation: 0
-      }
-    }
-    case 'radial': {
-      // 径向环形：柱绕区域中心放射（柱长=len，柱厚=barW）。
-      // Konva Rect.x/y 为左上角、rotation 绕中心——先算中心再回推左上角。
-      const cx = pxW / 2
-      const cy = pxH / 2
-      const angle = (i / n) * 360 - 90
-      const innerR = Math.min(pxW, pxH) * 0.18
-      const len = Math.max(4, v0 * (Math.min(pxW, pxH) / 2 - innerR))
-      const rad = (angle * Math.PI) / 180
-      const midR = innerR + len / 2
-      const midX = cx + Math.cos(rad) * midR
-      const midY = cy + Math.sin(rad) * midR
-      return {
-        x: midX - len / 2,
-        y: midY - barW / 2,
-        w: len,
-        h: barW,
-        rotation: angle
-      }
-    }
-    default:
-      return { x: 0, y: pxH - h, w: barW, h, rotation: 0 }
+  // 柱形（默认）：底部向上（0.3.0 历史几何，保持逐像素一致）
+  const w = style === 'area' ? slotW : barW
+  const x = style === 'area' ? i * slotW : i * slotW + (slotW - barW) / 2
+  return {
+    x,
+    y: pxH - h,
+    w,
+    h,
+    rotation: 0
   }
 }
 
-/** 折线形态的归一化控制点（wave=原始、area=带亮度轴、flow=随时间流动的相位叠加）。
- * 返回 0–1 的列高度数组；组件负责换算像素。
+/** 径向环形楔形（扇形柱）顶点：弧长随半径增长，柱宽（角度）固定 → 疏密均匀。
+ * 返回 8 个数值（x, y ×4）：内弧两端 + 外弧两端（闭合多边形）。 */
+export function wedgeGeometry(
+  i: number,
+  v: number,
+  n: number,
+  pxW: number,
+  pxH: number,
+  barWidthRatio: number
+): number[] {
+  const v0 = Math.min(Math.max(v, 0), 1)
+  const cx = pxW / 2
+  const cy = pxH / 2
+  const maxR = Math.min(pxW, pxH) / 2
+  const innerR = Math.min(pxW, pxH) * 0.18
+  const len = Math.max(4, v0 * (maxR - innerR))
+  // 每根柱占角度 = 完整 2π / n；柱宽比例折入角度
+  const fullAngle = (2 * Math.PI) / n
+  const halfW = (fullAngle * Math.min(Math.max(barWidthRatio, 0.05), 0.95)) / 2
+  const a0 = (i / n) * 2 * Math.PI - Math.PI / 2
+  const a1 = a0 - halfW
+  const a2 = a0 + halfW
+  const rOut = innerR + len
+  const p = (ang: number, r: number): [number, number] => [
+    cx + Math.cos(ang) * r,
+    cy + Math.sin(ang) * r
+  ]
+  const p1 = p(a1, innerR)
+  const p2 = p(a2, innerR)
+  const p3 = p(a2, rOut)
+  const p4 = p(a1, rOut)
+  return [p1[0], p1[1], p2[0], p2[1], p3[0], p3[1], p4[0], p4[1]]
+}
+
+/** 楔形（radial）每柱一个 Konva.Line（closed）节点，points 为 8 数。 */
+export function wedgePointsToLine(points: number[]): number[] {
+  // 闭合：Konva Line points 已是 8 数，closed 自动闭合
+  return points
+}
+
+/** 折线形态：wave=原始曲线；flow=随时间流动的相位叠加。
+ * area 已改为"连续柱形"（isLine 移出，走 Rect 无间隙填充）。
  */
-export type LineMode = 'wave' | 'area' | 'flow'
+export type LineMode = 'wave' | 'flow'
 
 /** 连续折线：每列取 v 的高度，追加"流动"相位偏移（flow 用 tSec 推动）。
  * 返回与 bars 等长的 0–1 高度数组。

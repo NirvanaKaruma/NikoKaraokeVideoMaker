@@ -176,7 +176,6 @@ export function useAudioPlayback(
           decoded.sampleRate
         )
         const an = createSpectrumAnalyzer(mono, decoded.sampleRate, {
-          fftSize: 2048,
           freqMin: range.freqMin,
           freqMax: range.freqMax
         })

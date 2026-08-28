@@ -18,7 +18,7 @@ export interface SpectrumAnalyzer {
 }
 
 export interface SpectrumOptions {
-  /** 2 的幂，默认 2048 */
+  /** 2 的幂，默认 8192（bin≈5.9Hz@48k：低频段多柱共用同一 FFT bin 的问题——2048 时 30–50Hz 仅 1 个 bin，多根柱数值相同） */
   fftSize?: number
   freqMin?: number
   freqMax?: number
@@ -80,7 +80,7 @@ export function createSpectrumAnalyzer(
   sampleRate: number,
   opts: SpectrumOptions = {}
 ): SpectrumAnalyzer {
-  const fftSize = nextPow2(opts.fftSize ?? 2048)
+  const fftSize = nextPow2(opts.fftSize ?? 8192)
   // 频率范围校验：0 < freqMin < freqMax ≤ 奈奎斯特（避免对数分桶比值退化）
   const half = sampleRate > 0 ? sampleRate / 2 : 24000
   const fMin = Math.min(Math.max(1, opts.freqMin ?? 30), half - 1)

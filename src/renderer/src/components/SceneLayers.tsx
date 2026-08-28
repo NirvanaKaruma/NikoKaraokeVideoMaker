@@ -25,7 +25,7 @@ import {
   type CanvasSize
 } from '@shared/layout'
 import { colorAt } from '@shared/color'
-import { barGeometry, lineHeights, type LineMode } from '@shared/fx'
+import { barGeometry, lineHeights, wedgeGeometry, type LineMode } from '@shared/fx'
 import { useLocale } from '../hooks/useLocale'
 
 /** 可选中元素：主图 / 歌名 / 作者 / 可视化 */
@@ -479,6 +479,7 @@ function VisualizerLayer({
   const groupRef = useRef<Konva.Group>(null)
   const trRef = useRef<Konva.Transformer>(null)
   const barNodes = useRef<(Konva.Rect | null)[]>([])
+  const wedgeNodes = useRef<(Konva.Line | null)[]>([])
   const dotGroups = useRef<(Konva.Group | null)[]>([])
   const lineRef = useRef<Konva.Line | null>(null)
   const lastTRef = useRef(0)
@@ -487,7 +488,8 @@ function VisualizerLayer({
   const maxH = px.h * config.heightRatio
   const baseY = px.h
   const style = config.style
-  const isLine = style === 'wave' || style === 'area' || style === 'flow'
+  const isLine = style === 'wave' || style === 'flow'
+  const colorsKey = config.colors.join('')
 
   useEffect(() => {
     const tr = trRef.current
@@ -529,6 +531,16 @@ function VisualizerLayer({
           dot.visible(active)
           if (active) dot.opacity(Math.min(1, (h - dotH * lvl) / dotH + 0.4))
         }
+      })
+      g?.batchDraw()
+      return
+    }
+    if (style === 'radial') {
+      wedgeNodes.current.forEach((node, i) => {
+        if (!node) return
+        node.points(
+          wedgeGeometry(i, next[i] ?? 0, config.barCount, px.w, px.h, config.barWidthRatio)
+        )
       })
       g?.batchDraw()
       return
@@ -575,7 +587,8 @@ function VisualizerLayer({
     px.h,
     maxH,
     baseY,
-    slot
+    slot,
+    colorsKey
   ])
 
   // 帧时间通道：flow 等随时间变化形态使用
@@ -617,12 +630,9 @@ function VisualizerLayer({
           ref={lineRef}
           points={pts}
           stroke={firstColor}
-          strokeWidth={style === 'wave' ? 3 : 0}
-          fill={style === 'area' ? firstColor : undefined}
-          fillOpacity={style === 'area' ? 0.45 : undefined}
+          strokeWidth={style === 'wave' ? 3 : 2}
           lineCap="round"
           lineJoin="round"
-          closed={style === 'area'}
           listening={false}
         />
       )
@@ -652,6 +662,20 @@ function VisualizerLayer({
         )
       }
       return arr
+    }
+    if (style === 'radial') {
+      return Array.from({ length: config.barCount }, (_, i) => (
+        <KonvaLine
+          key={i}
+          ref={(el) => {
+            wedgeNodes.current[i] = el
+          }}
+          points={wedgeGeometry(i, bars[i] ?? 0, config.barCount, px.w, px.h, config.barWidthRatio)}
+          closed
+          fill={colorAt(config.colors, i / Math.max(1, config.barCount - 1))}
+          listening={false}
+        />
+      ))
     }
     return Array.from({ length: config.barCount }, (_, i) => {
       const v = Math.min(Math.max(bars[i] ?? 0, 0), 1)
