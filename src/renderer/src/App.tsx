@@ -451,6 +451,71 @@ async function runAudioSmoke(
   project.updateVisualizer({ style: 'bars' })
   await sleep(250)
 
+  // 播放中 flow 频谱本体更新（0.4.0 回归）：flow 折线几何必须跟随时变频谱。
+  // 曾因 frame(t) 通道重绘时使用冻结的 React bars 状态 → 绘制的包络停在旧谱，
+  // 视觉上"只有细波在流动、频谱本体不动"。从节点 points() 直接读包络峰值柱位验证。
+  project.updateVisualizer({ style: 'flow' })
+  await sleep(300)
+  const flowPeakColumn = (): number => {
+    const nodes = stage.find('.viz-line')
+    if (!nodes.length) return -1
+    const pts = (nodes[0] as Konva.Line).points()
+    let best = -1
+    let bestH = -Infinity
+    for (let i = 0; i + 1 < pts.length; i += 2) {
+      const h = -pts[i + 1] // y 越小越高（同坐标系，峰值柱=最高点）
+      if (h > bestH) {
+        bestH = h
+        best = i / 2
+      }
+    }
+    return best
+  }
+  pbRef.current.seek(0.2)
+  pbRef.current.play()
+  // 直接轮询"绘制的包络"（不依赖 React currentTime state，躲避 resume 延迟期的假 0.2s）：
+  // A：等待 440Hz 包络峰值柱（#61±6）出现（暂停态 seek 或播放中都算，内容一致）；
+  // B：等待包络峰值移动到 1200Hz 段（>A+3 → 频谱本体随播放推进/拖动）。
+  let flowPeakA = -1
+  const fA0 = Date.now()
+  while (Date.now() - fA0 < 6000 && flowPeakA < 0) {
+    await sleep(150)
+    const p = flowPeakColumn()
+    if (p >= 55 && p <= 67) flowPeakA = p
+  }
+  let flowPeakB = -1
+  let flowPeakBSeen = -1
+  const fB0 = Date.now()
+  while (Date.now() - fB0 < 10000) {
+    await sleep(200)
+    flowPeakB = flowPeakColumn()
+    if (flowPeakB > flowPeakA + 3) {
+      flowPeakBSeen = flowPeakB
+      break
+    }
+  }
+  pbRef.current.pause()
+  const flowLines = stage.find('.viz-line').length
+  if (flowPeakA >= 0 && flowPeakBSeen > flowPeakA + 3) {
+    pass(
+      '播放中 flow 频谱更新',
+      '包络峰值柱 #' + flowPeakA + ' → #' + flowPeakBSeen + '（440→1200Hz 段）'
+    )
+  } else {
+    fail(
+      '播放中 flow 频谱更新',
+      '峰值柱 #' +
+        flowPeakA +
+        ' → #' +
+        flowPeakB +
+        '（线节点 ' +
+        flowLines +
+        '；预期包络峰值右移 >3：播放推进后频谱本体未更新）'
+    )
+  }
+  project.updateVisualizer({ style: 'bars' })
+  await sleep(250)
+
   // 回归：播放中 seek 不得被旧音源 onended 误判为播完（曾跳到结尾并停止）
   pbRef.current.seek(0.2)
   pbRef.current.play()
@@ -458,14 +523,14 @@ async function runAudioSmoke(
   // 期间若掉出播放态则重试一次播放
   let bootOk = false
   const bootStart = Date.now()
-  while (Date.now() - bootStart < 2500) {
+  while (Date.now() - bootStart < 6000) {
     await sleep(120)
     const pbNow = pbRef.current
     if (pbNow.isPlaying && pbNow.currentTime > 0.01) {
       bootOk = true
       break
     }
-    if (!pbNow.isPlaying && pbNow.currentTime < 0.01) {
+    if (!pbNow.isPlaying && pbNow.currentTime < 0.15) {
       pbNow.seek(0.2)
       pbNow.play()
     }

@@ -496,6 +496,9 @@ function VisualizerLayer({
   const lineRef = useRef<Konva.Line | null>(null)
   const line2Ref = useRef<Konva.Line | null>(null)
   const lastTRef = useRef(0)
+  // barsRef = "最近一次实际绘制的柱数据"：
+  // 命令式路径（applyBars）每帧写入 → frame(t) 通道（flow 相位重绘）使用同一份最新数据，
+  // 避免 React bars state 在播放中冻结 → 包络回退为旧谱（只剩细波动）。
   const barsRef = useRef<number[]>(bars)
   useEffect(() => {
     barsRef.current = bars
@@ -517,6 +520,7 @@ function VisualizerLayer({
   }, [selected, config.rect, style])
 
   const applyBars = (next: number[]): void => {
+    barsRef.current = next
     const g = groupRef.current?.getLayer()
     if (isLine) {
       if (style === 'flow') {
@@ -606,6 +610,13 @@ function VisualizerLayer({
     }
   })
 
+  // pause/seek 走 state 路径后立即重绘（须在 implRef 注册之后）：
+  // flow 渲染点独占命令式（React 不参与），若不重绘，本次 state 更新会留下
+  // "旧包络+新相位"直到下次播放触发。
+  useEffect(() => {
+    if (style === 'flow') implRef.current.bars(bars)
+  }, [bars, style])
+
   // 首绘：style/几何变化后，等 refs 绑定完成再跑一次全量更新（React props 不驱动 Line points）。
   useEffect(() => {
     const id = requestAnimationFrame(() => implRef.current.bars(barsRef.current))
@@ -666,6 +677,7 @@ function VisualizerLayer({
           <>
             <KonvaLine
               key="flow-secondary"
+              name="viz-line-2"
               ref={(el) => bindLine(el, line2Ref)}
               points={NO_POINTS}
               stroke={lastColor}
@@ -677,6 +689,7 @@ function VisualizerLayer({
             />
             <KonvaLine
               key="flow-primary"
+              name="viz-line"
               ref={(el) => bindLine(el, lineRef)}
               points={NO_POINTS}
               stroke={firstColor}
@@ -690,6 +703,7 @@ function VisualizerLayer({
       }
       return (
         <KonvaLine
+          name="viz-line"
           ref={(el) => bindLine(el, lineRef)}
           points={renderPts}
           stroke={firstColor}
