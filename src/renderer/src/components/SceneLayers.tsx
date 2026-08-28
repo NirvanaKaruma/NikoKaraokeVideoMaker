@@ -72,6 +72,17 @@ export interface SceneLayersProps {
 
 const SELECT_BORDER = '#ff5f9e'
 
+/** 五角星顶点（中心锚定 0,0；外径 R、内径 r） */
+function starPoints(R: number, r: number, n = 5): number[] {
+  const pts: number[] = []
+  for (let i = 0; i < n * 2; i++) {
+    const rad = i % 2 === 0 ? R : r
+    const a = (Math.PI * i) / n - Math.PI / 2
+    pts.push(Math.cos(a) * rad, Math.sin(a) * rad)
+  }
+  return pts
+}
+
 /**
  * 拖动边界：自由移动（元素可部分超出画布，所见即所得），
  * 只保证至少 60px 可见，避免完全拖丢（尤其元素接近/超过画布大小时）。
@@ -396,20 +407,27 @@ interface MainImageLayerProps {
   onMainRectChange: (rect: NormRect) => void
 }
 
-/** 主图层：Group 承载拖拽 + 等比缩放手柄；图片按 fillMode 填充 */
+/** 主图层：Group 承载拖拽 + 等比缩放手柄；图片按 fillMode 填充（0.5.0：呼吸/旋转/发光脉冲/形状遮罩/边框）。 */
 function MainImageLayer({
   layout,
   coverElement,
   canvas,
   selectedId,
   onSelect,
-  onMainRectChange
-}: MainImageLayerProps): React.JSX.Element {
+  onMainRectChange,
+  layerFxSlotRef
+}: MainImageLayerProps & {
+  /** 每帧动效更新槽（SceneLayers 分发 frame(t)） */
+  layerFxSlotRef?: { current: ((t: number) => void) | null }
+}): React.JSX.Element {
   const { t } = useLocale()
   const groupRef = useRef<Konva.Group>(null)
+  const fxGroupRef = useRef<Konva.Group>(null)
+  const imgRef = useRef<Konva.Image>(null)
   const trRef = useRef<Konva.Transformer>(null)
   const px = normToPixel(layout.mainImage.rect, canvas)
   const fillMode = layout.mainImage.fillMode
+  const fx = layout.mainImage.fx
 
   useEffect(() => {
     const tr = trRef.current
@@ -430,23 +448,39 @@ function MainImageLayer({
     onMainRectChange(pixelToNorm(rect, canvas))
   }
 
+  // 图片（中心锚定：fxGroup 位于 rect 中心，图片以自身中心为原点，缩放/旋转绕中心）
   let imageNode: React.JSX.Element | null = null
+  let dw = 0
+  let dh = 0
   if (coverElement) {
     const iw = coverElement.naturalWidth || coverElement.width
     const ih = coverElement.naturalHeight || coverElement.height
     if (iw > 0 && ih > 0) {
       if (fillMode === 'stretch') {
-        imageNode = <KonvaImage image={coverElement} width={px.w} height={px.h} listening={false} />
+        dw = px.w
+        dh = px.h
+        imageNode = (
+          <KonvaImage
+            ref={imgRef}
+            image={coverElement}
+            x={-px.w / 2}
+            y={-px.h / 2}
+            width={px.w}
+            height={px.h}
+            listening={false}
+          />
+        )
       } else {
         const s =
           fillMode === 'contain' ? Math.min(px.w / iw, px.h / ih) : Math.max(px.w / iw, px.h / ih)
-        const dw = iw * s
-        const dh = ih * s
+        dw = iw * s
+        dh = ih * s
         imageNode = (
           <KonvaImage
+            ref={imgRef}
             image={coverElement}
-            x={(px.w - dw) / 2}
-            y={(px.h - dh) / 2}
+            x={-dw / 2}
+            y={-dh / 2}
             width={dw}
             height={dh}
             listening={false}
@@ -457,6 +491,70 @@ function MainImageLayer({
   }
 
   const isCover = fillMode === 'cover'
+
+  // 形状遮罩（React 静态驱动；随图像中心 0,0）：none=无 / circle=圆 / star=五角星
+  const mR = Math.min(dw, dh) / 2
+  const clipFn = (ctx: Konva.Context): void => {
+    if (fx.mask === 'circle') {
+      ctx.arc(0, 0, Math.max(1, mR), 0, Math.PI * 2)
+    } else if (fx.mask === 'star') {
+      const pts = starPoints(mR, mR * 0.4)
+      ctx.moveTo(pts[0], pts[1])
+      for (let i = 2; i < pts.length; i += 2) ctx.lineTo(pts[i], pts[i + 1])
+    }
+  }
+
+  // 边框装饰（React 静态驱动；围绕遮罩形状描边；0=关）
+  const borderW = fx.border > 0 ? Math.max(1, fx.border * canvas.height) : 0
+  let borderNode: React.JSX.Element | null = null
+  if (borderW > 0 && dw > 0 && dh > 0) {
+    const stroke = { stroke: fx.borderColor, strokeWidth: borderW, listening: false }
+    if (fx.mask === 'circle') {
+      borderNode = <Circle x={0} y={0} radius={Math.max(1, mR)} {...stroke} />
+    } else if (fx.mask === 'star') {
+      borderNode = <KonvaLine points={starPoints(mR, mR * 0.4)} closed {...stroke} />
+    } else {
+      borderNode = (
+        <Rect x={-dw / 2} y={-dh / 2} width={dw} height={dh} cornerRadius={borderW} {...stroke} />
+      )
+    }
+  }
+
+  // 每帧动效：呼吸缩放 + 微旋转 + 发光脉冲（shadowBlur 动画；默认全部关闭时复位）
+  useEffect(() => {
+    if (!layerFxSlotRef) return
+    layerFxSlotRef.current = (tt: number): void => {
+      const fg = fxGroupRef.current
+      if (!fg) return
+      const twoPi = Math.PI * 2
+      // 呼吸：±强度×4% 缩放；周期 breathePeriod 秒
+      const breatheS =
+        fx.breathe > 0
+          ? 1 +
+            fx.breathe * 0.04 * (0.5 + 0.5 * Math.sin((twoPi * tt) / Math.max(1, fx.breathePeriod)))
+          : 1
+      // 微旋转：±rotateDeg° 慢速往复（16s 周期）
+      const rotDeg = fx.rotateDeg > 0 ? fx.rotateDeg * Math.sin((twoPi * tt) / 16) : 0
+      fg.scale({ x: breatheS, y: breatheS })
+      fg.rotation(rotDeg)
+      // 发光脉冲：shadowBlur 0→强度×60px（2.4s 周期）；无脉冲时关阴影
+      const glow =
+        fx.glowPulse > 0 ? fx.glowPulse * 60 * (0.5 + 0.5 * Math.sin((twoPi * tt) / 2.4)) : 0
+      // 发光载体=图片节点（Konva Group 运行时不支持 shadow；图片=Shape）。
+      // 注意：mask≠none 时图像被裁剪组包住，辉光会被裁剪（组合场景较少见，先接受）。
+      const img = imgRef.current
+      if (img) {
+        img.shadowColor('#ffffff')
+        img.shadowBlur(glow)
+        img.shadowOpacity(glow > 0 ? 0.75 : 0)
+        img.shadowOffset({ x: 0, y: 0 })
+      }
+      fg.getLayer()?.batchDraw()
+    }
+    return () => {
+      layerFxSlotRef.current = null
+    }
+  }, [layerFxSlotRef, fx, coverElement, px.w, px.h])
 
   return (
     <>
@@ -492,7 +590,13 @@ function MainImageLayer({
       >
         {/* 透明命中区：让整个矩形（含透明留白）都可拖动/选中 */}
         <Rect width={px.w} height={px.h} fill="rgba(0,0,0,0.01)" />
-        {imageNode ?? (
+        {imageNode && (
+          <Group ref={fxGroupRef} x={px.w / 2} y={px.h / 2}>
+            <Group clipFunc={fx.mask === 'none' ? undefined : clipFn}>{imageNode}</Group>
+            {borderNode}
+          </Group>
+        )}
+        {!imageNode && (
           <>
             <Rect
               width={px.w}
@@ -1019,6 +1123,7 @@ export function SceneLayers(props: SceneLayersProps): React.JSX.Element {
             selectedId={selectedId}
             onSelect={onSelect}
             onMainRectChange={onMainRectChange}
+            layerFxSlotRef={imgFxSlot}
           />
         </Layer>
       )}
