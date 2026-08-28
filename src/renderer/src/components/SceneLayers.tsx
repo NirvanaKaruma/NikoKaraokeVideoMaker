@@ -28,6 +28,9 @@ import { colorAt } from '@shared/color'
 import {
   bandEnergySmoothed,
   barGeometry,
+  bounceIn,
+  easeOutCubic,
+  entryProgress,
   kenBurns,
   lineHeights,
   wedgeGeometry,
@@ -278,14 +281,17 @@ function BackgroundLayer({
   )
 }
 
-/** 文本层：歌曲名/作者——可拖动、可缩放文本框（字号不变，宽度驱动自动换行；选中显示虚线框） */
+/** 文本层：歌曲名/作者——可拖动、可缩放文本框（字号不变，宽度驱动自动换行；选中显示虚线框）。
+ * 0.5.0：入场动画（fade/slide/typewriter/bounce）——作用于内部文字节点（不动可拖组），
+ * 由 textFxSlot 逐帧驱动（时间轴语义：进入即生效，暂停/seek 同步，预览/导出同源）。 */
 function TextNode({
   kind,
   cfg,
   canvas,
   selected,
   onSelect,
-  onRectChange
+  onRectChange,
+  textFxSlotRef
 }: {
   kind: 'songTitle' | 'artist'
   cfg: TextLayerConfig
@@ -293,6 +299,8 @@ function TextNode({
   selected: boolean
   onSelect: (id: SelectableId) => void
   onRectChange: (rect: NormRect) => void
+  /** 每帧入场动画更新槽（SceneLayers 分发 frame(t)） */
+  textFxSlotRef?: { current: ((t: number) => void) | null }
 }): React.JSX.Element {
   const groupRef = useRef<Konva.Group>(null)
   const textRef = useRef<Konva.Text>(null)
@@ -308,6 +316,51 @@ function TextNode({
       tr.getLayer()?.batchDraw()
     }
   }, [selected, cfg.rect])
+
+  // 入场动画逐帧应用：进度→按类型变换；完成后复位到最终态（防止残留半透明/位移/字符截断）
+  useEffect(() => {
+    if (!textFxSlotRef) return
+    textFxSlotRef.current = (t: number): void => {
+      const te = textRef.current
+      if (!te) return
+      const en = cfg.entry
+      const p = entryProgress(t, en.delaySec, en.durationSec)
+      const done = en.type === 'none' || p >= 1
+      // 复位最终态（React 只给基准值 0/0/全文，命令式仅在此覆盖）
+      if (done) {
+        te.opacity(1)
+        te.x(0)
+        te.y(0)
+        if (te.text() !== cfg.text) te.text(cfg.text)
+        te.getLayer()?.batchDraw()
+        return
+      }
+      const e = easeOutCubic(p)
+      switch (en.type) {
+        case 'fade':
+          te.opacity(e)
+          break
+        case 'slide':
+          te.opacity(Math.min(1, p * 1.5))
+          te.x((1 - e) * px.w * 0.6)
+          break
+        case 'typewriter':
+          te.opacity(1)
+          te.text(cfg.text.slice(0, Math.max(1, Math.round(p * cfg.text.length))))
+          break
+        case 'bounce':
+          te.opacity(Math.min(1, p * 2))
+          te.y(-(1 - bounceIn(p)) * px.h * 0.45 + 6 * (1 - p))
+          break
+        default:
+          break
+      }
+      te.getLayer()?.batchDraw()
+    }
+    return () => {
+      textFxSlotRef.current = null
+    }
+  }, [textFxSlotRef, cfg.entry, cfg.text, px.w, px.h])
 
   const commit = (node: Konva.Group): void => {
     onRectChange(
@@ -1087,13 +1140,15 @@ export function SceneLayers(props: SceneLayersProps): React.JSX.Element {
   // 各子层（背景/主图/文本）写入自己的 slot（getter 惰性读取不回退重绘）。
   const bgFxSlot = useRef<((t: number) => void) | null>(null)
   const imgFxSlot = useRef<((t: number) => void) | null>(null)
-  const textFxSlot = useRef<((t: number) => void) | null>(null)
+  const titleFxSlot = useRef<((t: number) => void) | null>(null)
+  const artistFxSlot = useRef<((t: number) => void) | null>(null)
   useEffect(() => {
     if (!layerFxRef) return
     layerFxRef.current = (t: number) => {
       bgFxSlot.current?.(t)
       imgFxSlot.current?.(t)
-      textFxSlot.current?.(t)
+      titleFxSlot.current?.(t)
+      artistFxSlot.current?.(t)
     }
     return () => {
       layerFxRef.current = null
@@ -1136,6 +1191,7 @@ export function SceneLayers(props: SceneLayersProps): React.JSX.Element {
             selected={selectedId === 'songTitle'}
             onSelect={onSelect}
             onRectChange={(rect) => onTextRectChange('songTitle', rect)}
+            textFxSlotRef={titleFxSlot}
           />
           <TextNode
             kind="artist"
@@ -1144,6 +1200,7 @@ export function SceneLayers(props: SceneLayersProps): React.JSX.Element {
             selected={selectedId === 'artist'}
             onSelect={onSelect}
             onRectChange={(rect) => onTextRectChange('artist', rect)}
+            textFxSlotRef={artistFxSlot}
           />
         </Layer>
       )}

@@ -132,6 +132,25 @@ export function bandEnergySmoothed(
   return sum / steps
 }
 
+/** 入场动画类型（0.5.0）：none=无；fade/slide/typewriter/bounce 见 entryProgress 族 */
+export type EntryStyle = 'none' | 'fade' | 'slide' | 'typewriter' | 'bounce'
+
+/** 入场进度（含延迟）：t ≤ delay → 0；t ≥ delay+duration → 1；其间线性推进。
+ * 纯时刻函数 → 预览 rAF 与导出逐帧同值（30/60fps 一致）。 */
+export function entryProgress(t: number, delaySec: number, durationSec: number): number {
+  const d = Math.max(0, delaySec)
+  const dur = Math.max(0.01, durationSec)
+  if (t <= d) return 0
+  if (t >= d + dur) return 1
+  return (t - d) / dur
+}
+
+/** 弹跳过冲（0→1 带轻微回弹；bounce 用）：x=0→0，x=1→≈1 */
+export function bounceIn(x: number): number {
+  const t = Math.min(Math.max(x, 0), 1)
+  return Math.max(0, 1 - Math.exp(-6 * t) * Math.cos(8 * t))
+}
+
 /** 能量阶跃（踩点闪光）：band 能量在 windowSec 内的上升量 0–1；纯时刻函数、与帧率无关 */
 export function energyAttack(
   sample: (t: number) => BandEnergies,

@@ -3,8 +3,10 @@ import {
   bandEnergySmoothed,
   bandEnergiesFromBars,
   barGeometry,
+  bounceIn,
   easeOutCubic,
   energyAttack,
+  entryProgress,
   lineHeights,
   seededRng,
   smoothBarsFx,
@@ -159,6 +161,24 @@ describe('fx 时间函数库', () => {
       treble: 0
     })
     expect(energyAttack(jump, 0.1, 'bass', 0.15)).toBe(1)
+  })
+
+  it('entryProgress：含延迟的入场进度——未开始 0、完成 1、区间线性、帧率无关', () => {
+    expect(entryProgress(0.5, 1, 1.2)).toBe(0)
+    expect(entryProgress(2.2, 1, 1.2)).toBe(1)
+    expect(entryProgress(1.6, 1, 1.2)).toBeCloseTo(0.5, 6)
+    // 同 t 同值（30/60fps 序列一致的根源）
+    expect(entryProgress(1.234, 0.5, 2.5)).toBe(entryProgress(1.234, 0.5, 2.5))
+    // 参数钳制：负延迟→0、零时长→视为 0.01
+    expect(entryProgress(0.1, -1, 1)).toBeGreaterThan(0)
+  })
+
+  it('bounceIn：端点 0→1，中间超冲（先超后回弹）', () => {
+    expect(bounceIn(0)).toBeCloseTo(0, 6)
+    expect(bounceIn(1)).toBeCloseTo(1, 1)
+    let max = 0
+    for (let i = 0; i <= 20; i++) max = Math.max(max, bounceIn(i / 20))
+    expect(max).toBeGreaterThan(1.05) // 有回弹超冲
   })
 
   it('wedgeGeometry：radial 楔形 4 顶点 8 数值，弧长随半径增长均匀', () => {
