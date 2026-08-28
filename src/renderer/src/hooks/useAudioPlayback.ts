@@ -51,6 +51,41 @@ function decodeAudioViaWorker(ab: ArrayBuffer): Promise<WorkerDecodeResult | nul
   })
 }
 
+/** ffmpeg 输出的交错 f32 → Worker 内拆声道（零拷贝回传；主线程只剩 createBuffer+copy） */
+function pcmToChannelsViaWorker(
+  data: ArrayBuffer,
+  chN: number,
+  sampleRate: number
+): Promise<WorkerDecodeResult | null> {
+  return new Promise((resolve) => {
+    try {
+      decodeWorkerInst?.terminate()
+      const w = new Worker(new URL('../workers/audioDecode.worker.ts', import.meta.url), {
+        type: 'module'
+      })
+      decodeWorkerInst = w
+      const done = (r: WorkerDecodeResult | null): void => {
+        w.terminate()
+        if (decodeWorkerInst === w) decodeWorkerInst = null
+        resolve(r)
+      }
+      w.onmessage = (e: MessageEvent): void => {
+        const r = e.data as { ok?: boolean; channels?: Float32Array[]; sampleRate?: number }
+        if (r.ok && r.channels && r.channels.length > 0 && (r.sampleRate ?? 0) > 0) {
+          done({ channels: r.channels, sampleRate: r.sampleRate ?? 0 })
+        } else {
+          done(null)
+        }
+      }
+      w.onerror = (): void => done(null)
+      // data 可安全 transfer（ffmpeg 结果只喂这一处）
+      w.postMessage({ type: 'pcm', data, channels: chN, sampleRate }, [data])
+    } catch {
+      resolve(null)
+    }
+  })
+}
+
 export interface PlaybackApi {
   status: AudioStatus
   error: string | null
@@ -235,15 +270,12 @@ export function useAudioPlayback(
           try {
             const ffr = await window.api.project.audioDecode(decodePath)
             if (!cancelled && ffr.ok && ffr.samples && ffr.channels > 0 && ffr.sampleRate > 0) {
-              const data = new Float32Array(ffr.samples)
-              const chN = ffr.channels
-              const len = Math.floor(data.length / chN)
-              if (len > 0) {
-                decoded = ctx.createBuffer(chN, len, ffr.sampleRate)
-                for (let c = 0; c < chN; c++) {
-                  const ch = new Float32Array(len)
-                  for (let i = 0; i < len; i++) ch[i] = data[i * chN + c]
-                  decoded.copyToChannel(ch as Float32Array<ArrayBuffer>, c)
+              // 拆声道挪进 Worker（主线程只剩 createBuffer+copy，消掉 ~400ms 阻塞与 GC 尖刺）
+              const pc = await pcmToChannelsViaWorker(ffr.samples, ffr.channels, ffr.sampleRate)
+              if (!cancelled && pc) {
+                decoded = ctx.createBuffer(pc.channels.length, pc.channels[0].length, pc.sampleRate)
+                for (let c = 0; c < pc.channels.length; c++) {
+                  decoded.copyToChannel(pc.channels[c] as Float32Array<ArrayBuffer>, c)
                 }
               }
             }

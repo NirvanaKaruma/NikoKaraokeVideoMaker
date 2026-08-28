@@ -924,8 +924,14 @@ async function runAudioSmoke(
       return m?.usedJSHeapSize ?? 0
     }
     let heapMax = heapNow()
+    // 主线程停顿探针：UI 卡死 = 事件循环长时间无空闲（间隔 = 被占用的时长）
+    let lastTick = performance.now()
+    let maxGap = 0
     const heapTimer = setInterval(() => {
       heapMax = Math.max(heapMax, heapNow())
+      const now = performance.now()
+      maxGap = Math.max(maxGap, now - lastTick)
+      lastTick = now
     }, 200)
     project.setAudioFile(
       new File([probeBytes as Uint8Array<ArrayBuffer>], name, { type: 'audio/mpeg' })
@@ -943,14 +949,24 @@ async function runAudioSmoke(
           name +
           ' → 就绪，时长 ' +
           pbRef.current.duration.toFixed(0) +
-          's，解码期堆峰值 ' +
+          's，堆峰值 ' +
           (heapMax / 1048576).toFixed(0) +
-          'MB）'
+          'MB，主线程最大停顿 ' +
+          maxGap.toFixed(0) +
+          'ms）'
       )
     } else {
       fail(
         '真实音频导入耗时',
-        'status=' + res.st + ' 等待 ' + ms + 'ms，堆峰值 ' + (heapMax / 1048576).toFixed(0) + 'MB'
+        'status=' +
+          res.st +
+          ' 等待 ' +
+          ms +
+          'ms，堆峰值 ' +
+          (heapMax / 1048576).toFixed(0) +
+          'MB，主线程最大停顿 ' +
+          maxGap.toFixed(0) +
+          'ms'
       )
     }
   }
@@ -982,6 +998,25 @@ async function runAudioSmoke(
       pass('大图导入耗时', imgMs + 'ms（4000×3000 封面就绪 ' + nat + '）')
     } else {
       fail('大图导入耗时', '等待 ' + imgMs + 'ms 仍未就绪')
+    }
+  }
+
+  // 新建项目响应探针（用户反馈：新建也卡顿）——resetProject 后 3s 内主线程最大停顿
+  {
+    let lastTick = performance.now()
+    let gapMax = 0
+    const gapTimer = setInterval(() => {
+      const now = performance.now()
+      gapMax = Math.max(gapMax, now - lastTick)
+      lastTick = now
+    }, 120)
+    project.resetProject()
+    await sleep(3000)
+    clearInterval(gapTimer)
+    if (gapMax < 1500) {
+      pass('新建项目响应', '3s 内主线程最大停顿 ' + gapMax.toFixed(0) + 'ms')
+    } else {
+      fail('新建项目响应', '3s 内主线程最大停顿 ' + gapMax.toFixed(0) + 'ms（>1500ms 卡死级）')
     }
   }
 

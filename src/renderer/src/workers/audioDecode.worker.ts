@@ -9,8 +9,18 @@
 interface DecodeResult {
   ok: boolean
   channels: Float32Array[] | null
+  /** 单声道混音（Worker 内算好；WebAudio 路径为 null，由主线程自己混） */
+  mono: Float32Array | null
   sampleRate: number
   error: string | null
+}
+
+/** ffmpeg PCM 入参：{type:'pcm'} + 原始交错 f32（Transferable）+ 声道数/采样率 */
+interface PcmRequest {
+  type: 'pcm'
+  data: ArrayBuffer
+  channels: number
+  sampleRate: number
 }
 
 /** 探测文件原生采样率（避免 decodeAudioData 重采样 48000 上下变频——44.1k/8k 文件尤其明显）：
@@ -59,8 +69,40 @@ function guessSampleRate(bytes: Uint8Array): number {
   return 48000
 }
 
-self.onmessage = (e: MessageEvent<ArrayBuffer>): void => {
-  const bytes = e.data
+self.onmessage = (e: MessageEvent<ArrayBuffer | PcmRequest>): void => {
+  const msg = e.data
+  // ffmpeg PCM：拆交错 → 各声道 + 单声道混音，全部零拷贝回传（主线程零重活）
+  if (typeof msg === 'object' && msg !== null && (msg as PcmRequest).type === 'pcm') {
+    const req = msg as PcmRequest
+    const data = new Float32Array(req.data)
+    const chN = Math.max(1, req.channels)
+    const len = Math.floor(data.length / chN)
+    const channels: Float32Array[] = []
+    for (let c = 0; c < chN; c++) {
+      const ch = new Float32Array(len)
+      const o = c
+      for (let i = 0; i < len; i++) ch[i] = data[i * chN + o]
+      channels.push(ch)
+    }
+    const mono = new Float32Array(len)
+    for (let i = 0; i < len; i++) {
+      let s = 0
+      for (let c = 0; c < chN; c++) s += channels[c][i]
+      mono[i] = s / chN
+    }
+    const result: DecodeResult = {
+      ok: true,
+      channels,
+      mono,
+      sampleRate: req.sampleRate,
+      error: null
+    }
+    const transfers: ArrayBuffer[] = channels.map((c) => c.buffer as ArrayBuffer)
+    transfers.push(mono.buffer as ArrayBuffer)
+    ;(self as unknown as Worker).postMessage(result, transfers)
+    return
+  }
+  const bytes = msg as ArrayBuffer
   void (async () => {
     try {
       // 按 ≤48kHz 解码：96k/192k 高解析文件以 48k 通道输出（Chromium 内部按上下文采样率
@@ -77,6 +119,7 @@ self.onmessage = (e: MessageEvent<ArrayBuffer>): void => {
       const result: DecodeResult = {
         ok: true,
         channels,
+        mono: null,
         sampleRate: decoded.sampleRate,
         error: null
       }
@@ -88,6 +131,7 @@ self.onmessage = (e: MessageEvent<ArrayBuffer>): void => {
       const result: DecodeResult = {
         ok: false,
         channels: null,
+        mono: null,
         sampleRate: 0,
         error: err instanceof Error ? err.message : String(err)
       }

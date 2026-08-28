@@ -27,22 +27,22 @@ interface MergeInvoke extends MergeRequest {
 /** 合并任务句柄（按 mergeId 取消） */
 const mergeHandles = new Map<string, { kill: () => void }>()
 
-/** 音频解码请求：任何 ffmpeg 可读的媒体（mp3/flac/wav/m4a/mp4…）→ 44.1kHz 立体声 f32 交错 PCM */
-interface AudioDecodeResult {
-  ok: boolean
-  samples: ArrayBuffer | null
-  sampleRate: number
-  channels: number
-  error: string | null
-}
-
 let audioDecodeProc: import('child_process').ChildProcess | null = null
+/** 单块 PCM 字节数：4MB 分块 → 渲染进程每次只 ~20ms 反序列化，块间让出事件循环（UI 有响应窗口） */
+const PCM_CHUNK_BYTES = 4 * 1024 * 1024
 
-/** 音频解码（预览用）：ffmpeg 子进程解码到内存——渲染进程完全不参与解码（UI 永不卡）。
- * 新请求会终止进行中的旧请求（重复导入不再叠加内存）。 */
-async function handleAudioDecode(path: string): Promise<AudioDecodeResult> {
+/** 流式音频解码（预览用）：ffmpeg 子进程解码 → main 按 4MB 分块推送给渲染进程。
+ * 渲染进程零解码 CPU、零长阻塞；新请求 kill 旧请求（重复导入不叠加内存）。 */
+async function streamAudioDecode(
+  sender: Electron.WebContents,
+  token: string,
+  path: string
+): Promise<void> {
   const ff = await getFFmpegPath()
-  if (!ff) return { ok: false, samples: null, sampleRate: 0, channels: 0, error: 'no-ffmpeg' }
+  if (!ff) {
+    sender.send('audio:pcm', { token, type: 'error', error: 'no-ffmpeg' })
+    return
+  }
   audioDecodeProc?.kill()
   const chunks: Buffer[] = []
   let errTail = ''
@@ -77,17 +77,32 @@ async function handleAudioDecode(path: string): Promise<AudioDecodeResult> {
   })
   if (audioDecodeProc) audioDecodeProc = null
   if (!ok || chunks.length === 0) {
-    return {
-      ok: false,
-      samples: null,
-      sampleRate: 0,
-      channels: 0,
-      error: errTail || 'decode-failed'
-    }
+    sender.send('audio:pcm', { token, type: 'error', error: errTail || 'decode-failed' })
+    return
   }
   const buf = Buffer.concat(chunks)
-  const samples = buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength) as ArrayBuffer
-  return { ok: true, samples, sampleRate: 44100, channels: 2, error: null }
+  for (let off = 0; off < buf.length; off += PCM_CHUNK_BYTES) {
+    const end = Math.min(off + PCM_CHUNK_BYTES, buf.length)
+    const part = buf.subarray(off, end)
+    sender.send('audio:pcm', {
+      token,
+      type: 'chunk',
+      data: part.buffer.slice(part.byteOffset, part.byteOffset + part.byteLength)
+    })
+    // 块间让出事件循环：渲染进程可在反序列化间隙响应 UI（有窗口，不冻结）
+    await new Promise((r) => setImmediate(r))
+  }
+  sender.send('audio:pcm', { token, type: 'end', sampleRate: 44100, channels: 2 })
+}
+
+/** 流式解码开始（invoke）：返回 token；结果经 'audio:pcm' 事件推给该 sender */
+async function startAudioDecodeStream(
+  e: Electron.IpcMainInvokeEvent,
+  path: string
+): Promise<string> {
+  const token = e.sender.id + '-' + Date.now()
+  void streamAudioDecode(e.sender, token, path)
+  return token
 }
 
 /** 注册 ffmpeg 三源管理 + 导出合并的全部 IPC（规格 §3.4/§3.3） */
@@ -135,11 +150,9 @@ export function registerFfmpegIpc(): void {
     return true
   })
 
-  ipcMain.handle('audio:decode', async (_e, path: string) => {
-    if (typeof path !== 'string' || !path) {
-      return { ok: false, samples: null, sampleRate: 0, channels: 0, error: 'bad-path' }
-    }
-    return handleAudioDecode(path)
+  ipcMain.handle('audio:decode-start', async (e, path: string) => {
+    if (typeof path !== 'string' || !path) return 'bad-path'
+    return startAudioDecodeStream(e, path)
   })
 
   ipcMain.handle(IPC.exportPickOutput, async (e, defaultName: string) => {

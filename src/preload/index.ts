@@ -68,7 +68,65 @@ const api = {
       sampleRate: number
       channels: number
       error: string | null
-    }> => ipcRenderer.invoke('audio:decode', path)
+    }> => {
+      // 流式解码：main 按 4MB 分块推送 → preload 组装（块间渲染进程可响应 UI，不冻结）
+      return new Promise((resolve) => {
+        const fail = (error: string): void =>
+          resolve({ ok: false, samples: null, sampleRate: 0, channels: 0, error })
+        void ipcRenderer
+          .invoke('audio:decode-start', path)
+          .then((token: unknown) => {
+            const tok = String(token)
+            let total = 0
+            let meta: { sampleRate: number; channels: number } | null = null
+            const parts: ArrayBuffer[] = []
+            const onPcm = (
+              _e: IpcRendererEvent,
+              m: {
+                token?: string
+                type?: string
+                data?: unknown
+                error?: string
+                sampleRate?: number
+                channels?: number
+              }
+            ): void => {
+              if (m.token !== tok) return
+              if (m.type === 'chunk') {
+                const d = m.data as ArrayBuffer
+                parts.push(d)
+                total += d.byteLength
+              } else if (m.type === 'end') {
+                if (m.sampleRate && m.channels) {
+                  meta = { sampleRate: m.sampleRate, channels: m.channels }
+                }
+              } else if (m.type === 'error') {
+                ipcRenderer.removeListener('audio:pcm', onPcm)
+                fail(m.error ?? 'decode-failed')
+              }
+              if (meta && total > 0) {
+                ipcRenderer.removeListener('audio:pcm', onPcm)
+                const out = new ArrayBuffer(total)
+                const u8 = new Uint8Array(out)
+                let off = 0
+                for (const p of parts) {
+                  u8.set(new Uint8Array(p), off)
+                  off += p.byteLength
+                }
+                resolve({
+                  ok: true,
+                  samples: out,
+                  sampleRate: meta.sampleRate,
+                  channels: meta.channels,
+                  error: null
+                })
+              }
+            }
+            ipcRenderer.on('audio:pcm', onPcm)
+          })
+          .catch(() => fail('start-failed'))
+      })
+    }
   },
 
   exportApi: {
