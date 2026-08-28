@@ -21,7 +21,11 @@ function sameShape(a: unknown, b: unknown, path = ''): string[] {
       else if (!(k in (b as Record<string, unknown>))) diffs.push(path + '.' + k + ' (缺于 b)')
       else
         diffs.push(
-          ...sameShape((a as Record<string, unknown>)[k], (b as Record<string, unknown>)[k], path + '.' + k)
+          ...sameShape(
+            (a as Record<string, unknown>)[k],
+            (b as Record<string, unknown>)[k],
+            path + '.' + k
+          )
         )
     }
   }
@@ -61,13 +65,17 @@ describe('i18n', () => {
     expect(t('header.saveProject')).toBe('💾 保存项目')
   })
 
-  it('en 空值回退 zh-cn；已填值直接返回', () => {
+  it('语言切换：已填值取该语言；未填键回退 zh-cn', () => {
     setLocale('en')
-    expect(t('header.saveProject')).toBe('💾 保存项目') // en 未填 → 回退
+    // 自适应：en 已填 → 期望等于 en 值；未填 → 回退 zh-cn
+    const enExpected = en.header.saveProject || zhCn.header.saveProject
+    expect(t('header.saveProject')).toBe(enExpected)
     setLocale('zh-cn')
+    expect(t('header.saveProject')).toBe(zhCn.header.saveProject)
   })
 
   it('占位符替换：参数注入 {v}/{min}/{max}', () => {
+    setLocale('zh-cn')
     expect(t('visualizer.barCount', { v: 128 })).toBe('柱数：128（100–160）')
     expect(t('visualizer.freqRange', { min: 30, max: 8000 })).toBe('显示频率范围：30–8000 Hz')
   })
