@@ -7,6 +7,7 @@ import { useAudioPlayback, type PlaybackApi } from './hooks/useAudioPlayback'
 import { useFfmpegDownload, useFfmpegStatus } from './hooks/useFfmpeg'
 import { useExporter } from './hooks/useExporter'
 import { benchmarkEncoder } from './export/exportVideo'
+import { drawCanvasFx } from '@shared/canvasfx'
 import { CanvasStage } from './components/CanvasStage'
 import { ExportStageHost } from './components/ExportStageHost'
 import { SidePanel } from './components/SidePanel'
@@ -571,6 +572,142 @@ async function runAudioSmoke(
     pbRef.current.pause()
     fail('播放中 seek 不中断', '音频起播失败（AudioContext resume 超时）')
   }
+
+  // ── 0.5.0 动效回归（暂停态 seek 驱动：确定性、无 AudioContext 时序依赖）──
+  const countBright = (data: Uint8ClampedArray): number => {
+    let n = 0
+    for (let i = 0; i < data.length; i += 4) {
+      if (data[i] > 180 && data[i + 1] > 170 && data[i + 2] > 170) n++
+    }
+    return n
+  }
+  const meanSum = (data: Uint8ClampedArray): number => {
+    let s = 0
+    const n = Math.max(1, data.length / 4)
+    for (let i = 0; i < data.length; i += 4) s += data[i] + data[i + 1] + data[i + 2]
+    return s / n
+  }
+
+  // Ken Burns：背景区两时刻（0.4s→1.8s）像素差异（测试音频 2s：seek 钳制在 2s 内；周期 3s 便于观察）
+  project.updateBackgroundFx({ kenBurns: 0.35, kenBurnsDuration: 3 })
+  await sleep(200)
+  pbRef.current.seek(0.4)
+  await sleep(250)
+  const kbA = captureRegion(stage, 0.05 * 1920, 0.62 * 1080, 0.4 * 1920, 0.95 * 1080)
+  pbRef.current.seek(1.8)
+  await sleep(250)
+  const kbB = captureRegion(stage, 0.05 * 1920, 0.62 * 1080, 0.4 * 1920, 0.95 * 1080)
+  project.updateBackgroundFx({ kenBurns: 0 })
+  const kbDiff = countDiffPixels(kbA, kbB)
+  if (kbDiff > 80) {
+    pass('Ken Burns 生效', '背景区两时刻差异像素 ' + kbDiff)
+  } else {
+    fail('Ken Burns 生效', '背景区两时刻差异 ' + kbDiff + '（>80 预期）')
+  }
+
+  // 全局后期（暗角）：离屏 canvas 直接绘制管线（预览 overlay / 导出 compose 同函数，
+  // 舞台 toCanvas 不含 DOM 叠加层，故用同一函数离屏验证）
+  const off = document.createElement('canvas')
+  off.width = 320
+  off.height = 180
+  const octx = off.getContext('2d')
+  if (octx) {
+    octx.fillStyle = '#ffffff'
+    octx.fillRect(0, 0, 320, 180)
+    drawCanvasFx(
+      octx,
+      { t: 1.0, vignette: 0.85, grain: 0, scanline: 0, beatFlash: 0, lightLeak: 0 },
+      320,
+      180
+    )
+    const corner = octx.getImageData(10, 10, 1, 1).data
+    const center = octx.getImageData(160, 90, 1, 1).data
+    if (corner[0] < center[0] - 80) {
+      pass('全局后期（暗角）', '角 r=' + corner[0] + ' 暗于中心 r=' + center[0])
+    } else {
+      fail('全局后期（暗角）', '角 r=' + corner[0] + ' 中心 r=' + center[0] + '（预期角暗 >80）')
+    }
+    // 颗粒确定性：同 t 同输出；t 推进输出变化
+    octx.fillStyle = '#808080'
+    octx.fillRect(0, 0, 320, 180)
+    drawCanvasFx(
+      octx,
+      { t: 2.0, vignette: 0, grain: 0.5, scanline: 0, beatFlash: 0, lightLeak: 0 },
+      320,
+      180
+    )
+    const gA = octx.getImageData(0, 0, 320, 180).data.slice()
+    octx.fillStyle = '#808080'
+    octx.fillRect(0, 0, 320, 180)
+    drawCanvasFx(
+      octx,
+      { t: 2.0, vignette: 0, grain: 0.5, scanline: 0, beatFlash: 0, lightLeak: 0 },
+      320,
+      180
+    )
+    const gB = octx.getImageData(0, 0, 320, 180).data.slice()
+    if (countDiffPixels(gA, gB) === 0) {
+      octx.fillStyle = '#808080'
+      octx.fillRect(0, 0, 320, 180)
+      drawCanvasFx(
+        octx,
+        { t: 2.0 + 1 / 24, vignette: 0, grain: 0.5, scanline: 0, beatFlash: 0, lightLeak: 0 },
+        320,
+        180
+      )
+      const gC = octx.getImageData(0, 0, 320, 180).data.slice()
+      if (countDiffPixels(gB, gC) > 0) {
+        pass('颗粒确定性', '同 t 完全一致；t 推进后颗粒移动')
+      } else {
+        fail('颗粒确定性', 't 推进后颗粒未移动（grainOffset 可能退化）')
+      }
+    } else {
+      fail('颗粒确定性', '同 t 两次绘制不一致（种子退化）')
+    }
+  }
+
+  // 片头黑场：t≈0 全黑 → t=1.5 正常画面
+  project.updateIntroOutro({ introFade: 1 })
+  await sleep(200)
+  pbRef.current.seek(0.05)
+  await sleep(250)
+  const introA = captureRegion(stage, 0.3 * 1920, 0.3 * 1080, 0.7 * 1920, 0.7 * 1080)
+  pbRef.current.seek(1.5)
+  await sleep(250)
+  const introB = captureRegion(stage, 0.3 * 1920, 0.3 * 1080, 0.7 * 1920, 0.7 * 1080)
+  project.updateIntroOutro({ introFade: 0 })
+  if (meanSum(introB) - meanSum(introA) > 120) {
+    pass(
+      '片头黑场',
+      't=0.05 中心亮度 ' + meanSum(introA).toFixed(0) + ' → t=1.5 ' + meanSum(introB).toFixed(0)
+    )
+  } else {
+    fail(
+      '片头黑场',
+      '亮度 ' + meanSum(introA).toFixed(0) + '→' + meanSum(introB).toFixed(0) + '（>120 预期）'
+    )
+  }
+
+  // 文本打字机：t=0.3 字符亮度像素少于 t=2.0（完成后复位最终态且与 none 等值）
+  project.updateTextEntry('songTitle', { type: 'typewriter', durationSec: 1.2, delaySec: 0 })
+  await sleep(200)
+  pbRef.current.seek(0.3)
+  await sleep(250)
+  const twA = captureRegion(stage, 0.54 * 1920, 0.13 * 1080, 0.94 * 1920, 0.25 * 1080)
+  pbRef.current.seek(2.0)
+  await sleep(250)
+  const twB = captureRegion(stage, 0.54 * 1920, 0.13 * 1080, 0.94 * 1920, 0.25 * 1080)
+  project.updateTextEntry('songTitle', { type: 'none' })
+  if (countBright(twB) > countBright(twA) + 20) {
+    pass('打字机入场', '亮像素 ' + countBright(twA) + ' → ' + countBright(twB))
+  } else {
+    fail('打字机入场', '亮像素 ' + countBright(twA) + '→' + countBright(twB) + '（+20 预期）')
+  }
+
+  // 复位全部动效（防污染后续检查/导出）
+  project.updateCanvasFx({ vignette: 0, grain: 0, scanline: 0, beatFlash: 0, lightLeak: 0 })
+  project.updateIntroOutro({ introFade: 0, introTitleCard: 0, outroFade: 0 })
+  project.updateBackgroundFx({ kenBurns: 0, bassBrightness: 0, bassHue: 0 })
 
   return { ok: checks.every((c) => c.pass), checks }
 }

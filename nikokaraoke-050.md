@@ -18,7 +18,7 @@
 - [x] T7: 片头/片尾——黑场淡入、标题卡（复用文本样式）、片尾淡出（tSec 时间函数）
 - [x] T8: 预览集成——CanvasStage 叠加重绘（frameT 驱动）+ 动效面板（背景/主图/文本入场/全局后期/片头片尾分组，全部默认关）
 - [x] T9: 导出集成——exportVideo 逐帧 compose 同函数应用全部特效（含 CanvasFX overlay 与 30/60fps 序列一致验证）
-- [ ] T10: 单测与回归——canvasfx/camera/entry 纯函数测试；fps 一致性（同 tSec 同输出）；smoke-visual 特效开关像素校验 + 播放中两时刻差异
+- [x] T10: 单测与回归——canvasfx/camera/entry 纯函数测试；fps 一致性（同 tSec 同输出）；smoke-visual 特效开关像素校验 + 播放中两时刻差异
 - [ ] T11: 端到端验收——导出含特效 MP4（ffprobe + 抽帧对比预览同 tSec 帧）+ 全量回归（typecheck/lint/test/build/smoke-visual）
 - [ ] T12: 文档与交付——ROADMAP 更新（0.4.0 勾掉、0.5.0 进度）、DECISIONS 追加决策、README 简述；版本 0.5.0；提交推送 + 截图汇报等用户验收
 
@@ -33,3 +33,4 @@
 - T7：片头/片尾——fx.ts introOutroAlpha（黑场 1→0 / 标题卡边缘渐入渐出 / 片尾 0→1，纯时刻函数）+ SceneLayers 新增 IntroOutroLayer（fx 层，最顶）：黑场 Rect + 标题卡双文本（复用歌名/作者样式居中，1.6–1.7× 字号）；mediaDurationSec 贯通 CanvasStage/ExportStageHost；导出 viz 舞台 layers 增加 'fx'。
 - T8：预览集成——CanvasStage 新增 CanvasFxOverlay（2D canvas 叠于舞台，rAF 自绘 drawCanvasFx；能量采样 bandEnergiesAt；playTimeRef 值盒由 useAudioPlayback 每 computeBars 写入）；动效面板：SidePanel 新增「动效与后期」tab（tabs.fx 三语）+ FxPanel 五分组（背景/主图/文本入场/全局后期/片头片尾，全默认关）；useProject 新增 5 个 update 函数（入撤销栈）。
 - T9：导出集成——layout.hasDynamicFx（默认关 = 快速路径与 0.4.0 输出一致）；ExportStageHost 新增全层 Stage + handle.renderFull；exportVideo 逐帧：dynamic → renderFull（同批节点），否则静态+可视化合成；CanvasFX 全局后期在 compose ctx 上同函数叠加（能量=bandEnergiesAt(t+offset)，30/60fps 同 t 同值）；导出 smoke 720p/1080p@30 全过。
+- T10：单测与回归——fx.test 新增 fps 序列一致（30/60fps 网格共享 tSec 全等 + 时间演化）；smoke-visual 新增 0.5.0 动效组（暂停态 seek 驱动，确定性）：Ken Burns 生效（背景区两时刻差异 4112px，调参后幅度映射 ×0.35 且测试周期 3s）、全局后期暗角（角 r=93 暗于中心 255）、颗粒确定性（同 t 全等/推进移动）、片头黑场（亮度 23→457）、打字机入场（亮像素 628→2173）；连跑 3 次全绿；49 单测全过。

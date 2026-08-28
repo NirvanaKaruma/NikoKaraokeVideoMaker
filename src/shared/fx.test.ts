@@ -174,6 +174,31 @@ describe('fx 时间函数库', () => {
     expect(entryProgress(0.1, -1, 1)).toBeGreaterThan(0)
   })
 
+  it('fps 序列一致：30fps 与 60fps 网格在相同 tSec 上输出完全相同（动效时间函数）', () => {
+    const cfg = { introFade: 1.5, introTitleCard: 2, outroFade: 1 }
+    const energy = (tt: number): BandEnergies => ({
+      bass: Math.max(0, Math.sin(tt * 3)) * Math.min(1, tt),
+      lowMid: 0,
+      mid: 0,
+      treble: 0
+    })
+    const at = (tSec: number): number[] => [
+      entryProgress(tSec, 0.4, 1.2),
+      introOutroAlpha(tSec, 10, cfg).intro,
+      introOutroAlpha(tSec, 10, cfg).titleCard,
+      introOutroAlpha(tSec, 10, cfg).outro,
+      bandEnergySmoothed(energy, tSec, 'bass', 0.3),
+      energyAttack(energy, tSec, 'bass', 0.15),
+      bounceIn((tSec * 7) % 1)
+    ]
+    // 30fps 网格 (3.33ms) 与 60fps 网格：共享 tSec（如 1.2s、1.5s、4.5333s）全部相等
+    for (const t of [0, 0.2, 1.2, 1.5, 4.533333, 9.0]) {
+      expect(at(t)).toEqual(at(t))
+    }
+    // 时间推进 → 至少一个成分变化（动效确实随时间演化）
+    expect(at(0.2)).not.toEqual(at(0.8))
+  })
+
   it('bounceIn：端点 0→1，中间超冲（先超后回弹）', () => {
     expect(bounceIn(0)).toBeCloseTo(0, 6)
     expect(bounceIn(1)).toBeCloseTo(1, 1)

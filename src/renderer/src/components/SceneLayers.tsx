@@ -208,7 +208,7 @@ function BackgroundLayer({
           tVis,
           SEED_BG_FX,
           Math.max(1, background.fx.kenBurnsDuration),
-          background.fx.kenBurns * 0.1
+          background.fx.kenBurns * 0.35
         )
         g.scale({ x: s, y: s })
         g.x((canvas.width - canvas.width * s) / 2 + dx * canvas.width)
