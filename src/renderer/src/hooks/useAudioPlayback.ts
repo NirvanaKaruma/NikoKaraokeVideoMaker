@@ -221,8 +221,10 @@ export function useAudioPlayback(
     playingRef.current = false
     setIsPlaying(false)
     setCurrentTime(offsetRef.current)
-    // 命令式路径下把最后一帧谱同步回 state，避免后续声明式重渲染回退到旧值
+    // command 路径下同步最后一帧（lastBars / lastT）到 state/渲染侧，
+    // 避免后续声明式重渲染回退到旧值（flow 相位与暂停点一致，防突变）
     if (lastBarsRef.current) setBars(Array.from(lastBarsRef.current))
+    frameTSinkRef.current?.current?.(offsetRef.current)
   }, [])
 
   const seek = useCallback(
@@ -241,6 +243,8 @@ export function useAudioPlayback(
       }
       offsetRef.current = clamped
       setCurrentTime(clamped)
+      // 同步可视化帧时间（flow 相位跟随 seek 后时间轴，避免突变）
+      frameTSinkRef.current?.current?.(clamped)
       computeBars(clamped, true)
     },
     [computeBars, startSource]

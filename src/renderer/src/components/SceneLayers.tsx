@@ -653,15 +653,9 @@ function VisualizerLayer({
     return linePts(lineHeights('wave', bars, 0), slot, baseY, maxH)
   }, [style, bars, slot, baseY, maxH])
 
-  const renderFlowPts1 = useMemo(() => {
-    if (style !== 'flow') return NO_POINTS
-    return linePts(lineHeights('flow', bars, 0, 0), slot, baseY, maxH)
-  }, [style, bars, slot, baseY, maxH])
-
-  const renderFlowPts2 = useMemo(() => {
-    if (style !== 'flow') return NO_POINTS
-    return linePts(lineHeights('flow', bars, 0, Math.PI), slot, baseY, maxH)
-  }, [style, bars, slot, baseY, maxH])
+  // flow 不做渲染期 points（React 不参与 flow 绘制）：
+  // 相位/波形全部由命令式路径独占更新（frameT 通道），暂停/seek 时也会触发一次
+  // 命令式更新 → 与播放末帧连续，无突变，也无 React 覆盖风险。
 
   const renderShape = (): React.JSX.Element[] | React.JSX.Element => {
     if (isLine) {
@@ -673,7 +667,7 @@ function VisualizerLayer({
             <KonvaLine
               key="flow-secondary"
               ref={(el) => bindLine(el, line2Ref)}
-              points={renderFlowPts2}
+              points={NO_POINTS}
               stroke={lastColor}
               strokeWidth={2}
               opacity={0.55}
@@ -684,7 +678,7 @@ function VisualizerLayer({
             <KonvaLine
               key="flow-primary"
               ref={(el) => bindLine(el, lineRef)}
-              points={renderFlowPts1}
+              points={NO_POINTS}
               stroke={firstColor}
               strokeWidth={3}
               lineCap="round"

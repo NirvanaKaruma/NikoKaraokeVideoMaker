@@ -237,11 +237,11 @@ export function lineHeights(
   for (let i = 0; i < n; i++) {
     const v = Math.min(Math.max(bars[i] ?? 0, 0), 1)
     if (mode === 'flow') {
-      // 流动感：相位沿 x 轴前进；扰动 = sin 包络 × 频谱混合
-      const phase = (i / Math.max(1, n - 1)) * Math.PI * 4 - tSec * 3.0 - phaseShift
-      const ripple = 0.5 + 0.5 * Math.sin(phase)
-      const ripple2 = 0.5 + 0.5 * Math.sin(phase + Math.PI * 0.5)
-      out[i] = Math.min(1, v * 0.6 + (ripple * 0.5 + 0.15) * (0.4 + 0.6 * v) + ripple2 * 0.12)
+      // 流动感：频谱为主体（0.8），相位扰动为 ±0.25 的随附波动 → 波形轮廓清晰可见
+      const phase = (i / Math.max(1, n - 1)) * Math.PI * 4 - tSec * 2.2 - phaseShift
+      const ripple = Math.sin(phase) * 0.5 + 0.5
+      const ripple2 = Math.sin(phase + Math.PI * 0.5) * 0.5 + 0.5
+      out[i] = Math.min(1, v * 0.8 + (ripple * 0.5 + ripple2 * 0.2) * 0.5)
     } else {
       out[i] = v
     }
