@@ -809,6 +809,20 @@ async function runAudioSmoke(
   project.updateVisualizer({ bpm: null, beatIntervalSec: null })
   project.updateBeatFx({ pulse: 0, burst: 0, particleDensity: 0 })
 
+  // 长音频导入性能探针（用户反馈：导入后长时间卡顿）：180s WAV → 解码耗时
+  const pbStatus = (): string => pbRef.current.status
+  const longT0 = Date.now()
+  project.setAudioFile(makeTwoToneWavFile(180, 8000))
+  while ((pbStatus() === 'empty' || pbStatus() === 'loading') && Date.now() - longT0 < 30000) {
+    await sleep(120)
+  }
+  const decodeMs = Date.now() - longT0
+  if (pbRef.current.status === 'ready') {
+    pass('长音频导入耗时', decodeMs + 'ms（180s WAV 解码至就绪）')
+  } else {
+    fail('长音频导入耗时', 'status=' + pbRef.current.status + ' 等待 ' + decodeMs + 'ms')
+  }
+
   return { ok: checks.every((c) => c.pass), checks }
 }
 

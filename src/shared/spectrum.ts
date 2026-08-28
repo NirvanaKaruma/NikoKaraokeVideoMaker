@@ -15,6 +15,9 @@ export interface SpectrumAnalyzer {
   window: Float32Array
   twiddles: Float32Array
   bitRev: Int32Array
+  /** FFT 工作缓冲（复用避免每帧分配 2×8192 浮点 → GC 压力；单线程顺序调用安全） */
+  scratchRe: Float32Array | null
+  scratchIm: Float32Array | null
 }
 
 export interface SpectrumOptions {
@@ -95,7 +98,9 @@ export function createSpectrumAnalyzer(
     freqMax: fMax,
     window: makeHann(fftSize),
     twiddles: makeTwiddles(fftSize),
-    bitRev: makeBitRev(fftSize)
+    bitRev: makeBitRev(fftSize),
+    scratchRe: null,
+    scratchIm: null
   }
 }
 
@@ -167,8 +172,18 @@ export function spectrumAt(
   }
   const center = Math.min(Math.max(Math.round(t * sr), 0), len - 1)
   const offset = center - n / 2
-  const re = new Float32Array(n)
-  const im = new Float32Array(n)
+  // 复用工作缓冲（0.5.0+ 动效层每帧会多次调用 spectrumAt，分配会成为 GC 尖刺来源）
+  let re = analyzer.scratchRe
+  let im = analyzer.scratchIm
+  if (!re || re.length !== n || !im || im.length !== n) {
+    re = new Float32Array(n)
+    im = new Float32Array(n)
+    analyzer.scratchRe = re
+    analyzer.scratchIm = im
+  }
+  // 复用缓冲必须清零（音频边缘采样点越界部分不再写入）
+  re.fill(0)
+  im.fill(0)
   for (let i = 0; i < n; i++) {
     const src = offset + i
     if (src >= 0 && src < len) {

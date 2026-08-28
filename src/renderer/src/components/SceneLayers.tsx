@@ -220,8 +220,10 @@ function BackgroundLayer({
         g.x(0)
         g.y(0)
       }
-      // bass 呼吸：0–0.4s 窗口平滑（灯光随低音起伏）+ 手动节拍脉冲（beat 起点短闪）
-      const bassV = analyzer ? bandEnergySmoothed(sample, tVis, 'bass', 0.4) : 0
+      // bass 呼吸：0–0.4s 窗口平滑（灯光随低音起伏）+ 手动节拍脉冲（beat 起点短闪）。
+      // 呼吸未启用时跳过窗口采样（省 5×FFT/帧——曾导致播放中持续卡顿/GC 尖刺）
+      const wantBreath = background.fx.bassBrightness > 0 || background.fx.bassHue > 0
+      const bassV = wantBreath && analyzer ? bandEnergySmoothed(sample, tVis, 'bass', 0.4) : 0
       const period = beatPeriod(layout.visualizer.bpm, layout.visualizer.beatIntervalSec)
       const env = period != null ? beatEnvelope(tVis, period) : 0
       const bright = breatheBrightRef.current

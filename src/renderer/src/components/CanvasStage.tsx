@@ -41,6 +41,7 @@ function CanvasFxOverlay({
   offY: number
 }): React.JSX.Element {
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  const lastSigRef = useRef<string>('')
   const enabled =
     canvasFx.vignette > 0 ||
     canvasFx.grain > 0 ||
@@ -54,13 +55,31 @@ function CanvasFxOverlay({
     let raf = 0
     const draw = (): void => {
       raf = requestAnimationFrame(draw)
+      // 空闲跳过：暂停/未加载且信号未变时整帧跳过（省全画布 clear+重绘）
+      const offset = visualizer.offsetMs > 0 ? visualizer.offsetMs / 1000 : 0
+      const t = (playTimeRef?.current ?? 0) + offset
+      const sig = [
+        t,
+        canvasFx.vignette,
+        canvasFx.grain,
+        canvasFx.scanline,
+        canvasFx.beatFlash,
+        canvasFx.lightLeak,
+        beat.pulse,
+        beat.burst,
+        beat.particlePreset,
+        beat.particleDensity,
+        visualizer.bpm,
+        visualizer.beatIntervalSec,
+        analyzer ? 1 : 0
+      ].join('|')
+      if (sig === lastSigRef.current) return
+      lastSigRef.current = sig
       const c = canvasRef.current
       if (!c) return
       const ctx = c.getContext('2d')
       if (!ctx) return
       ctx.clearRect(0, 0, c.width, c.height)
-      const offset = visualizer.offsetMs > 0 ? visualizer.offsetMs / 1000 : 0
-      const t = (playTimeRef?.current ?? 0) + offset
       const period = beatPeriod(visualizer.bpm, visualizer.beatIntervalSec)
       const env = period != null ? beatEnvelope(t, period) : 0
       // 粒子：beat 爆发 boost（音乐响应）
