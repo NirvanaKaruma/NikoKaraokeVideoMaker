@@ -153,6 +153,17 @@ const api = {
     }
   },
 
+  /** 1.0.0 T7b 流式写盘：invoke 分块写（ACK = fs write 回调；窗口 1 块；position=字节偏移定位写） */
+  muxer: {
+    start: (hintName: string): Promise<{ jobId: string }> =>
+      ipcRenderer.invoke(IPC.muxerStart, hintName),
+    write: (jobId: string, buffer: ArrayBuffer, position: number): Promise<void> =>
+      ipcRenderer.invoke(IPC.muxerWrite, jobId, buffer, position),
+    finish: (jobId: string): Promise<{ ok: boolean; target?: string; error?: string }> =>
+      ipcRenderer.invoke(IPC.muxerFinish, jobId),
+    cancel: (jobId: string): Promise<boolean> => ipcRenderer.invoke(IPC.muxerCancel, jobId)
+  },
+
   exportApi: {
     pickOutput: (defaultName: string): Promise<string | null> =>
       ipcRenderer.invoke(IPC.exportPickOutput, defaultName),

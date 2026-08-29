@@ -1,4 +1,5 @@
-import { ArrayBufferTarget, Muxer } from 'mp4-muxer'
+import { ArrayBufferTarget, Muxer, StreamTarget } from 'mp4-muxer'
+import { openDiskStream, STREAM_CHUNK_BYTES, type DiskStreamSink } from './streamMuxer'
 import {
   hasCustomLayerOrder,
   hasDynamicFx,
@@ -213,14 +214,24 @@ export interface EncodeVideoOptions {
   stage: ExportStageHandle
   onProgress: (p: ExportProgressInfo) => void
   signal: AbortSignal
+  /** 1.0.0 T7b：提供则流式写盘（StreamTarget+MessagePort+ACK 背压）；不提供走内存 ArrayBufferTarget */
+  diskName?: string
+}
+
+/** 1.0.0 T7b 结果：内存缓冲 或 流式临时文件路径（二选一；取消 = 双 null） */
+export interface ExportVideoResult {
+  buffer: ArrayBuffer | null
+  streamPath: string | null
 }
 
 /**
  * 导出编码（T18）：静态层一次渲染 + 逐帧频谱 → H.264(yuv420p) → mp4-muxer 纯视频。
- * 取消：signal.aborted → 返回 null（由调用方清理）。
+ * 1.0.0 T7b：diskName 提供时流式写盘（StreamTarget chunked + MessagePort + ACK 背压；
+ * fastStart:false = moov 尾置，重排交给 ffmpeg merge），否则内存缓冲（旧路径）。
+ * 取消：signal.aborted → 返回 {buffer:null, streamPath:null}（临时文件由 main 清理）。
  */
-export async function encodeVideo(opts: EncodeVideoOptions): Promise<ArrayBuffer | null> {
-  const { layout, analyzer, durationMs, resolution, stage, onProgress, signal } = opts
+export async function encodeVideo(opts: EncodeVideoOptions): Promise<ExportVideoResult> {
+  const { layout, analyzer, durationMs, resolution, stage, onProgress, signal, diskName } = opts
   const fps = layout.export.fps
   // 0.7.0 前导留白：视频帧数 = 音频时长 + lead；lead 段画面=黑场/标题卡（introOutro 时间函数），
   // 频谱/踩点等音频驱动量按 audioT = t − lead 采样（lead 内全静音柱）。
@@ -238,11 +249,37 @@ export async function encodeVideo(opts: EncodeVideoOptions): Promise<ArrayBuffer
   }
   const encoderConfig = picked.config
 
-  const muxer = new Muxer({
-    target: new ArrayBufferTarget(),
-    video: { codec: 'avc', width: resolution.width, height: resolution.height },
-    fastStart: 'in-memory'
-  })
+  // 1.0.0 T7b：流式目标（append-only，moov 尾置——fastStart:false）或内存目标（旧路径）
+  let diskSink: DiskStreamSink | null = null
+  let diskError: Error | null = null
+  let muxer: Muxer<ArrayBufferTarget | StreamTarget>
+  if (diskName != null) {
+    const { jobId } = await window.api.muxer.start(diskName)
+    diskSink = openDiskStream(jobId)
+    diskSink.onError((msg) => {
+      if (!diskError) diskError = new Error(msg)
+    })
+    const sink = diskSink
+    muxer = new Muxer({
+      target: new StreamTarget({
+        chunked: true,
+        chunkSize: STREAM_CHUNK_BYTES,
+        onData: (data, position) => {
+          void sink.write(data, position).catch((err: Error) => {
+            if (!diskError) diskError = err
+          })
+        }
+      }),
+      video: { codec: 'avc', width: resolution.width, height: resolution.height },
+      fastStart: false
+    })
+  } else {
+    muxer = new Muxer({
+      target: new ArrayBufferTarget(),
+      video: { codec: 'avc', width: resolution.width, height: resolution.height },
+      fastStart: 'in-memory'
+    })
+  }
 
   let encoderError: Error | null = null
   const encoder = new VideoEncoder({
@@ -301,7 +338,8 @@ export async function encodeVideo(opts: EncodeVideoOptions): Promise<ArrayBuffer
   try {
     for (let i = 0; i < totalFrames; i++) {
       if (signal.aborted) {
-        return null
+        if (diskSink) void diskSink.cancel()
+        return { buffer: null, streamPath: null }
       }
       const f0 = performance.now()
       const tSec = i / fps // 画面时间轴（含 lead）
@@ -380,6 +418,19 @@ export async function encodeVideo(opts: EncodeVideoOptions): Promise<ArrayBuffer
           )
         }
       }
+      // 1.0.0 T7b 背压①：编码器排队 ≤2（4K RGBA≈30MB/帧，防原始帧队列 OOM）
+      while (encoder.encodeQueueSize > 2) {
+        await new Promise<void>((res) => {
+          const h = (): void => {
+            encoder.removeEventListener('dequeue', h)
+            res()
+          }
+          encoder.addEventListener('dequeue', h)
+        })
+      }
+      // 1.0.0 T7b 背压③：流式积压 ≤ 2 块 = 8MB → 慢盘写回压编码
+      if (diskSink) await diskSink.throttle(STREAM_CHUNK_BYTES * 2)
+      if (diskError) throw diskError
       const frame = new VideoFrame(compose, {
         timestamp: Math.round((i * 1_000_000) / fps),
         duration: Math.round(1_000_000 / fps)
@@ -418,8 +469,15 @@ export async function encodeVideo(opts: EncodeVideoOptions): Promise<ArrayBuffer
     await encoder.flush()
     if (encoderError) throw encoderError
     muxer.finalize()
-    return muxer.target.buffer
+    if (diskSink) {
+      // 流式：等待全部 ACK（含 moov 尾块）→ 主进程 end 流 → 临时文件路径
+      const path = await diskSink.finish()
+      return { buffer: null, streamPath: path }
+    }
+    return { buffer: (muxer.target as ArrayBufferTarget).buffer, streamPath: null }
   } finally {
+    // 失败/取消：主进程摧毁流并删临时文件；成功路径 job 已删除（cancel 幂等）
+    if (diskSink) void diskSink.cancel()
     try {
       encoder.close()
     } catch {

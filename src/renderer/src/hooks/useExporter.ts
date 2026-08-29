@@ -78,14 +78,15 @@ export function useExporter(args: UseExporterArgs): {
       const abort = abortRef.current
       if (!abort) return
       try {
-        // 1) 编码纯视频（renderer）
-        const buffer = await encodeVideo({
+        // 1) 编码纯视频（renderer；1.0.0 T7b 流式写盘 = diskName 提供时直落盘，moov 尾置）
+        const result = await encodeVideo({
           layout,
           analyzer: a.analyzer,
           durationMs: a.durationMs,
           resolution,
           stage: handle,
           signal: abort.signal,
+          diskName: (layout.texts.songTitle.text || 'video') + '-' + Date.now(),
           onProgress: (p) =>
             update({
               ...p,
@@ -96,7 +97,7 @@ export function useExporter(args: UseExporterArgs): {
                   : undefined
             })
         })
-        if (!buffer) {
+        if (!result.buffer && !result.streamPath) {
           update({ phase: 'cancelled', message: t('exporter.exportCancelled') })
           setStageRequest(null)
           return
@@ -106,12 +107,14 @@ export function useExporter(args: UseExporterArgs): {
           setStageRequest(null)
           return
         }
-        // 2) 纯视频写入临时文件（main）
+        // 2) 纯视频：流式已落盘 → 直接给合并器路径；否则内存缓冲写临时文件（main）
         update({ phase: 'merging', mergePercent: 0, message: t('exporter.prepareMerge') })
-        const videoPath = await window.api.exportApi.saveVideo(
-          buffer,
-          'video-' + Date.now() + '.mp4'
-        )
+        const videoPath =
+          result.streamPath ??
+          (await window.api.exportApi.saveVideo(
+            result.buffer ?? new ArrayBuffer(0),
+            'video-' + Date.now() + '.mp4'
+          ))
         // 3) 音频路径：优先原文件路径（拖放/选择），缺失则把字节写临时文件（无路径来源如内存生成）
         let audioPath = a.audioFile ? window.api.getFilePath(a.audioFile) : ''
         if (!audioPath && a.audioFile) {

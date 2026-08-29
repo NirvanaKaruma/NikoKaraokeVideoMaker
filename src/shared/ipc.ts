@@ -35,5 +35,12 @@ export const IPC = {
   exportSaveAudio: 'export:save-audio',
   exportMerge: 'export:merge',
   exportMergeCancel: 'export:merge:cancel',
-  exportMergeProgress: 'export:merge:progress'
+  exportMergeProgress: 'export:merge:progress',
+
+  /** 1.0.0 T7b 流式写盘：renderer 分块 invoke 写（每块 = 一次 fs write，resolve = ACK；背压=在途窗口 1 块）
+   * 注：MessageChannelMain 端口经 contextBridge 传递在本构建不可达（实测），采用 invoke 同协议降级。 */
+  muxerStart: 'muxer:start',
+  muxerWrite: 'muxer:write',
+  muxerFinish: 'muxer:finish',
+  muxerCancel: 'muxer:cancel'
 } as const

@@ -61,6 +61,13 @@ declare global {
           cancel: () => void
         }
       }
+      /** 1.0.0 T7b 流式写盘 */
+      muxer: {
+        start: (hintName: string) => Promise<{ jobId: string }>
+        write: (jobId: string, buffer: ArrayBuffer, position: number) => Promise<void>
+        finish: (jobId: string) => Promise<{ ok: boolean; target?: string; error?: string }>
+        cancel: (jobId: string) => Promise<boolean>
+      }
       exportApi: {
         pickOutput: (defaultName: string) => Promise<string | null>
         saveVideo: (buffer: ArrayBuffer, name: string) => Promise<string>
