@@ -301,7 +301,10 @@ export const zhCn = {
     remove: '删除片段',
     hint: '点击/拖动轨道进行试听定位；将歌曲分割成段落后可单独编辑每段',
     segmentLabel: '段落 {i}',
-    inherit: '继承全局'
+    inherit: '继承全局',
+    editTarget: '当前编辑对象',
+    editGlobal: '全局基线',
+    editSegment: '片段 {i}'
   },
   overlay: {
     title: '附加图层',

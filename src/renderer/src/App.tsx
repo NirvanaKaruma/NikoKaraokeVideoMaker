@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type Konva from 'konva'
 import { SUBTITLE_ZONE_Y, defaultLayerOrder } from '@shared/layout'
+import { resolveLayoutAt } from '@shared/timeline'
 import { useLocale } from './hooks/useLocale'
+import { useEditableLayout } from './hooks/useEditableLayout'
 import { useProject, type CanvasImageElement } from './hooks/useProject'
 import { useAudioPlayback, type PlaybackApi } from './hooks/useAudioPlayback'
 import { useCustomFont, customFontFamily } from './hooks/useCustomFont'
@@ -1171,12 +1173,13 @@ async function runAudioSmoke(
 function App(): React.JSX.Element {
   const { t } = useLocale()
   const project = useProject()
+  /** 编辑上下文（1.0.0 T4）：null=全局基线；选中片段 = 段视图（所有面板写入自动路由） */
+  const edit = useEditableLayout(project)
   const [selectedId, setSelectedId] = useState<SelectableId>(null)
   const [helpOpen, setHelpOpen] = useState(false)
   const [exportOpen, setExportOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [timelineOpen, setTimelineOpen] = useState(true)
-  const [selectedSegmentId, setSelectedSegmentId] = useState<string | null>(null)
   const stageRef = useRef<Konva.Stage | null>(null)
   const projectRef = useRef(project)
 
@@ -1203,13 +1206,14 @@ function App(): React.JSX.Element {
     return m
   }, [project.assets.overlayImages])
   // 图层面板行（0.9.0）：按渲染顺序展开（null=默认序）；名称 i18n key + 附加层序号
+  // 1.0.0 T4：行来自当前编辑视图（段视图里隐藏/锁定/顺序按段呈现）
   const layerRows = useMemo(() => {
-    const overlays = project.layout.overlayLayers ?? []
+    const overlays = edit.view.overlayLayers ?? []
     // layers 已物化时为 LayerItem[]（取 id）；null 时按默认序（string[]）
     const order = (
-      project.layout.layers ?? defaultLayerOrder(overlays.map((o) => 'overlay:' + o.id))
+      edit.view.layers ?? defaultLayerOrder(overlays.map((o) => 'overlay:' + o.id))
     ).map((l) => (typeof l === 'string' ? l : l.id))
-    const state = new Map((project.layout.layers ?? []).map((l) => [l.id, l]))
+    const state = new Map((edit.view.layers ?? []).map((l) => [l.id, l]))
     return order.map((id) => {
       const st = state.get(id)
       const base = {
@@ -1234,7 +1238,7 @@ function App(): React.JSX.Element {
                 : 'layers.visualizer'
       return { ...base, nameKey }
     })
-  }, [project.layout.overlayLayers, project.layout.layers])
+  }, [edit.view.overlayLayers, edit.view.layers])
   const pb = useAudioPlayback(
     project.assets.audioFile,
     project.layout.visualizer,
@@ -1934,17 +1938,17 @@ function App(): React.JSX.Element {
             snapEnabled={project.layout.editor.snapEnabled}
             onLayerToggleHidden={(id) =>
               project.updateLayerState(id, {
-                hidden: !(project.layout.layers?.find((l) => l.id === id)?.hidden ?? false)
+                hidden: !(edit.view.layers?.find((l) => l.id === id)?.hidden ?? false)
               })
             }
             onLayerToggleLocked={(id) =>
               project.updateLayerState(id, {
-                locked: !(project.layout.layers?.find((l) => l.id === id)?.locked ?? false)
+                locked: !(edit.view.layers?.find((l) => l.id === id)?.locked ?? false)
               })
             }
             onLayerMove={(id, dir) => project.moveLayerState(id, dir)}
             onSnapToggle={(v) => project.updateEditor({ snapEnabled: v })}
-            overlayLayers={project.layout.overlayLayers}
+            overlayLayers={edit.view.overlayLayers}
             overlayImageUrls={overlayUrls}
             selectedId={selectedId}
             onOverlaySelect={setSelectedId}
@@ -1959,8 +1963,8 @@ function App(): React.JSX.Element {
             coverFile={project.assets.coverFile}
             audioFile={project.assets.audioFile}
             fileError={project.fileError}
-            onSongTitleChange={(t) => project.updateText('songTitle', { text: t })}
-            onArtistChange={(t) => project.updateText('artist', { text: t })}
+            onSongTitleChange={(t) => project.updateTextGlobal('songTitle', { text: t })}
+            onArtistChange={(t) => project.updateTextGlobal('artist', { text: t })}
             onCoverFile={(f) => void project.setCoverFile(f)}
             onAudioFile={(f) => void project.setAudioFile(f)}
             audioStatus={pb.status}
@@ -1974,26 +1978,26 @@ function App(): React.JSX.Element {
             onPlay={pb.play}
             onPause={pb.pause}
             onSeek={pb.seek}
-            mainImage={project.layout.mainImage}
+            mainImage={edit.view.mainImage}
             onMainImageChange={project.updateMainImage}
-            background={project.layout.background}
+            background={edit.view.background}
             bgUrl={project.assets.bgUrl}
             bgFile={project.assets.bgFile}
             onBackgroundChange={project.updateBackground}
             onBgFile={(f) => void project.setBgFile(f)}
             onClearBg={project.clearBgImage}
-            songTitleCfg={project.layout.texts.songTitle}
-            artistCfg={project.layout.texts.artist}
+            songTitleCfg={edit.view.texts.songTitle}
+            artistCfg={edit.view.texts.artist}
             onSongTitleCfgChange={(x) => project.updateText('songTitle', x)}
             onArtistCfgChange={(x) => project.updateText('artist', x)}
-            visualizer={project.layout.visualizer}
+            visualizer={edit.view.visualizer}
             onVisualizerChange={project.updateVisualizer}
-            backgroundFx={project.layout.background.fx}
-            imageFx={project.layout.mainImage.fx}
-            songTitleEntry={project.layout.texts.songTitle.entry}
-            artistEntry={project.layout.texts.artist.entry}
-            canvasFx={project.layout.canvasFx}
-            introOutro={project.layout.introOutro}
+            backgroundFx={edit.view.background.fx}
+            imageFx={edit.view.mainImage.fx}
+            songTitleEntry={edit.view.texts.songTitle.entry}
+            artistEntry={edit.view.texts.artist.entry}
+            canvasFx={edit.view.canvasFx}
+            introOutro={edit.view.introOutro}
             onBackgroundFxChange={project.updateBackgroundFx}
             onImageFxChange={project.updateImageFx}
             onSongTitleEntryChange={(x) => project.updateTextEntry('songTitle', x)}
@@ -2002,14 +2006,17 @@ function App(): React.JSX.Element {
             onIntroOutroChange={project.updateIntroOutro}
             audio={project.layout.audio}
             onAudioChange={project.updateAudioEngine}
-            beat={project.layout.beat}
-            visualizerForBeat={project.layout.visualizer}
+            beat={edit.view.beat}
+            visualizerForBeat={edit.view.visualizer}
             onBeatFxChange={project.updateBeatFx}
             onVisualizerForBeatChange={project.updateVisualizer}
+            editLabel={edit.label}
+            editIsSegment={edit.isSegment}
+            onEditGlobal={() => project.setEditSegment(null)}
           />
           <main className="canvas-wrap">
             <CanvasStage
-              layout={project.layout}
+              layout={resolveLayoutAt(project.layout, pb.currentTime)}
               coverElement={project.assets.coverElement}
               bgElement={project.assets.bgElement}
               selectedId={selectedId}
@@ -2038,11 +2045,14 @@ function App(): React.JSX.Element {
             segments={project.layout.timeline?.segments ?? []}
             durationSec={pb.duration}
             currentT={pb.currentTime}
-            selectedSegmentId={selectedSegmentId}
+            selectedSegmentId={edit.segId}
             onSeek={pb.seek}
-            onSelectSegment={setSelectedSegmentId}
+            onSelectSegment={project.setEditSegment}
             onSplitAt={(t) => project.splitSegment(t)}
-            onRemoveSegment={project.removeSegment}
+            onRemoveSegment={(id) => {
+              project.removeSegment(id)
+              if (project.editSegId === id) project.setEditSegment(null)
+            }}
             onUpdateBounds={project.updateSegmentBounds}
             onClose={() => setTimelineOpen(false)}
           />

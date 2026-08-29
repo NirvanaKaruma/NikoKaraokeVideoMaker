@@ -112,6 +112,10 @@ export interface SidePanelProps {
   visualizerForBeat: VisualizerConfig
   onBeatFxChange: (patch: Partial<BeatFxConfig>) => void
   onVisualizerForBeatChange: (patch: Partial<VisualizerConfig>) => void
+  // 编辑上下文（1.0.0 T4）：当前编辑对象条
+  editLabel: string
+  editIsSegment: boolean
+  onEditGlobal: () => void
 }
 
 const TABS: { id: SideTab; labelKey: string }[] = [
@@ -122,12 +126,28 @@ const TABS: { id: SideTab; labelKey: string }[] = [
   { id: 'fx', labelKey: 'tabs.fx' }
 ]
 
+/** 布局四面板（1.0.0 T4）：顶部显示「当前编辑对象」上下文条 */
+const CTX_TABS: SideTab[] = ['layers', 'text', 'visualizer', 'fx']
+
 /** 左侧面板：常驻播放控制 + 分类 tab（M5 UI 重构：避免单列无限堆叠） */
 export function SidePanel(props: SidePanelProps): React.JSX.Element {
   const { t } = useLocale()
   const [tab, setTab] = useState<SideTab>('assets')
   return (
     <aside className="side-panel">
+      {CTX_TABS.includes(tab) && (
+        <div className="edit-ctx-bar">
+          <span className="edit-ctx-label">{t('timeline.editTarget')}</span>
+          <span className={'edit-ctx-value' + (props.editIsSegment ? ' seg' : '')}>
+            {props.editLabel}
+          </span>
+          {props.editIsSegment && (
+            <button type="button" className="mini-btn" onClick={props.onEditGlobal}>
+              {t('timeline.editGlobal')}
+            </button>
+          )}
+        </div>
+      )}
       <AudioPanel
         status={props.audioStatus}
         error={props.audioError}

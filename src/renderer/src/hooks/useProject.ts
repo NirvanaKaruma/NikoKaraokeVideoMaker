@@ -102,6 +102,13 @@ function snapshotOf(l: ProjectLayout, a: ProjectAssets): string {
  */
 export function useProject(): {
   layout: ProjectLayout
+  /** 当前编辑视图（1.0.0 T4）：段视图或全局基线 */
+  view: ProjectLayout
+  /** 当前编辑目标（1.0.0 T4）：null=全局基线，否则片段 id */
+  editSegId: string | null
+  /** 1-based 片段序号（0=全局，1.0.0 T4） */
+  editSegIndex: number
+  setEditSegment: (id: string | null) => void
   assets: ProjectAssets
   fileError: string | null
   notice: string | null
@@ -109,6 +116,8 @@ export function useProject(): {
   updateMainRect: (rect: NormRect) => void
   updateMainImage: (patch: Partial<MainImageConfig>) => void
   updateText: (kind: 'songTitle' | 'artist', patch: Partial<TextLayerConfig>) => void
+  /** 全局直达文本更新（1.0.0 T4：歌曲信息输入栏不随编辑目标路由） */
+  updateTextGlobal: (kind: 'songTitle' | 'artist', patch: Partial<TextLayerConfig>) => void
   updateVisualizer: (patch: Partial<VisualizerConfig>) => void
   updateBackgroundFx: (patch: Partial<BackgroundConfig['fx']>) => void
   updateImageFx: (patch: Partial<MainImageConfig['fx']>) => void
@@ -185,6 +194,22 @@ export function useProject(): {
   /** 脏标记：渲染期派生（快照字符串对比，不产生级联渲染） */
   const dirty = snapshotOf(layout, assets) !== savedSnapshot
 
+  // ── 1.0.0 T4：编辑上下文化。编辑目标（null=全局基线）→ 所有布局写入路由（继承式写时复制）──
+  const [editSegId, setEditSegIdState] = useState<string | null>(null)
+  const editSegIdRef = useRef<string | null>(null)
+  /** 设置/清除段级编辑目标（选择某片段 = 面板与画布进入该段视图） */
+  const setEditSegment = useCallback((id: string | null) => {
+    editSegIdRef.current = id
+    setEditSegIdState(id)
+  }, [])
+
+  /** 当前编辑视图：段（未物化=全局快照）或全局基线；面板/画布只读此对象 */
+  const editSegIndex = editSegId
+    ? (layout.timeline?.segments ?? []).findIndex((s) => s.id === editSegId) + 1
+    : 0
+  const editSeg = editSegIndex > 0 ? (layout.timeline?.segments ?? [])[editSegIndex - 1] : null
+  const view: ProjectLayout = editSeg?.layout ?? layout
+
   const bumpHistory = useCallback(() => {
     setHistLen({ past: pastRef.current.length, future: futureRef.current.length })
   }, [])
@@ -203,34 +228,65 @@ export function useProject(): {
     bumpHistory()
   }, [bumpHistory])
 
+  /**
+   * 提交布局补丁：路由到当前编辑目标。
+   * 全局基线 → 直接应用；段视图 → 写时复制（base = seg.layout ?? 全局，首次改动自动物化「一改即拆」）。
+   */
+  const commit = useCallback(
+    (fn: (l: ProjectLayout) => ProjectLayout) => {
+      pushHistory()
+      const base = layoutRef.current
+      const segId = editSegIdRef.current
+      if (!segId) {
+        applyLayout(fn(base))
+        return
+      }
+      const seg = (base.timeline?.segments ?? []).find((s) => s.id === segId)
+      if (!seg) {
+        applyLayout(fn(base))
+        return
+      }
+      const segments = (base.timeline?.segments ?? []).map((s) =>
+        s.id === segId ? { ...s, layout: fn(seg.layout ?? base) } : s
+      )
+      applyLayout({ ...base, timeline: { ...base.timeline, segments } })
+    },
+    [applyLayout, pushHistory]
+  )
+
   const updateBackground = useCallback(
     (patch: Partial<BackgroundConfig>) => {
-      pushHistory()
-      applyLayout({
-        ...layoutRef.current,
-        background: { ...layoutRef.current.background, ...patch }
-      })
+      commit((l) => ({ ...l, background: { ...l.background, ...patch } }))
     },
-    [pushHistory, applyLayout]
+    [commit]
   )
 
   const updateMainRect = useCallback(
     (rect: NormRect) => {
-      pushHistory()
-      applyLayout({ ...layoutRef.current, mainImage: { ...layoutRef.current.mainImage, rect } })
+      commit((l) => ({ ...l, mainImage: { ...l.mainImage, rect } }))
     },
-    [pushHistory, applyLayout]
+    [commit]
   )
 
   const updateMainImage = useCallback(
     (patch: Partial<MainImageConfig>) => {
-      pushHistory()
-      applyLayout({ ...layoutRef.current, mainImage: { ...layoutRef.current.mainImage, ...patch } })
+      commit((l) => ({ ...l, mainImage: { ...l.mainImage, ...patch } }))
     },
-    [pushHistory, applyLayout]
+    [commit]
   )
 
   const updateText = useCallback(
+    (kind: 'songTitle' | 'artist', patch: Partial<TextLayerConfig>) => {
+      commit((l) => ({
+        ...l,
+        texts: { ...l.texts, [kind]: { ...l.texts[kind], ...patch } }
+      }))
+    },
+    [commit]
+  )
+
+  /** 全局直达（1.0.0 T4）：歌曲标题/作者输入栏——项目元数据，不随编辑目标路由 */
+  const updateTextGlobal = useCallback(
     (kind: 'songTitle' | 'artist', patch: Partial<TextLayerConfig>) => {
       pushHistory()
       applyLayout({
@@ -246,85 +302,63 @@ export function useProject(): {
 
   const updateVisualizer = useCallback(
     (patch: Partial<VisualizerConfig>) => {
-      pushHistory()
-      applyLayout({
-        ...layoutRef.current,
-        visualizer: { ...layoutRef.current.visualizer, ...patch }
-      })
+      commit((l) => ({ ...l, visualizer: { ...l.visualizer, ...patch } }))
     },
-    [pushHistory, applyLayout]
+    [commit]
   )
 
   const updateBackgroundFx = useCallback(
     (patch: Partial<BackgroundConfig['fx']>) => {
-      pushHistory()
-      applyLayout({
-        ...layoutRef.current,
-        background: {
-          ...layoutRef.current.background,
-          fx: { ...layoutRef.current.background.fx, ...patch }
-        }
-      })
+      commit((l) => ({
+        ...l,
+        background: { ...l.background, fx: { ...l.background.fx, ...patch } }
+      }))
     },
-    [pushHistory, applyLayout]
+    [commit]
   )
 
   const updateImageFx = useCallback(
     (patch: Partial<MainImageConfig['fx']>) => {
-      pushHistory()
-      applyLayout({
-        ...layoutRef.current,
-        mainImage: {
-          ...layoutRef.current.mainImage,
-          fx: { ...layoutRef.current.mainImage.fx, ...patch }
-        }
-      })
+      commit((l) => ({
+        ...l,
+        mainImage: { ...l.mainImage, fx: { ...l.mainImage.fx, ...patch } }
+      }))
     },
-    [pushHistory, applyLayout]
+    [commit]
   )
 
   const updateTextEntry = useCallback(
     (kind: 'songTitle' | 'artist', patch: Partial<TextLayerConfig['entry']>) => {
-      pushHistory()
-      applyLayout({
-        ...layoutRef.current,
+      commit((l) => ({
+        ...l,
         texts: {
-          ...layoutRef.current.texts,
-          [kind]: {
-            ...layoutRef.current.texts[kind],
-            entry: { ...layoutRef.current.texts[kind].entry, ...patch }
-          }
+          ...l.texts,
+          [kind]: { ...l.texts[kind], entry: { ...l.texts[kind].entry, ...patch } }
         }
-      })
+      }))
     },
-    [pushHistory, applyLayout]
+    [commit]
   )
 
   const updateCanvasFx = useCallback(
     (patch: Partial<CanvasFxConfig>) => {
-      pushHistory()
-      applyLayout({ ...layoutRef.current, canvasFx: { ...layoutRef.current.canvasFx, ...patch } })
+      commit((l) => ({ ...l, canvasFx: { ...l.canvasFx, ...patch } }))
     },
-    [pushHistory, applyLayout]
+    [commit]
   )
 
   const updateIntroOutro = useCallback(
     (patch: Partial<IntroOutroConfig>) => {
-      pushHistory()
-      applyLayout({
-        ...layoutRef.current,
-        introOutro: { ...layoutRef.current.introOutro, ...patch }
-      })
+      commit((l) => ({ ...l, introOutro: { ...l.introOutro, ...patch } }))
     },
-    [pushHistory, applyLayout]
+    [commit]
   )
 
   const updateBeatFx = useCallback(
     (patch: Partial<BeatFxConfig>) => {
-      pushHistory()
-      applyLayout({ ...layoutRef.current, beat: { ...layoutRef.current.beat, ...patch } })
+      commit((l) => ({ ...l, beat: { ...l.beat, ...patch } }))
     },
-    [pushHistory, applyLayout]
+    [commit]
   )
 
   const updateAudioEngine = useCallback(
@@ -473,40 +507,33 @@ export function useProject(): {
 
   const addOverlayLayer = useCallback((): string => {
     const layer = overlayDefaults()
-    pushHistory()
-    const cur = layoutRef.current
-    applyLayout({
+    commit((cur) => ({
       ...cur,
       overlayLayers: [...cur.overlayLayers, layer],
       layers: cur.layers
         ? materializeLayers({ ...cur, overlayLayers: [...cur.overlayLayers, layer] })
         : null
-    })
+    }))
     return layer.id
-  }, [applyLayout, materializeLayers, overlayDefaults, pushHistory])
+  }, [commit, materializeLayers, overlayDefaults])
 
   const updateOverlayLayer = useCallback(
     (id: string, patch: Partial<OverlayLayerConfig>) => {
-      pushHistory()
-      applyLayout({
-        ...layoutRef.current,
-        overlayLayers: layoutRef.current.overlayLayers.map((o) =>
-          o.id === id ? { ...o, ...patch, id: o.id } : o
-        )
-      })
+      commit((l) => ({
+        ...l,
+        overlayLayers: l.overlayLayers.map((o) => (o.id === id ? { ...o, ...patch, id: o.id } : o))
+      }))
     },
-    [applyLayout, pushHistory]
+    [commit]
   )
 
   const removeOverlayLayer = useCallback(
     (id: string) => {
-      pushHistory()
-      const cur = layoutRef.current
-      applyLayout({
+      commit((cur) => ({
         ...cur,
         overlayLayers: cur.overlayLayers.filter((o) => o.id !== id),
         layers: cur.layers ? cur.layers.filter((x) => x.id !== 'overlay:' + id) : null
-      })
+      }))
       setAssets((prev) => {
         const old = prev.overlayImages?.[id]
         if (old?.url) URL.revokeObjectURL(old.url)
@@ -515,70 +542,70 @@ export function useProject(): {
         return { ...prev, overlayImages: next }
       })
     },
-    [applyLayout, pushHistory]
+    [commit]
   )
 
   const moveOverlayLayer = useCallback(
     (id: string, dir: -1 | 1) => {
-      pushHistory()
-      const cur = layoutRef.current
-      const arr = [...cur.overlayLayers]
-      const i = arr.findIndex((o) => o.id === id)
-      const j = i + dir
-      if (i < 0 || j < 0 || j >= arr.length) return
-      const tmp = arr[i]
-      arr[i] = arr[j]
-      arr[j] = tmp
-      // 已物化图层清单：同步交换两个附加层条目（保持与 overlayLayers 数组序一致）
-      let layers = cur.layers
-      if (layers) {
-        const la = layers.findIndex((x) => x.id === 'overlay:' + arr[i].id)
-        const lb = layers.findIndex((x) => x.id === 'overlay:' + arr[j].id)
-        if (la >= 0 && lb >= 0) {
-          const out = [...layers]
-          const t = out[la]
-          out[la] = out[lb]
-          out[lb] = t
-          layers = out
+      commit((cur) => {
+        const arr = [...cur.overlayLayers]
+        const i = arr.findIndex((o) => o.id === id)
+        const j = i + dir
+        if (i < 0 || j < 0 || j >= arr.length) return cur
+        const tmp = arr[i]
+        arr[i] = arr[j]
+        arr[j] = tmp
+        // 已物化图层清单：同步交换两个附加层条目（保持与 overlayLayers 数组序一致）
+        let layers = cur.layers
+        if (layers) {
+          const la = layers.findIndex((x) => x.id === 'overlay:' + arr[i].id)
+          const lb = layers.findIndex((x) => x.id === 'overlay:' + arr[j].id)
+          if (la >= 0 && lb >= 0) {
+            const out = [...layers]
+            const t = out[la]
+            out[la] = out[lb]
+            out[lb] = t
+            layers = out
+          }
         }
-      }
-      applyLayout({ ...cur, overlayLayers: arr, layers })
+        return { ...cur, overlayLayers: arr, layers }
+      })
     },
-    [applyLayout, pushHistory]
+    [commit]
   )
 
   /** 0.9.0：图层隐藏/锁定（首次编辑物化清单） */
   const updateLayerState = useCallback(
     (id: string, patch: Partial<Pick<LayerItem, 'hidden' | 'locked'>>) => {
-      pushHistory()
-      const cur = layoutRef.current
-      const next = materializeLayers(cur)
-      const hit = next.find((x) => x.id === id)
-      if (hit) {
-        Object.assign(hit, patch)
-      } else {
-        next.push({ id, hidden: patch.hidden ?? false, locked: patch.locked ?? false })
-      }
-      applyLayout({ ...cur, layers: next })
+      commit((cur) => {
+        const next = materializeLayers(cur)
+        const hit = next.find((x) => x.id === id)
+        if (hit) {
+          Object.assign(hit, patch)
+        } else {
+          next.push({ id, hidden: patch.hidden ?? false, locked: patch.locked ?? false })
+        }
+        return { ...cur, layers: next }
+      })
     },
-    [applyLayout, materializeLayers, pushHistory]
+    [commit, materializeLayers]
   )
 
   /** 0.9.0：图层 z 序上移/下移 */
   const moveLayerState = useCallback(
     (id: string, dir: -1 | 1) => {
-      pushHistory()
-      const cur = layoutRef.current
-      const arr = materializeLayers(cur)
-      const i = arr.findIndex((x) => x.id === id)
-      const j = i + dir
-      if (i < 0 || j < 0 || j >= arr.length) return
-      const tmp = arr[i]
-      arr[i] = arr[j]
-      arr[j] = tmp
-      applyLayout({ ...cur, layers: arr })
+      commit((cur) => {
+        const arr = materializeLayers(cur)
+        const i = arr.findIndex((x) => x.id === id)
+        const j = i + dir
+        if (i < 0 || j < 0 || j >= arr.length) return cur
+        const tmp = arr[i]
+        arr[i] = arr[j]
+        arr[j] = tmp
+        return { ...cur, layers: arr }
+      })
     },
-    [applyLayout, materializeLayers, pushHistory]
+    [commit, materializeLayers]
   )
 
   /** 0.9.0：编辑器选项（吸附开关等） */
@@ -1028,13 +1055,9 @@ export function useProject(): {
       img.onerror = () => setFileError(t('project.bgLoadFail'))
       img.src = url
       // 来源切换进历史栈（可 Ctrl+Z 撤销回默认封面图行为）
-      pushHistory()
-      applyLayout({
-        ...layoutRef.current,
-        background: { ...layoutRef.current.background, imageSource: 'custom' }
-      })
+      commit((l) => ({ ...l, background: { ...l.background, imageSource: 'custom' } }))
     },
-    [pushHistory, applyLayout]
+    [commit]
   )
 
   /** 清除独立背景图：回退到默认行为（用封面图） */
@@ -1043,15 +1066,18 @@ export function useProject(): {
       if (prev.bgUrl) URL.revokeObjectURL(prev.bgUrl)
       return { ...prev, bgUrl: null, bgFile: null, bgElement: null }
     })
-    pushHistory()
-    applyLayout({
-      ...layoutRef.current,
-      background: { ...layoutRef.current.background, imageSource: 'cover' }
-    })
-  }, [pushHistory, applyLayout])
+    commit((l) => ({ ...l, background: { ...l.background, imageSource: 'cover' } }))
+  }, [commit])
 
   return {
     layout,
+    /** 当前编辑视图（1.0.0 T4：段视图或全局基线） */
+    view,
+    /** 当前编辑目标（null=全局） */
+    editSegId,
+    /** 1-based 片段序号（0=全局） */
+    editSegIndex,
+    setEditSegment,
     assets,
     fileError,
     notice,
@@ -1059,6 +1085,7 @@ export function useProject(): {
     updateMainRect,
     updateMainImage,
     updateText,
+    updateTextGlobal,
     updateVisualizer,
     updateBackgroundFx,
     updateImageFx,

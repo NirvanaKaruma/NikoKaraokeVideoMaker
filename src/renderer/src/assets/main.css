@@ -760,3 +760,35 @@ body {
   bottom: 0;
   background: #ff5f9e;
 }
+
+/* ===== 当前编辑对象条（1.0.0 T4） ===== */
+.edit-ctx-bar {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border: 1px solid var(--ev-c-gray-2);
+  border-radius: 8px;
+  background: var(--ev-c-black-mute);
+  font-size: 12px;
+}
+
+.edit-ctx-label {
+  color: var(--ev-c-text-2);
+}
+
+.edit-ctx-value {
+  font-weight: 700;
+  color: var(--ev-c-text-1);
+}
+
+.edit-ctx-value.seg {
+  color: #7ce3ff;
+}
+
+.edit-ctx-bar .mini-btn {
+  margin-left: auto;
+  padding: 3px 8px;
+  font-size: 12px;
+}

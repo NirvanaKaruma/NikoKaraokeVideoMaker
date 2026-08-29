@@ -301,7 +301,10 @@ export const jp = {
     remove: 'セグメント削除',
     hint: 'トラックをクリック/ドラッグで位置決め；曲をセグメントに分割して個別編集できます',
     segmentLabel: 'セグ {i}',
-    inherit: 'グローバル継承'
+    inherit: 'グローバル継承',
+    editTarget: '編集中の対象',
+    editGlobal: 'グローバル基線',
+    editSegment: 'セグ {i}'
   },
   layers: {
     tab: 'レイヤー',

@@ -300,7 +300,10 @@ export const en = {
     remove: 'Remove segment',
     hint: 'Click/drag the track to position; split the song into segments and edit each one separately',
     segmentLabel: 'Seg {i}',
-    inherit: 'inherits global'
+    inherit: 'inherits global',
+    editTarget: 'Editing',
+    editGlobal: 'Global baseline',
+    editSegment: 'Seg {i}'
   },
   layers: {
     tab: 'Layers',
