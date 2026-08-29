@@ -11,6 +11,7 @@ import { useCustomFont, customFontFamily } from './hooks/useCustomFont'
 import { useFfmpegDownload, useFfmpegStatus } from './hooks/useFfmpeg'
 import { useExporter } from './hooks/useExporter'
 import { benchmarkEncoder } from './export/exportVideo'
+import { openDiskStream } from './export/streamMuxer'
 import { drawCanvasFx } from '@shared/canvasfx'
 import { drawParticles, particlesAt } from '@shared/particles'
 import { CanvasStage } from './components/CanvasStage'
@@ -29,6 +30,7 @@ const IS_VISUAL_SMOKE = new URLSearchParams(window.location.search).has('smokeVi
 const IS_SMOKE_EXPORT = new URLSearchParams(window.location.search).has('smokeExport')
 const IS_SMOKE_PROJECT = new URLSearchParams(window.location.search).has('smokeProject')
 const IS_SMOKE_TIME = new URLSearchParams(window.location.search).has('smokeTime')
+const IS_SMOKE_PROBE = new URLSearchParams(window.location.search).has('smokeProbe')
 
 /* ================= 无头自测工具 ================= */
 
@@ -1680,6 +1682,65 @@ function App(): React.JSX.Element {
     }
     return () => {
       delete window.__runTimeSmoke
+    }
+  }, [])
+  // T10b 慢盘背压探针（--smoke-probe）：真实 muxer 链 + NIKO_SMOKE_PROBE_RATE 限速 ACK——
+  // 测 2/4/8MB 块下「在途 1 块 + 每帧 throttle(2×块)」的队列峰值与堆增量（背压有界性证据）
+  useEffect(() => {
+    if (!IS_SMOKE_PROBE) return
+    window.__runSmokeProbe = async () => {
+      const checks: VisualCheckItem[] = []
+      const add = (label: string, pass: boolean, detail: string): void => {
+        checks.push({ label, pass, detail })
+      }
+      const heapNow = (): number => {
+        const m = (performance as unknown as { memory?: { usedJSHeapSize?: number } }).memory
+        return m?.usedJSHeapSize ?? 0
+      }
+      for (const bsMiB of [2, 4, 8]) {
+        const bs = bsMiB * 1024 * 1024
+        const cap = bs * 2
+        const { jobId } = await window.api.muxer.start('probe-' + bsMiB + 'm')
+        const sink = openDiskStream(jobId)
+        const samples: Uint8Array[] = []
+        const n = Math.ceil((24 * 1024 * 1024) / bs)
+        for (let i = 0; i < n; i++) samples.push(new Uint8Array(bs))
+        const heap0 = heapNow()
+        let maxPending = 0
+        let heapMax = heap0
+        const timer = setInterval(() => {
+          maxPending = Math.max(maxPending, sink.pendingBytes())
+          heapMax = Math.max(heapMax, heapNow())
+        }, 40)
+        const t0 = Date.now()
+        // 与 encodeVideo 同构：throttle(2×块) → write（在途 1 块；慢盘 ACK 延迟 → 队列应被 cap 拦截）
+        for (let i = 0; i < n; i++) {
+          await sink.throttle(cap)
+          await sink.write(samples[i], i * bs)
+        }
+        clearInterval(timer)
+        const secs = ((Date.now() - t0) / 1000).toFixed(1)
+        const peakPend = maxPending / 1048576
+        const heapDelta = Math.round((heapMax - heap0) / 1048576)
+        add(
+          '慢盘·块 ' + bsMiB + 'MB',
+          peakPend <= cap / 1048576 + bsMiB + 1,
+          '队列峰值 ' +
+            peakPend.toFixed(1) +
+            'MB（期望 ≤ ' +
+            (cap / 1048576 + bsMiB) +
+            'MB） | 堆增量 ' +
+            heapDelta +
+            'MB | 用时 ' +
+            secs +
+            's'
+        )
+        await sink.cancel()
+      }
+      return { ok: checks.every((c) => c.pass), checks }
+    }
+    return () => {
+      delete window.__runSmokeProbe
     }
   }, [])
   // 项目保存/加载自测（M5/T25）：保存 → 篡改 → 加载 → 对比

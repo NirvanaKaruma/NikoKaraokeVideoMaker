@@ -10,6 +10,8 @@ export const STREAM_CHUNK_BYTES = 4 * 1024 * 1024
 export interface DiskStreamSink {
   /** 写入一块（position = 文件字节偏移；主进程定位写） */
   write: (data: Uint8Array, position?: number) => Promise<void>
+  /** 队列深度（已排未 ACK 字节；--smoke-probe 慢盘场景测量用） */
+  pendingBytes: () => number
   /** 背压：等待积压字节降到 cap 以下（encodeVideo 每帧编码前调用） */
   throttle: (capBytes: number) => Promise<void>
   /** 等待全部已发送块 ACK（finalize 后调用） */
@@ -123,6 +125,7 @@ export function openDiskStream(jobId: string): DiskStreamSink {
         queuedBytes += copy.byteLength
         pump()
       }),
+    pendingBytes: () => queuedBytes,
     throttle: (capBytes) =>
       new Promise<void>((resolve) => {
         if (queuedBytes <= capBytes) {

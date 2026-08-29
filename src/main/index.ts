@@ -40,6 +40,8 @@ const isSmokeBench = process.argv.includes('--smoke-bench') || smokeEnv === 'ben
 const isSmokeProject = process.argv.includes('--smoke-project') || smokeEnv === 'project'
 /** smoke-time（1.0.0 T10a）：时间轴预览端到端——关键帧/片段切换像素断言 + 引擎插值断言 */
 const isSmokeTime = process.argv.includes('--smoke-time') || smokeEnv === 'time'
+/** smoke-probe（1.0.0 T10b）：慢盘背压探针（NIKO_SMOKE_PROBE_RATE=字节/秒 限速）——窗口×队列×内存 */
+const isSmokeProbe = process.argv.includes('--smoke-probe') || smokeEnv === 'probe'
 /** smoke-detect：只做三源检测并落盘（来源矩阵测试用，配合 PATH 操控） */
 const isSmokeDetect = process.argv.includes('--smoke-detect') || smokeEnv === 'detect'
 /** smoke-download：走一遍托管安装（--smoke-download=default 或完整 URL / file:// 本地镜像） */
@@ -82,7 +84,8 @@ function createWindow(): BrowserWindow {
       !isSmokeExport &&
       !isSmokeBench &&
       !isSmokeProject &&
-      !isSmokeTime
+      !isSmokeTime &&
+      !isSmokeProbe
     )
       mainWindow.show()
   })
@@ -100,6 +103,7 @@ function createWindow(): BrowserWindow {
     isSmokeBench ||
     isSmokeProject ||
     isSmokeTime ||
+    isSmokeProbe ||
     isSmokeDetect ||
     smokeDownloadArg !== undefined
   if (!isSmokeMode) {
@@ -155,6 +159,8 @@ function createWindow(): BrowserWindow {
     mainWindow.loadFile(join(__dirname, '../renderer/index.html'), { query: { smokeProject: '1' } })
   } else if (isSmokeTime) {
     mainWindow.loadFile(join(__dirname, '../renderer/index.html'), { query: { smokeTime: '1' } })
+  } else if (isSmokeProbe) {
+    mainWindow.loadFile(join(__dirname, '../renderer/index.html'), { query: { smokeProbe: '1' } })
   } else if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
     mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL'])
   } else {
@@ -256,6 +262,25 @@ async function runSmokeTime(win: BrowserWindow): Promise<void> {
     app.exit(ok ? 0 : 1)
   } catch (error) {
     console.error('[smoke-time] 失败:', error)
+    app.exit(1)
+  }
+}
+
+/** T10b 慢盘背压探针：renderer 走真实 muxer 链（NIKO_SMOKE_PROBE_RATE 限速 ACK）→ 队列/内存峰值落盘 */
+async function runSmokeProbe(win: BrowserWindow): Promise<void> {
+  try {
+    const report: unknown = await win.webContents.executeJavaScript('window.__runSmokeProbe()')
+    await writeFile(
+      join(smokeDir, 'smoke-probe-report.json'),
+      JSON.stringify(report, null, 2),
+      'utf-8'
+    )
+    const ok = (report as { ok?: boolean })?.ok === true
+    console.log('[smoke-probe]', ok ? '全部通过' : '存在失败项')
+    console.log(JSON.stringify(report, null, 2))
+    app.exit(ok ? 0 : 1)
+  } catch (error) {
+    console.error('[smoke-probe] 失败:', error)
     app.exit(1)
   }
 }
@@ -495,9 +520,23 @@ async function runSmokeExport(win: BrowserWindow): Promise<void> {
   try {
     const { resolutions, durationSec } = parseSmokeExport()
     console.log('[smoke-export] 分辨率:', resolutions.join(','), '时长:', durationSec + 's')
+    // T10b 内存验收：导出期间轮询渲染进程堆峰值（含在报告里）
+    let heapPeakMB = 0
+    const heapTimer = setInterval(() => {
+      void win.webContents
+        .executeJavaScript('(performance.memory?.usedJSHeapSize ?? 0)')
+        .then((v) => {
+          heapPeakMB = Math.max(heapPeakMB, Math.round((Number(v) || 0) / 1048576))
+        })
+        .catch(() => undefined)
+    }, 1000)
     const report: unknown = await win.webContents.executeJavaScript(
       'window.__runExportSmoke(' + JSON.stringify(resolutions) + ', ' + durationSec + ')'
     )
+    clearInterval(heapTimer)
+    if (report && typeof report === 'object') {
+      ;(report as Record<string, unknown>).heapPeakMB = heapPeakMB
+    }
     await writeFile(
       join(smokeDir, 'smoke-export-report.json'),
       JSON.stringify(report, null, 2),
@@ -663,6 +702,13 @@ app.whenReady().then(async () => {
     mainWindow.webContents.once('did-finish-load', () => {
       setTimeout(() => {
         void runSmokeTime(mainWindow)
+      }, 3500)
+    })
+  }
+  if (isSmokeProbe) {
+    mainWindow.webContents.once('did-finish-load', () => {
+      setTimeout(() => {
+        void runSmokeProbe(mainWindow)
       }, 3500)
     })
   }

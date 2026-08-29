@@ -24,6 +24,9 @@ interface MuxJob {
 
 const jobs = new Map<string, MuxJob>()
 
+/** 慢盘模拟限速（--smoke-probe 用；字节/秒；0 = 不限速） */
+const PROBE_RATE_BYTES = Number(process.env['NIKO_SMOKE_PROBE_RATE'] ?? '0')
+
 async function tempDir(): Promise<string> {
   const dir = join(app.getPath('temp'), 'niko-export')
   await mkdir(dir, { recursive: true })
@@ -64,6 +67,12 @@ export function registerMuxIpc(): void {
         const buf = Buffer.from(buffer)
         // 定位写：position = 文件字节偏移（mp4-muxer 语义；乱序到达同样正确落盘）
         await job.fh.write(buf, 0, buf.length, position)
+        // --smoke-probe 慢盘模拟：NIKO_SMOKE_PROBE_RATE=字节/秒（按块长延迟 ACK，校验背压窗口与队列峰值）
+        if (PROBE_RATE_BYTES > 0) {
+          await new Promise<void>((res) =>
+            setTimeout(res, Math.ceil((buf.length / PROBE_RATE_BYTES) * 1000))
+          )
+        }
       } catch (err) {
         job.error = err instanceof Error ? err.message : String(err)
         await cleanupJob(job)

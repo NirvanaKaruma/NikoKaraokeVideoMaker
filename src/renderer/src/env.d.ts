@@ -44,4 +44,6 @@ interface Window {
   }>
   /** 仅 --smoke-time：时间轴预览端到端（关键帧/片段切换像素断言 + 引擎插值断言） */
   __runTimeSmoke?: () => Promise<{ ok: boolean; checks: VisualCheckItem[] }>
+  /** 仅 --smoke-probe：慢盘背压探针（队列/内存峰值） */
+  __runSmokeProbe?: () => Promise<{ ok: boolean; checks: VisualCheckItem[] }>
 }
