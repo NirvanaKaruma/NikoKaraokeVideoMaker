@@ -5,6 +5,8 @@
  * 预览与导出共用本模型；序列化 = JSON.stringify(ProjectLayout)。
  */
 
+import type { TimelineDocument } from './timeline'
+
 export interface NormRect {
   x: number
   y: number
@@ -295,6 +297,8 @@ export interface ProjectLayout {
   layers: LayerItem[] | null
   /** 0.9.0 编辑器选项 */
   editor: EditorConfig
+  /** 1.0.0 时间轴与多场景（片段 + 片段内关键帧；默认空） */
+  timeline: TimelineDocument
   export: ExportConfig
 }
 
@@ -399,6 +403,7 @@ export const DEFAULT_LAYOUT: ProjectLayout = {
   overlayLayers: [],
   layers: null,
   editor: { snapEnabled: true },
+  timeline: { segments: [] },
   export: {
     resolutionId: '1080p',
     fps: 30
