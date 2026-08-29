@@ -19,9 +19,11 @@
 - [x] T6: 自定义字体（路径引用，不内嵌）——TextPanel「自定义字体」：选择 ttf/otf → FontFace 注册（document.fonts.add，家庭名=确定性合成名，与文件基名绑定）→ 歌名/作者下拉可选（内置/系统/自定义分组）；项目文件只存 { name, path }（同音频模型）；打开项目：本机路径存在 → 读文件重建 FontFace；缺失 → 提示 + 回退默认字体；字体=导出与预览同字形（同进程 FontFace，smoke-project 校验保存/还原）
 - [x] T7: 自动主题色——shared 纯函数：封面 32×32 降采样 → 亮度过滤（去过暗/过曝）→ 频次桶主色 → 派生背景基色 + 可视化渐变双色；单测（固定像素数组 → 确定性输出）；「一键应用」按钮（只改 background.color + visualizer.colors，入撤销栈一次撤销）
 - [x] T8: 端到端与回归——typecheck/lint/测试（新增模型/主题色/字体序列化单测）/build；smoke-visual 扩展（附加层渲染位置像素校验 + 主题应用后背景色变化）；smoke-export 含附加层+字体用例（全层动态路径与 WYSIWYG）；smoke-project（含 T5 扩展）
-- [ ] T9: 文档与交付——ROADMAP 0.8.0 勾选+验收记录；DECISIONS §23（0.8.0 决策：多层模型、fx 全量复用提取、字体内嵌+版权提示、主题色范围只改背景+可视化）；README 简述；版本 0.7.0→0.8.0；提交推送 + 汇报等用户验收
+- [x] T9: 文档与交付——ROADMAP 0.8.0 勾选+验收记录；DECISIONS §23（0.8.0 决策：多层模型、fx 全量复用提取、字体路径引用、主题色范围只改背景+可视化）；README 简述；版本 0.7.0→0.8.0；提交推送 + 汇报等用户验收
 
 ## 执行记录
 
 - T1：数据模型——layout.ts 新增 OverlayLayerConfig（id/rect/opacity/fx 复用 ImageFxConfig/entry 子集 none|fade|slide|bounce/fillMode='contain'）+ ProjectLayout.overlayLayers(默认 []) + hasDynamicFx 计入（呼吸/旋转/发光/入场；mask/border 静态不算）；useProject 平行资产 overlayImages（id→{url,file,element}）+ snapshotsOf 纳入（id+存在性稳定序列化）+ 层 CRUD（add/update/remove/move，全部入撤销栈）；i18n 三语 project.overlayType/overlayLoadFail；layout.test 默认值 + hasDynamicFx 附加层用例（65 测试全绿）。
+- T8：端到端——smoke-visual 新增主题色应用/撤销校验（bg #ffffff→#802b8d 恢复 ✓）与附加层渲染像素校验（左上区域差异 ✓）；smoke-export fx 用例含附加层（呼吸/圆遮罩/淡入）+ 自定义字体（arial.ttf 注册应用于标题）→ 动态路径导出通过；全量回归：typecheck/lint/69 测试/build + 三项 smoke 全绿。
+- T9：交付——ROADMAP 0.8.0 勾选（含字体不内嵌/主题色范围修订注记）、DECISIONS §23、README「素材与排版（0.8.0）」节；版本 0.7.0→0.8.0。
 - T2：共享组件提取——MainImageLayer 的图像动效整体抽成 SharedImageFxLayer（中心锚定内容/mask 裁剪/描边/整体透明度/命令式动效槽：呼吸·微旋转·发光脉冲·节拍 kick，beatPulse/beatPeriodSec 参数化）+ SharedImageLayer（可拖拽外层 Group/Transformer/边界 clamp/无图占位 全参数化）；MainImageLayer 变薄壳（行为零变化——smoke-visual 主图/动效/片头黑场/前导校验全绿）；顺手修复前导 WYSIWYG 校验时序竞态（改用重试轮询等黑幕到位，防布局提交/绘制调度抖动，同「片头黑场」既有模式）。
