@@ -1392,7 +1392,32 @@ function App(): React.JSX.Element {
       // 独立背景图（用户反馈：背景可额外上传图，默认用封面）
       const bgF = await makeSyntheticCoverFile()
       if (bgF) project.setBgFile(bgF)
-      await sleep(300)
+      // 附加层（0.8.0）：两层——Logo（左上+呼吸+淡入）与 Watermark（右下+透明）
+      const ov1Id = project.addOverlayLayer()
+      const ov1f = await makeSyntheticCoverFile()
+      if (ov1f) project.setOverlayFile(ov1Id, ov1f)
+      project.updateOverlayLayer(ov1Id, {
+        opacity: 0.8,
+        rect: { x: 0.02, y: 0.02, w: 0.2, h: 0.15 },
+        fx: {
+          breathe: 0.2,
+          breathePeriod: 4,
+          rotateDeg: 0,
+          glowPulse: 0,
+          mask: 'none',
+          border: 0,
+          borderColor: '#ffffff'
+        },
+        entry: { type: 'fade', durationSec: 1.2, delaySec: 0 }
+      })
+      const ov2Id = project.addOverlayLayer()
+      const ov2f = await makeSyntheticCoverFile()
+      if (ov2f) project.setOverlayFile(ov2Id, ov2f)
+      project.updateOverlayLayer(ov2Id, {
+        opacity: 0.5,
+        rect: { x: 0.78, y: 0.83, w: 0.2, h: 0.15 }
+      })
+      await sleep(400)
       // 先走真实保存路径（更新已保存快照，同步 dirty 状态）
       await project.saveProject()
       // 再用带音频磁盘路径的版本覆盖磁盘文件（smoke 音频是内存生成，需落盘路径）
@@ -1510,6 +1535,30 @@ function App(): React.JSX.Element {
         pbRef.current.status === 'ready' && Math.abs(pbRef.current.duration - 3) < 0.5,
         'status=' + pbRef.current.status + ' 时长=' + pbRef.current.duration.toFixed(2) + 's'
       )
+      // 附加层恢复（0.8.0）：层配置 + 内嵌图像都在项目文件里（smoke 保存前添加了两层）
+      const ovWait = Date.now()
+      while (
+        (Object.keys(projectRef.current.assets.overlayImages ?? {}).length < 2 ||
+          !Object.values(projectRef.current.assets.overlayImages ?? {}).every((v) => v.element)) &&
+        Date.now() - ovWait < 6000
+      ) {
+        await sleep(150)
+      }
+      const ovAssets = projectRef.current.assets.overlayImages ?? {}
+      const ovCount = Object.keys(ovAssets).length
+      const ovLayerCount = projectRef.current.layout.overlayLayers.length
+      add(
+        '附加层恢复',
+        ovLayerCount === 2 &&
+          ovCount === 2 &&
+          projectRef.current.layout.overlayLayers.every((o) => ovAssets[o.id]?.element != null),
+        '层数=' +
+          ovLayerCount +
+          ' 图像=' +
+          ovCount +
+          ' 全部解码=' +
+          Object.values(ovAssets).every((v) => v.element != null)
+      )
       // 新建项目：应回到默认布局并清空素材
       project.resetProject()
       // 竞态防护：轮询等待 reset 的异步提交完成（曾偶发读到旧状态）
@@ -1529,13 +1578,17 @@ function App(): React.JSX.Element {
         nl.texts.songTitle.text === '歌曲名' &&
           na.coverUrl == null &&
           na.audioFile == null &&
-          na.bgUrl == null,
+          na.bgUrl == null &&
+          (nl.overlayLayers ?? []).length === 0 &&
+          Object.keys(na.overlayImages ?? {}).length === 0,
         '歌名=' +
           nl.texts.songTitle.text +
           ' 封面=' +
           (na.coverUrl != null) +
           ' 音频=' +
-          (na.audioFile?.name ?? 'null')
+          (na.audioFile?.name ?? 'null') +
+          ' 附加层=' +
+          (nl.overlayLayers ?? []).length
       )
       add('新建后未脏', !projectRef.current.dirty, 'dirty=' + projectRef.current.dirty)
       // 关闭守卫关键路径：保存后脏标记必须是 false（曾因 hasBg 字段漂移恒为 true）

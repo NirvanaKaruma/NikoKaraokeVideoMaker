@@ -537,10 +537,20 @@ export function useProject(): {
     return imageToDataUrl(a.bgFile, a.bgElement)
   }, [imageToDataUrl])
 
-  /** 组装项目文件（封面内嵌、音频只存路径） */
+  /** 组装项目文件（封面/背景/附加层内嵌、音频只存路径） */
   const buildProjectFile = useCallback(async (): Promise<ProjectFile> => {
     const a = assetsRef.current
     const audioPath = a.audioFile ? window.api.getFilePath(a.audioFile) : ''
+    // 附加层（0.8.0）：按布局层序导出（无图像的层跳过；字节随原文件或从已解码元素转画布）
+    const overlays: { layerId: string; name: string; dataUrl: string }[] = []
+    for (const o of layoutRef.current.overlayLayers ?? []) {
+      const ov = a.overlayImages?.[o.id]
+      if (!ov || (!ov.file && !ov.element)) continue
+      const dataUrl = await imageToDataUrl(ov.file, ov.element)
+      if (dataUrl) {
+        overlays.push({ layerId: o.id, name: ov.file?.name ?? 'overlay.png', dataUrl })
+      }
+    }
     return {
       version: 1,
       app: 'NikoKaraokeVideoMaker',
@@ -552,9 +562,10 @@ export function useProject(): {
           : null,
       backgroundImage:
         a.bgUrl && a.bgFile ? { name: a.bgFile.name, dataUrl: (await bgToDataUrl()) ?? '' } : null,
-      audio: a.audioFile ? { name: a.audioFile.name, path: audioPath } : null
+      audio: a.audioFile ? { name: a.audioFile.name, path: audioPath } : null,
+      overlays
     }
-  }, [coverToDataUrl, bgToDataUrl])
+  }, [coverToDataUrl, bgToDataUrl, imageToDataUrl])
 
   /** 应用项目文件：布局全量替换 + 封面内嵌恢复 + 音频按路径还原 */
   const applyProjectFile = useCallback(
@@ -628,10 +639,18 @@ export function useProject(): {
         warnings.push(t('project.audioNoPath'))
       }
 
+      // 附加层（0.8.0）：按 layerId 内嵌恢复（层配置已在上面随 layout 全量还原；
+      // 无对应层（或不含图像）的条目跳过；dataURL 损坏 → 警告）
+      for (const ov of pf.overlays ?? []) {
+        if (!ov?.layerId || !ov.dataUrl) continue
+        if (!(layoutRef.current.overlayLayers ?? []).some((o) => o.id === ov.layerId)) continue
+        loadOverlayUrl(ov.layerId, ov.dataUrl, null)
+      }
+
       setFileError(null)
       return warnings
     },
-    [loadCoverUrl]
+    [loadCoverUrl, loadOverlayUrl]
   )
 
   /** 保存项目（对话框 + 原子写 + 通知） */
