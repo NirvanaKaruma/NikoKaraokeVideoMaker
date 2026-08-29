@@ -134,6 +134,7 @@ export function OverlayPanel(props: OverlayPanelProps): React.JSX.Element {
           </label>
           <DeferredSlider
             label={(v) => t('overlay.opacity', { v: Math.round(v * 100) })}
+            unitScale={100}
             value={selected.opacity}
             min={0}
             max={1}
@@ -176,6 +177,7 @@ export function OverlayPanel(props: OverlayPanelProps): React.JSX.Element {
           </label>
           <DeferredSlider
             label={(v) => t('fx.img.border', { v: Math.round(v * 100) })}
+            unitScale={100}
             value={selected.fx.border}
             min={0}
             max={0.02}
@@ -196,6 +198,7 @@ export function OverlayPanel(props: OverlayPanelProps): React.JSX.Element {
           </label>
           <DeferredSlider
             label={(v) => t('fx.img.breathe', { v: Math.round(v * 100) })}
+            unitScale={100}
             value={selected.fx.breathe}
             min={0}
             max={1}
@@ -222,6 +225,7 @@ export function OverlayPanel(props: OverlayPanelProps): React.JSX.Element {
           />
           <DeferredSlider
             label={(v) => t('fx.img.glowPulse', { v: Math.round(v * 100) })}
+            unitScale={100}
             value={selected.fx.glowPulse}
             min={0}
             max={1}

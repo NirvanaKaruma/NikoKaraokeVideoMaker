@@ -218,6 +218,27 @@ body {
   accent-color: #ff5f9e;
 }
 
+.slider-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.slider-row input[type='range'] {
+  flex: 1;
+}
+
+.slider-num {
+  width: 64px;
+  text-align: right;
+  padding: 2px 4px;
+  font-size: 12px;
+  background: var(--ev-c-black-mute);
+  border: 1px solid var(--ev-c-gray-2);
+  border-radius: 6px;
+  color: var(--ev-c-text-1);
+}
+
 .field select {
   background: var(--ev-c-black-mute);
   border: 1px solid var(--ev-c-gray-2);

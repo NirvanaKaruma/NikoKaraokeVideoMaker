@@ -73,6 +73,7 @@ function StyleControls({
       </label>
       <DeferredSlider
         label={(v) => t('textPanel.size', { v: Math.round(v * 100) })}
+        unitScale={100}
         value={s.fontSize}
         min={0.02}
         max={0.2}
@@ -101,6 +102,7 @@ function StyleControls({
       </label>
       <DeferredSlider
         label={(v) => t('textPanel.strokeWidth', { v: (v * 100).toFixed(2) })}
+        unitScale={100}
         value={s.strokeWidth}
         min={0}
         max={0.02}

@@ -151,6 +151,7 @@ export function FxPanel(props: FxPanelProps): React.JSX.Element {
       <h2>{t('fx.bgTitle')}</h2>
       <DeferredSlider
         label={(v) => t('fx.bg.kenBurns', { v: Math.round(v * 100) })}
+        unitScale={100}
         value={backgroundFx.kenBurns}
         min={0}
         max={1}
@@ -167,6 +168,7 @@ export function FxPanel(props: FxPanelProps): React.JSX.Element {
       />
       <DeferredSlider
         label={(v) => t('fx.bg.bassBrightness', { v: Math.round(v * 100) })}
+        unitScale={100}
         value={backgroundFx.bassBrightness}
         min={0}
         max={1}
@@ -175,6 +177,7 @@ export function FxPanel(props: FxPanelProps): React.JSX.Element {
       />
       <DeferredSlider
         label={(v) => t('fx.bg.bassHue', { v: Math.round(v * 100) })}
+        unitScale={100}
         value={backgroundFx.bassHue}
         min={0}
         max={1}
@@ -185,6 +188,7 @@ export function FxPanel(props: FxPanelProps): React.JSX.Element {
       <h2>{t('fx.imgTitle')}</h2>
       <DeferredSlider
         label={(v) => t('fx.img.breathe', { v: Math.round(v * 100) })}
+        unitScale={100}
         value={imageFx.breathe}
         min={0}
         max={1}
@@ -209,6 +213,7 @@ export function FxPanel(props: FxPanelProps): React.JSX.Element {
       />
       <DeferredSlider
         label={(v) => t('fx.img.glowPulse', { v: Math.round(v * 100) })}
+        unitScale={100}
         value={imageFx.glowPulse}
         min={0}
         max={1}
@@ -232,6 +237,7 @@ export function FxPanel(props: FxPanelProps): React.JSX.Element {
       </label>
       <DeferredSlider
         label={(v) => t('fx.img.border', { v: Math.round(v * 100) })}
+        unitScale={100}
         value={imageFx.border}
         min={0}
         max={0.02}
@@ -266,6 +272,7 @@ export function FxPanel(props: FxPanelProps): React.JSX.Element {
         min={0}
         max={1}
         step={0.01}
+        unitScale={100}
         onCommit={(v) => props.onCanvasFxChange({ vignette: v })}
       />
       <DeferredSlider
@@ -274,6 +281,7 @@ export function FxPanel(props: FxPanelProps): React.JSX.Element {
         min={0}
         max={1}
         step={0.01}
+        unitScale={100}
         onCommit={(v) => props.onCanvasFxChange({ grain: v })}
       />
       <DeferredSlider
@@ -282,6 +290,7 @@ export function FxPanel(props: FxPanelProps): React.JSX.Element {
         min={0}
         max={1}
         step={0.01}
+        unitScale={100}
         onCommit={(v) => props.onCanvasFxChange({ scanline: v })}
       />
       <DeferredSlider
@@ -290,6 +299,7 @@ export function FxPanel(props: FxPanelProps): React.JSX.Element {
         min={0}
         max={1}
         step={0.01}
+        unitScale={100}
         onCommit={(v) => props.onCanvasFxChange({ beatFlash: v })}
       />
       <DeferredSlider
@@ -298,6 +308,7 @@ export function FxPanel(props: FxPanelProps): React.JSX.Element {
         min={0}
         max={1}
         step={0.01}
+        unitScale={100}
         onCommit={(v) => props.onCanvasFxChange({ lightLeak: v })}
       />
       <p className="panel-note">{t('fx.canvas.note')}</p>
@@ -372,6 +383,7 @@ export function FxPanel(props: FxPanelProps): React.JSX.Element {
       <p className="panel-note">{t('fx.beat.note')}</p>
       <DeferredSlider
         label={(v) => t('fx.beat.pulse', { v: Math.round(v * 100) })}
+        unitScale={100}
         value={beat.pulse}
         min={0}
         max={1}
@@ -380,6 +392,7 @@ export function FxPanel(props: FxPanelProps): React.JSX.Element {
       />
       <DeferredSlider
         label={(v) => t('fx.beat.burst', { v: Math.round(v * 100) })}
+        unitScale={100}
         value={beat.burst}
         min={0}
         max={1}
@@ -403,6 +416,7 @@ export function FxPanel(props: FxPanelProps): React.JSX.Element {
       </label>
       <DeferredSlider
         label={(v) => t('fx.beat.particleDensity', { v: Math.round(v * 100) })}
+        unitScale={100}
         value={beat.particleDensity}
         min={0}
         max={1}
