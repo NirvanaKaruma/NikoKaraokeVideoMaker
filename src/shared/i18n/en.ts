@@ -294,6 +294,24 @@ export const en = {
       'The font had no disk path when the project was saved; please pick the font file again',
     defaultName: 'Untitled project'
   },
+  layers: {
+    tab: 'Layers',
+    bg: 'Background',
+    main: 'Main image',
+    songTitle: 'Song title',
+    artist: 'Artist',
+    visualizer: 'Visualizer',
+    overlayI: 'Layer {i}',
+    hide: 'Hide',
+    hideOff: 'Show',
+    lock: 'Lock',
+    lockOff: 'Unlock',
+    moveUp: 'Move up',
+    moveDown: 'Move down',
+    snap: 'Snap guides',
+    snapEnabled: 'On (snap to canvas edges/center and element guides while dragging)',
+    note: 'Hidden = not rendered (same in preview and export); Locked = not selectable/draggable on canvas (params still adjustable)'
+  },
   overlay: {
     title: 'Overlay Layers',
     add: '➕ Add image',

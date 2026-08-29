@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type Konva from 'konva'
-import { SUBTITLE_ZONE_Y } from '@shared/layout'
+import { SUBTITLE_ZONE_Y, defaultLayerOrder } from '@shared/layout'
 import { useLocale } from './hooks/useLocale'
 import { useProject, type CanvasImageElement } from './hooks/useProject'
 import { useAudioPlayback, type PlaybackApi } from './hooks/useAudioPlayback'
@@ -1160,6 +1160,36 @@ function App(): React.JSX.Element {
     }
     return m
   }, [project.assets.overlayImages])
+  // 图层面板行（0.9.0）：按渲染顺序展开（null=默认序）；名称 i18n key + 附加层序号
+  const layerRows = useMemo(() => {
+    const overlays = project.layout.overlayLayers ?? []
+    const order = project.layout.layers ?? defaultLayerOrder(overlays.map((o) => 'overlay:' + o.id))
+    const state = new Map((project.layout.layers ?? []).map((l) => [l.id, l]))
+    return order.map((id) => {
+      const st = state.get(id)
+      const base = {
+        id,
+        hidden: st?.hidden ?? false,
+        locked: st?.locked ?? false
+      }
+      if (id.startsWith('overlay:')) {
+        const oid = id.slice('overlay:'.length)
+        const idx = overlays.findIndex((o) => o.id === oid)
+        return { ...base, nameKey: 'layers.overlayI', nameArg: { i: idx + 1 } }
+      }
+      const nameKey =
+        id === 'background'
+          ? 'layers.bg'
+          : id === 'main'
+            ? 'layers.main'
+            : id === 'songTitle'
+              ? 'layers.songTitle'
+              : id === 'artist'
+                ? 'layers.artist'
+                : 'layers.visualizer'
+      return { ...base, nameKey }
+    })
+  }, [project.layout.overlayLayers, project.layout.layers])
   const pb = useAudioPlayback(
     project.assets.audioFile,
     project.layout.visualizer,
@@ -1816,6 +1846,20 @@ function App(): React.JSX.Element {
           customFontFamily={project.assets.fontFile ? customFont.family : null}
           customFontName={customFont.name}
           onPickFont={project.setFontFile}
+          layerRows={layerRows}
+          snapEnabled={project.layout.editor.snapEnabled}
+          onLayerToggleHidden={(id) =>
+            project.updateLayerState(id, {
+              hidden: !(project.layout.layers?.find((l) => l.id === id)?.hidden ?? false)
+            })
+          }
+          onLayerToggleLocked={(id) =>
+            project.updateLayerState(id, {
+              locked: !(project.layout.layers?.find((l) => l.id === id)?.locked ?? false)
+            })
+          }
+          onLayerMove={(id, dir) => project.moveLayerState(id, dir)}
+          onSnapToggle={(v) => project.updateEditor({ snapEnabled: v })}
           overlayLayers={project.layout.overlayLayers}
           overlayImageUrls={overlayUrls}
           selectedId={selectedId}

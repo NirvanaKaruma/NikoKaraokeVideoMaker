@@ -10,6 +10,7 @@ import type { AudioStatus } from '../hooks/useAudioPlayback'
 import { AudioPanel } from './panels/AudioPanel'
 import { InputPanel } from './panels/InputPanel'
 import { OverlayPanel } from './panels/OverlayPanel'
+import { LayerPanel, type LayerRow } from './panels/LayerPanel'
 import { MainImagePanel } from './panels/MainImagePanel'
 import { BackgroundPanel } from './panels/BackgroundPanel'
 import { TextPanel } from './panels/TextPanel'
@@ -24,7 +25,7 @@ import type {
 } from '@shared/layout'
 import type { SelectableId } from './SceneLayers'
 
-export type SideTab = 'assets' | 'text' | 'visualizer' | 'fx'
+export type SideTab = 'assets' | 'layers' | 'text' | 'visualizer' | 'fx'
 
 export interface SidePanelProps {
   // 附加图层（0.8.0）
@@ -37,6 +38,13 @@ export interface SidePanelProps {
   onOverlayUpdate: (id: string, patch: Partial<OverlayLayerConfig>) => void
   onOverlayRemove: (id: string) => void
   onOverlayMove: (id: string, dir: -1 | 1) => void
+  // 图层面板（0.9.0）
+  layerRows: LayerRow[]
+  snapEnabled: boolean
+  onLayerToggleHidden: (id: string) => void
+  onLayerToggleLocked: (id: string) => void
+  onLayerMove: (id: string, dir: -1 | 1) => void
+  onSnapToggle: (v: boolean) => void
   // 自定义字体（0.8.0）
   customFontFamily: string | null
   customFontName: string | null
@@ -108,6 +116,7 @@ export interface SidePanelProps {
 
 const TABS: { id: SideTab; labelKey: string }[] = [
   { id: 'assets', labelKey: 'tabs.assets' },
+  { id: 'layers', labelKey: 'layers.tab' },
   { id: 'text', labelKey: 'tabs.text' },
   { id: 'visualizer', labelKey: 'tabs.visualizer' },
   { id: 'fx', labelKey: 'tabs.fx' }
@@ -182,6 +191,16 @@ export function SidePanel(props: SidePanelProps): React.JSX.Element {
               onClearBg={props.onClearBg}
             />
           </>
+        )}
+        {tab === 'layers' && (
+          <LayerPanel
+            rows={props.layerRows}
+            snapEnabled={props.snapEnabled}
+            onToggleHidden={props.onLayerToggleHidden}
+            onToggleLocked={props.onLayerToggleLocked}
+            onMove={props.onLayerMove}
+            onSnapToggle={props.onSnapToggle}
+          />
         )}
         {tab === 'text' && (
           <TextPanel

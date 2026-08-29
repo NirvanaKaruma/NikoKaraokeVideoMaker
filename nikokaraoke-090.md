@@ -12,7 +12,7 @@
 
 - [x] T1: 数据模型——layout 新增 `layers: LayerItem[]`（{ id: 'background'|'main'|'songTitle'|'artist'|'visualizer'|`overlay:<id>`, hidden, locked }，z 序=数组序；缺省 null=默认顺序）+ `editor: { snapEnabled: boolean }`（默认 true）；hasDynamicFx 不变，新增 `hasCustomLayerOrder(layout)`（顺序异于默认 → 导出走全层逐帧路径，保证任意 z 序所见即所得）；layout.test 默认序/自定义序/hasCustomLayerOrder 用例
 - [x] T2: SceneLayers 渲染改造——按 layers 数组顺序渲染（每元素一个 Konva Layer：name=元素 id；fx 特效层永远最后=置顶）；hidden → 不渲染（预览与导出同一渲染代码 → 天然同源）；locked → 可拖组件 draggable=false + onSelect 抑制（SharedImageLayer/TextNode/VisualizerLayer 增 `locked` prop）；附加层增删/移动同步 layers 数组（保持附加层排序语义）；ExportStageHost 拆分路径仅默认序可用（hasCustomLayerOrder → dynamic）
-- [ ] T3: 图层面板 UI——新增「图层」页签：全部场景元素列表（名称/👁 隐藏/🔒 锁定/↑↓ 排序），锁定行画布禁选提示；附加层资产操作仍在其面板（列表项同步）；i18n 三语
+- [x] T3: 图层面板 UI——新增「图层」页签：全部场景元素列表（名称/👁 隐藏/🔒 锁定/↑↓ 排序），锁定行画布禁选提示；附加层资产操作仍在其面板（列表项同步）；i18n 三语
 - [ ] T4: 吸附对齐线——shared/snap.ts 纯函数（拖动矩形 × 目标矩形集（画布中心/边缘 + 其余元素边/中线）→ { x, y, guides }，阈值 8 逻辑像素）；SceneLayers 增 `SnapGuidesLayer`（透明引导线）+ 三处可拖组 onDragMove 接入（拖中亮线、松手清除）；`editor.snapEnabled=false` 时不吸附；单测（中心/边缘/元素间/阈值内不误吸附）
 - [ ] T5: 数值精调——DeferredSlider 增数字输入框（显示单位值=模型值×unitScale，步进=step，↑↓ 微调 ∧⇧10×，失焦/回车提交模型值）；各面板滑块按单位配置 unitScale（百分比=100，秒=10，°=1 等）；单测（format/parse/step 计算）
 - [ ] T6: 端到端与回归——typecheck/lint/测试（新增 layers/snap 单测）/build；smoke-visual 扩展（隐藏主图 → 区域像素变化；锁定层 draggable=false 探针；吸附运行态用 Konva 探针 + 纯函数单测）；smoke-project 扩展（层顺序/隐藏/锁定/吸附开关 保存→还原校验）

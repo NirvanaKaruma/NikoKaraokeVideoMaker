@@ -277,6 +277,24 @@ export const zhCn = {
     fontNoPath: '项目保存时字体无磁盘路径，请重新选择字体文件',
     defaultName: '未命名项目'
   },
+  layers: {
+    tab: '图层',
+    bg: '背景',
+    main: '主图',
+    songTitle: '歌名',
+    artist: '作者',
+    visualizer: '可视化',
+    overlayI: '图层 {i}',
+    hide: '隐藏',
+    hideOff: '显示',
+    lock: '锁定',
+    lockOff: '解锁',
+    moveUp: '上移',
+    moveDown: '下移',
+    snap: '吸附对齐线',
+    snapEnabled: '开启（拖到画布边缘/中心/元素线附近自动对齐）',
+    note: '隐藏 = 不渲染（预览与导出一致）；锁定 = 画布上不可选中/拖动（参数仍可调）'
+  },
   overlay: {
     title: '附加图层',
     add: '➕ 添加图像',

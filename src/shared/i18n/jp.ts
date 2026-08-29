@@ -295,6 +295,24 @@ export const jp = {
     fontNoPath: '保存時にフォントのディスクパスがありません。フォントを選択し直してください',
     defaultName: '無題のプロジェクト'
   },
+  layers: {
+    tab: 'レイヤー',
+    bg: '背景',
+    main: 'メイン画像',
+    songTitle: '曲名',
+    artist: 'アーティスト',
+    visualizer: 'ビジュアライザー',
+    overlayI: 'レイヤー {i}',
+    hide: '非表示',
+    hideOff: '表示',
+    lock: 'ロック',
+    lockOff: 'ロック解除',
+    moveUp: '上へ',
+    moveDown: '下へ',
+    snap: 'スナップガイド',
+    snapEnabled: 'オン（キャンバス端/中央/要素ガイドに自動スナップ）',
+    note: '非表示 = 描画しない（プレビューと書き出しで一致）；ロック = キャンバス上で選択/ドラッグ不可（パラメータは調整可）'
+  },
   overlay: {
     title: '附加レイヤー',
     add: '➕ 画像を追加',
