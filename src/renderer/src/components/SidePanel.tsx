@@ -41,9 +41,6 @@ export interface SidePanelProps {
   customFontFamily: string | null
   customFontName: string | null
   onPickFont: (file: File | null) => void
-  // 一键主题色（0.8.0）
-  themeBusy?: boolean
-  onApplyTheme?: () => void
   // 输入
   songTitle: string
   artist: string
@@ -163,8 +160,6 @@ export function SidePanel(props: SidePanelProps): React.JSX.Element {
               onArtistChange={props.onArtistChange}
               onCoverFile={props.onCoverFile}
               onAudioFile={props.onAudioFile}
-              themeBusy={props.themeBusy}
-              onApplyTheme={props.onApplyTheme}
             />
             <MainImagePanel mainImage={props.mainImage} onChange={props.onMainImageChange} />
             <OverlayPanel

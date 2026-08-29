@@ -49,9 +49,6 @@ export const en = {
     coverDrop: 'Click or drop cover image',
     coverHint: '＋ Cover image',
     audio: 'Audio / video (mp3 / wav / flac / m4a / mp4 / mov / webm)',
-    applyTheme: '🎨 Apply theme color',
-    themeNote:
-      'Extract the dominant color from the cover → background base + visualizer gradient (text colors untouched; one undo)',
     audioDrop: 'Click or drop audio or video',
     audioHint: '♪ Audio'
   },

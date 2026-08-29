@@ -12,9 +12,6 @@ interface InputPanelProps {
   onArtistChange: (v: string) => void
   onCoverFile: (f: File | null) => void
   onAudioFile: (f: File | null) => void
-  /** 一键主题色（0.8.0）：仅当封面就绪时可用 */
-  themeBusy?: boolean
-  onApplyTheme?: () => void
 }
 
 interface DropZoneProps {
@@ -103,19 +100,6 @@ export function InputPanel(props: InputPanelProps): React.JSX.Element {
           onFile={props.onCoverFile}
         />
       </div>
-      {props.onApplyTheme && (
-        <div className="field">
-          <button
-            type="button"
-            className="btn"
-            disabled={props.themeBusy}
-            onClick={props.onApplyTheme}
-          >
-            {t('input.applyTheme')}
-          </button>
-          <p className="panel-note">{t('input.themeNote')}</p>
-        </div>
-      )}
       <div className="field">
         <span>{t('input.audio')}</span>
         <DropZone
