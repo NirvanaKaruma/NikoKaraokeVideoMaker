@@ -5,6 +5,7 @@ import {
   type ProjectLayout,
   type ResolutionOption
 } from '@shared/layout'
+import { hasTimeline, resolveLayoutAt } from '@shared/timeline'
 import { bandEnergiesAt, spectrumAt, type SpectrumAnalyzer } from '@shared/spectrum'
 import { beatEnvelope, beatPeriod, smoothBarsFx, type SmoothFxState } from '@shared/fx'
 import { drawCanvasFx } from '@shared/canvasfx'
@@ -263,7 +264,9 @@ export async function encodeVideo(opts: EncodeVideoOptions): Promise<ArrayBuffer
 
   // 0.5.0 动效：存在随时间变化的特效 → 逐帧全层渲染（同一批节点）；
   // 否则走静态缓存快速路径（与 0.4.0 输出一致）。
-  const dynamic = hasDynamicFx(layout) || hasCustomLayerOrder(layout)
+  // 1.0.0 T7：时间轴同理——逐帧 resolve（静态段零拷贝、关键帧段逐帧插值）→ setLayout 同步应用。
+  const tlActive = hasTimeline(layout)
+  const dynamic = hasDynamicFx(layout) || hasCustomLayerOrder(layout) || tlActive
   const staticCanvas = dynamic ? null : stage.renderStatic()
   const fxState: SmoothFxState = { prev: null, peak: null }
   const vizCfg = layout.visualizer
@@ -328,6 +331,8 @@ export async function encodeVideo(opts: EncodeVideoOptions): Promise<ArrayBuffer
         }
       }
       stage.setFrame(tSec)
+      // 1.0.0 T7：时间轴逐帧解析（tSec = wall 总轴；片段按 wall 轴分割）并应用到导出场景
+      if (tlActive) stage.setLayout(resolveLayoutAt(layout, tSec))
       if (dynamic) {
         // 全层逐帧渲染（含背景/主图/文本动效、片头片尾；同一 SceneLayers 绘制代码）
         ctx.clearRect(0, 0, resolution.width, resolution.height)

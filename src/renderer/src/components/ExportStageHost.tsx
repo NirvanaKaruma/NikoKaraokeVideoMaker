@@ -1,4 +1,5 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { flushSync } from 'react-dom'
 import { Stage } from 'react-konva'
 import type Konva from 'konva'
 import type { ProjectLayout } from '@shared/layout'
@@ -17,6 +18,8 @@ export interface ExportStageHandle {
   renderViz: () => HTMLCanvasElement
   /** 全层渲染画布（存在动态动效时逐帧调用：所有层同一批节点 = 同一绘制代码） */
   renderFull: () => HTMLCanvasElement
+  /** 1.0.0 T7：逐帧布局（时间轴 resolve 结果）——同步应用后随 renderFull 生效 */
+  setLayout: (layout: ProjectLayout) => void
 }
 
 interface ExportStageHostProps {
@@ -57,6 +60,8 @@ export function ExportStageHost(props: ExportStageHostProps): React.JSX.Element 
     onReady
   } = props
   const leadSec = Math.max(0, audioLeadSec ?? 0)
+  /** 1.0.0 T7：当前布局；setLayout 以 flushSync 同步切换（导出逐帧 resolve 后立即可渲染） */
+  const [dl, setDl] = useState(layout)
   const staticRef = useRef<Konva.Stage>(null)
   const vizRef = useRef<Konva.Stage>(null)
   const fullRef = useRef<Konva.Stage>(null)
@@ -93,7 +98,8 @@ export function ExportStageHost(props: ExportStageHostProps): React.JSX.Element 
             fullFrameTHandleRef.current?.(at)
           },
           renderViz: () => v.toCanvas({ pixelRatio: 1 }),
-          renderFull: () => f.toCanvas({ pixelRatio: 1 })
+          renderFull: () => f.toCanvas({ pixelRatio: 1 }),
+          setLayout: (l) => flushSync(() => setDl(l))
         })
       }
     }, 500)
@@ -115,7 +121,7 @@ export function ExportStageHost(props: ExportStageHostProps): React.JSX.Element 
     >
       <Stage ref={staticRef} width={width} height={height}>
         <SceneLayers
-          layout={layout}
+          layout={dl}
           coverElement={coverElement}
           bgElement={bgElement}
           selectedId={null}
@@ -136,7 +142,7 @@ export function ExportStageHost(props: ExportStageHostProps): React.JSX.Element 
       </Stage>
       <Stage ref={vizRef} width={width} height={height}>
         <SceneLayers
-          layout={layout}
+          layout={dl}
           coverElement={coverElement}
           bgElement={bgElement}
           selectedId={null}
@@ -144,7 +150,7 @@ export function ExportStageHost(props: ExportStageHostProps): React.JSX.Element 
           onMainRectChange={noop}
           onTextRectChange={noop}
           onVisualizerRectChange={noop}
-          bars={Array(layout.visualizer.barCount).fill(0)}
+          bars={Array(dl.visualizer.barCount).fill(0)}
           analyzer={analyzer}
           canvasSize={{ width, height }}
           layers={['visualizer', 'fx']}
@@ -159,7 +165,7 @@ export function ExportStageHost(props: ExportStageHostProps): React.JSX.Element 
       </Stage>
       <Stage ref={fullRef} width={width} height={height}>
         <SceneLayers
-          layout={layout}
+          layout={dl}
           coverElement={coverElement}
           bgElement={bgElement}
           selectedId={null}
@@ -167,7 +173,7 @@ export function ExportStageHost(props: ExportStageHostProps): React.JSX.Element 
           onMainRectChange={noop}
           onTextRectChange={noop}
           onVisualizerRectChange={noop}
-          bars={Array(layout.visualizer.barCount).fill(0)}
+          bars={Array(dl.visualizer.barCount).fill(0)}
           analyzer={analyzer}
           canvasSize={{ width, height }}
           barsHandleRef={fullBarsHandleRef}
