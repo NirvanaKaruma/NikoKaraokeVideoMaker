@@ -18,7 +18,8 @@ interface Window {
   >
   /** 仅 --smoke-visual 无头自测模式注入 */
   __captureStage?: () => string
-  __runVisualChecks?: () => VisualCheckReport
+  /** 仅 --smoke-visual（封面解码异步，等待就绪后返回） */
+  __runVisualChecks?: () => VisualCheckReport | Promise<VisualCheckReport>
   __runAudioSmoke?: () => Promise<VisualCheckReport>
   /** 关闭前未保存确认（main 窗口 close 事件调用） */
   __isDirty?: () => boolean

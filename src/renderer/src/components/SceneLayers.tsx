@@ -1715,6 +1715,7 @@ export function SceneLayers(props: SceneLayersProps): React.JSX.Element {
               </Layer>
             )
           default: {
+            if (typeof item.id !== 'string') return null
             if (!item.id.startsWith('overlay:')) return null
             const o = (layout.overlayLayers ?? []).find((x) => 'overlay:' + x.id === item.id)
             if (!o) return null

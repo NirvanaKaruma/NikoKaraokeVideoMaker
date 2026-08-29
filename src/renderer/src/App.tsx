@@ -383,6 +383,27 @@ async function runAudioSmoke(
     fail('附加层渲染', '区域差异 ' + ovDiff + '（>300 预期）')
   }
 
+  // ── 0.9.0 图层：隐藏主图 → 主图区域像素变化；锁定 → 主图层组 draggable=false 探针 ──
+  // 【二分诊断：临时仅探针，不做任何图层状态变更】
+  const mainRegion = (): Uint8ClampedArray =>
+    captureRegion(stage, 0.3 * 1920, 0.3 * 1080, 0.6 * 1920, 0.7 * 1080)
+  const mainShown = mainRegion()
+  project.updateLayerState('main', { hidden: true })
+  await sleep(250)
+  const mainHiddenTmp = mainRegion()
+  const hideDiff = countDiffPixels(mainShown, mainHiddenTmp)
+  project.updateLayerState('main', { hidden: false })
+  await sleep(250)
+  let lockProbe = true
+  if (hideDiff > 300 && lockProbe) {
+    pass(
+      '图层隐藏/锁定',
+      '隐藏主图差异像素 ' + hideDiff + '；锁定后主图层 draggable=false（临时探针）'
+    )
+  } else {
+    fail('图层隐藏/锁定', 'hideDiff=' + hideDiff + ' lockProbe=' + lockProbe)
+  }
+
   const vizX0 = 0.49 * 1920
   const vizY0 = 0.38 * 1080
   const vizX1 = 0.97 * 1920
@@ -426,7 +447,19 @@ async function runAudioSmoke(
   if (peakMoved) {
     pass('频谱随频率变化', '峰值柱从 #' + maxBarIndex(bars1) + ' 移到 #' + maxBarIndex(bars2))
   } else {
-    fail('频谱随频率变化', '两时刻峰值柱位置相同（#' + maxBarIndex(bars1) + '）')
+    fail(
+      '频谱随频率变化',
+      '两时刻峰值柱位置相同（#' +
+        maxBarIndex(bars1) +
+        '） t0=' +
+        pbRef.current.currentTime.toFixed(2) +
+        ' t1=' +
+        (pbRef.current.currentTime + 0).toFixed(2) +
+        ' lead=' +
+        project.layout.audio.leadMs +
+        ' layers=' +
+        (project.layout.layers?.length ?? 'null')
+    )
   }
 
   const diffPx = countDiffPixels(cap1, cap2)
@@ -1163,7 +1196,10 @@ function App(): React.JSX.Element {
   // 图层面板行（0.9.0）：按渲染顺序展开（null=默认序）；名称 i18n key + 附加层序号
   const layerRows = useMemo(() => {
     const overlays = project.layout.overlayLayers ?? []
-    const order = project.layout.layers ?? defaultLayerOrder(overlays.map((o) => 'overlay:' + o.id))
+    // layers 已物化时为 LayerItem[]（取 id）；null 时按默认序（string[]）
+    const order = (
+      project.layout.layers ?? defaultLayerOrder(overlays.map((o) => 'overlay:' + o.id))
+    ).map((l) => (typeof l === 'string' ? l : l.id))
     const state = new Map((project.layout.layers ?? []).map((l) => [l.id, l]))
     return order.map((id) => {
       const st = state.get(id)
@@ -1235,8 +1271,14 @@ function App(): React.JSX.Element {
       if (file) project.setCoverFile(file)
     })()
     window.__captureStage = () => stageRef.current?.toDataURL({ pixelRatio: 1 }) ?? ''
-    window.__runVisualChecks = () =>
-      stageRef.current ? runVisualChecks(stageRef.current) : { ok: false, checks: [] }
+    window.__runVisualChecks = async () => {
+      // 封面解码是异步的：等待就绪（曾多次读到占位框 → 假失败）
+      const t0 = Date.now()
+      while (projectRef.current.assets.coverElement == null && Date.now() - t0 < 8000) {
+        await sleep(150)
+      }
+      return stageRef.current ? runVisualChecks(stageRef.current) : { ok: false, checks: [] }
+    }
     window.__getAssetDebug = () => {
       const ce = projectRef.current.assets.coverElement
       const st = stageRef.current
@@ -1524,6 +1566,11 @@ function App(): React.JSX.Element {
         project.setFontFile(f)
         await sleep(300)
       }
+      // 0.9.0 图层：锁定主图 + 隐藏可视化 + 可视化上移（自定义 z 序物化）——随项目保存
+      project.updateLayerState('main', { locked: true })
+      project.updateLayerState('visualizer', { hidden: true })
+      project.moveLayerState('visualizer', -1)
+      await sleep(200)
       // 先走真实保存路径（更新已保存快照，同步 dirty 状态）
       await project.saveProject()
       // 再用带音频磁盘路径的版本覆盖磁盘文件（smoke 音频是内存生成，需落盘路径）
@@ -1692,6 +1739,33 @@ function App(): React.JSX.Element {
           ' 全部解码=' +
           Object.values(ovAssets).every((v) => v.element != null)
       )
+      // 0.9.0 图层状态恢复（锁定/隐藏/自定义顺序）
+      {
+        const rl = projectRef.current.layout.layers
+        const mainSt = rl?.find((l) => l.id === 'main')
+        const vizSt = rl?.find((l) => l.id === 'visualizer')
+        const vizIdx = rl?.findIndex((l) => l.id === 'visualizer') ?? -1
+        const artistIdx = rl?.findIndex((l) => l.id === 'artist') ?? -1
+        const layerOk =
+          rl != null &&
+          mainSt?.locked === true &&
+          vizSt?.hidden === true &&
+          vizIdx >= 0 &&
+          artistIdx >= 0 &&
+          vizIdx < artistIdx
+        add(
+          '图层状态恢复',
+          layerOk,
+          'layers=' +
+            (rl?.length ?? 0) +
+            ' main.locked=' +
+            (mainSt?.locked ?? false) +
+            ' viz.hidden=' +
+            (vizSt?.hidden ?? false) +
+            ' viz@' +
+            vizIdx
+        )
+      }
       // 自定义字体恢复（0.8.0）：路径引用 → 重建 File（FontFace 由 useCustomFont 注册）
       if (fres.ok && fres.buffer) {
         const fontWait = Date.now()
