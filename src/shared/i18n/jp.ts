@@ -306,7 +306,8 @@ export const jp = {
     inherit: 'グローバル継承',
     editTarget: '編集中の対象',
     editGlobal: 'グローバル基線',
-    editSegment: 'セグ {i}'
+    editSegment: 'セグ {i}',
+    overlap: '⚠ セグメント重複——重複区間は先の並びが優先（v1 ハードカット）'
   },
   kf: {
     hint: 'トラックを選択：再生ヘッドを動かして「ここにキーフレーム追加」；キーフレームをクリックでドラッグ/値/イージング変更',

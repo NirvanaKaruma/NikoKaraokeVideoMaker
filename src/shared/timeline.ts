@@ -130,9 +130,51 @@ export function trackValueAt(track: PropertyTrack, tSec: number): KeyframeValue 
   return last.value
 }
 
-/** 所在片段（首个包含 tSec 的；无则 null） */
+/** 所在片段（首个包含 tSec 的；无则 null）——硬切语义：重叠时排序在前（更早 startSec）者生效 */
 export function segmentAt(doc: TimelineDocument, tSec: number): TimelineSegment | null {
   return doc.segments.find((s) => tSec >= s.startSec && tSec < s.endSec) ?? null
+}
+
+/** 重叠校验（1.0.0 T9，非破坏）：返回重叠片段 id 对；[a,b) 半开区间——恰好相接不算重叠 */
+export function segmentOverlaps(doc: TimelineDocument): [string, string][] {
+  const segs = [...doc.segments].sort((a, b) => a.startSec - b.startSec)
+  const out: [string, string][] = []
+  for (let i = 0; i < segs.length; i++) {
+    for (let j = i + 1; j < segs.length; j++) {
+      if (segs[j].startSec < segs[i].endSec) {
+        out.push([segs[i].id, segs[j].id])
+      } else {
+        break // 已排序：后续不再可能重叠
+      }
+    }
+  }
+  return out
+}
+
+/** 音频长度变化修正（1.0.0 T9）：超出时长的片段删除、越界 endSec 钳制回时长；changed=是否有改动 */
+export function clampSegmentsToDuration(
+  doc: TimelineDocument,
+  durationSec: number
+): { segments: TimelineSegment[]; changed: boolean } {
+  if (durationSec <= 0) return { segments: doc.segments, changed: false }
+  let changed = false
+  const segments = doc.segments
+    .filter((s) => {
+      const keep = s.startSec < durationSec - 0.05
+      if (!keep) changed = true
+      return keep
+    })
+    .map((s) => {
+      const end = Math.min(s.endSec, durationSec)
+      if (end < s.startSec + 0.1) {
+        changed = true
+        return null
+      }
+      if (end !== s.endSec) changed = true
+      return end === s.endSec ? s : { ...s, endSec: end }
+    })
+    .filter((s): s is TimelineSegment => s !== null)
+  return { segments, changed }
 }
 
 /**

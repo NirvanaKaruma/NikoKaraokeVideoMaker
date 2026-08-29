@@ -14,6 +14,8 @@ export interface TimelineBarProps {
   onSplitAt: (t: number) => void
   onRemoveSegment: (id: string) => void
   onUpdateBounds: (id: string, startSec: number, endSec: number) => void
+  /** 重叠片段 id（T9 非破坏校验：标红 + 提示——重叠区间按排序靠前者生效） */
+  overlaps?: string[]
   /** 关闭时间轴（可选；App 顶部可重开） */
   onClose?: () => void
 }
@@ -86,6 +88,9 @@ export function TimelineBar(props: TimelineBarProps): React.JSX.Element {
           </button>
         )}
         <span className="panel-note">{t('timeline.hint')}</span>
+        {(props.overlaps?.length ?? 0) > 0 && (
+          <span className="timeline-overlap-note">{t('timeline.overlap')}</span>
+        )}
         {props.onClose && (
           <button type="button" className="btn-sm timeline-close" onClick={props.onClose}>
             ✕
@@ -122,7 +127,8 @@ export function TimelineBar(props: TimelineBarProps): React.JSX.Element {
             className={
               'segment-block' +
               (props.selectedSegmentId === s.id ? ' selected' : '') +
-              (s.layout ? ' detached' : '')
+              (s.layout ? ' detached' : '') +
+              (props.overlaps?.includes(s.id) ? ' overlap' : '')
             }
             style={{
               left: ratio(s.startSec) * 100 + '%',

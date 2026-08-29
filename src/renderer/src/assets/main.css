@@ -742,6 +742,16 @@ body {
   border-style: dashed;
 }
 
+.segment-block.overlap {
+  border-color: #d98a3d;
+  background: rgba(217, 138, 61, 0.22);
+}
+
+.timeline-overlap-note {
+  font-size: 11px;
+  color: #ffb46e;
+}
+
 .segment-label {
   position: absolute;
   top: 4px;

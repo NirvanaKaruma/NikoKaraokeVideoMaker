@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import {
+  clampSegmentsToDuration,
   getByPath,
   hasTimeline,
   interpolateValue,
   resolveLayoutAt,
   segmentAt,
+  segmentOverlaps,
   setByPath,
   trackValueAt,
   type TimelineDocument,
@@ -111,5 +113,72 @@ describe('timeline 时间轴与插值引擎（1.0.0，纯函数）', () => {
   it('hasTimeline：空=无；有片段=true', () => {
     expect(hasTimeline(structuredClone(DEFAULT_LAYOUT))).toBe(false)
     expect(hasTimeline({ ...structuredClone(DEFAULT_LAYOUT), timeline: doc([seg()]) })).toBe(true)
+  })
+})
+
+describe('T9 片段边界语义', () => {
+  const tdoc = (list: { id: string; a: number; b: number }[]): TimelineDocument => ({
+    segments: list.map((x) => ({
+      id: x.id,
+      startSec: x.a,
+      endSec: x.b,
+      layout: null,
+      keyframes: []
+    }))
+  })
+
+  it('重叠校验：恰好相接不算重叠；真重叠成对返回', () => {
+    expect(
+      segmentOverlaps(
+        tdoc([
+          { id: 'A', a: 0, b: 10 },
+          { id: 'B', a: 10, b: 20 }
+        ])
+      )
+    ).toEqual([])
+    const r1 = segmentOverlaps(
+      tdoc([
+        { id: 'A', a: 0, b: 15 },
+        { id: 'B', a: 10, b: 20 }
+      ])
+    )
+    expect(r1).toEqual([['A', 'B']])
+    const r2 = segmentOverlaps(
+      tdoc([
+        { id: 'A', a: 0, b: 30 },
+        { id: 'B', a: 5, b: 8 },
+        { id: 'C', a: 20, b: 25 }
+      ])
+    )
+    expect(r2.sort()).toEqual(
+      [
+        ['A', 'B'],
+        ['A', 'C']
+      ].sort()
+    )
+  })
+
+  it('音频长度变化：超界片段删除、越界 endSec 钳制；无改动时 changed=false', () => {
+    const r1 = clampSegmentsToDuration(
+      tdoc([
+        { id: 'A', a: 0, b: 10 },
+        { id: 'B', a: 8, b: 20 },
+        { id: 'C', a: 15, b: 18 }
+      ]),
+      12
+    )
+    expect(r1.changed).toBe(true)
+    expect(r1.segments.map((s) => s.id)).toEqual(['A', 'B'])
+    expect(r1.segments[1].endSec).toBe(12)
+    const r2 = clampSegmentsToDuration(tdoc([{ id: 'A', a: 0, b: 10 }]), 10)
+    expect(r2.changed).toBe(false)
+  })
+
+  it('硬切语义：重叠时排序在前（更早 start）生效', () => {
+    const d = tdoc([
+      { id: 'A', a: 0, b: 15 },
+      { id: 'B', a: 10, b: 20 }
+    ])
+    expect(segmentAt(d, 12)?.id).toBe('A')
   })
 })

@@ -17,7 +17,7 @@ import {
   VisualizerConfig,
   defaultLayerOrder
 } from '@shared/layout'
-import type { PropertyTrack } from '@shared/timeline'
+import { clampSegmentsToDuration, type PropertyTrack } from '@shared/timeline'
 import type { ProjectFile } from '@shared/project'
 import { t } from '@shared/i18n'
 
@@ -152,6 +152,8 @@ export function useProject(): {
   updateSegmentBounds: (segId: string, startSec: number, endSec: number) => void
   /** 段关键帧整体替换（T5；t 相对片段起点） */
   updateSegmentTracks: (segId: string, tracks: PropertyTrack[]) => void
+  /** 音频长度变化边界修正（T9；无改动时 no-op 不入历史） */
+  clampTimelineToDuration: (durationSec: number) => void
   applySegmentToAll: (segId: string) => void
   /** 图层（0.9.0）：隐藏/锁定切换（None-null 时物化默认序） */
   updateLayerState: (id: string, patch: Partial<Pick<LayerItem, 'hidden' | 'locked'>>) => void
@@ -721,6 +723,18 @@ export function useProject(): {
     [applyLayout, pushHistory]
   )
 
+  /** 音频长度变化边界修正（T9）：超界片段删除、endSec 钳制；无改动不入历史 */
+  const clampTimelineToDuration = useCallback(
+    (durationSec: number) => {
+      const cur = layoutRef.current
+      const r = clampSegmentsToDuration({ segments: cur.timeline?.segments ?? [] }, durationSec)
+      if (!r.changed) return
+      pushHistory()
+      applyLayout({ ...cur, timeline: { segments: r.segments } })
+    },
+    [applyLayout, pushHistory]
+  )
+
   /** 段关键帧整体替换（1.0.0 T5：关键帧编辑器提交；t 相对片段起点） */
   const updateSegmentTracks = useCallback(
     (segId: string, tracks: PropertyTrack[]) => {
@@ -1132,6 +1146,7 @@ export function useProject(): {
     splitSegment,
     updateSegmentBounds,
     updateSegmentTracks,
+    clampTimelineToDuration,
     applySegmentToAll,
     saveProject,
     loadProject,

@@ -305,7 +305,8 @@ export const en = {
     inherit: 'inherits global',
     editTarget: 'Editing',
     editGlobal: 'Global baseline',
-    editSegment: 'Seg {i}'
+    editSegment: 'Seg {i}',
+    overlap: '⚠ overlapping segments - the earlier one wins (v1 hard cut)'
   },
   kf: {
     hint: 'Select a track: move the playhead, then "Add keyframe here"; click a keyframe to drag/edit value/easing',

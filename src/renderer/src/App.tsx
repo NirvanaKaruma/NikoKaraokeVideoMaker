@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type Konva from 'konva'
 import { SUBTITLE_ZONE_Y, defaultLayerOrder, type ProjectLayout } from '@shared/layout'
-import { resolveLayoutAt } from '@shared/timeline'
+import { resolveLayoutAt, segmentOverlaps } from '@shared/timeline'
 import { resolvedSnapshotKey } from '@shared/tlDiff'
 import { useLocale } from './hooks/useLocale'
 import { useEditableLayout } from './hooks/useEditableLayout'
@@ -1273,6 +1273,17 @@ function App(): React.JSX.Element {
     TL_RESOLVE_CACHE.set(cur, { key, value: resolved })
     return resolved
   })()
+  /** T9：重叠校验（非破坏：标红提示；缝隙=全局基线显示，无需处理） */
+  const overlapIds = useMemo(
+    () => segmentOverlaps({ segments: project.layout.timeline?.segments ?? [] }).flat(),
+    [project.layout.timeline]
+  )
+  /** T9：音频时长变化 → 片段边界自动修正（无改动 no-op，不会循环入史） */
+  useEffect(() => {
+    if (pb.status === 'ready' && pb.duration > 0) {
+      projectRef.current.clampTimelineToDuration(pb.duration)
+    }
+  }, [pb.status, pb.duration])
   // 自定义字体（0.8.0）：项目 assets.fontFile → FontFace 注册（预览/导出同进程同字形）
   const customFont = useCustomFont(project.assets.fontFile ?? null)
 
@@ -2086,6 +2097,7 @@ function App(): React.JSX.Element {
               if (project.editSegId === id) project.setEditSegment(null)
             }}
             onUpdateBounds={project.updateSegmentBounds}
+            overlaps={overlapIds}
             onClose={() => setTimelineOpen(false)}
           />
         )}

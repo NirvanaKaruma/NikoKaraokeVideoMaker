@@ -306,7 +306,8 @@ export const zhCn = {
     inherit: '继承全局',
     editTarget: '当前编辑对象',
     editGlobal: '全局基线',
-    editSegment: '片段 {i}'
+    editSegment: '片段 {i}',
+    overlap: '⚠ 片段有重叠——重叠区间按排序靠前者生效（v1 硬切）'
   },
   kf: {
     hint: '选中轨道后：拖动播放头 → 「在此添加关键帧」；点关键帧可拖拽/改值/换缓动',
