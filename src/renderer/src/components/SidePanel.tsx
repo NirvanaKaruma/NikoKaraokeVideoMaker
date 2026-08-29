@@ -16,16 +16,19 @@ import { BackgroundPanel } from './panels/BackgroundPanel'
 import { TextPanel } from './panels/TextPanel'
 import { VisualizerPanel } from './panels/VisualizerPanel'
 import { FxPanel } from './panels/FxPanel'
+import { KeyframePanel } from './panels/KeyframePanel'
 import type {
   AudioEngineConfig,
   BeatFxConfig,
   CanvasFxConfig,
   IntroOutroConfig,
-  OverlayLayerConfig
+  OverlayLayerConfig,
+  ProjectLayout
 } from '@shared/layout'
+import type { PropertyTrack } from '@shared/timeline'
 import type { SelectableId } from './SceneLayers'
 
-export type SideTab = 'assets' | 'layers' | 'text' | 'visualizer' | 'fx'
+export type SideTab = 'assets' | 'layers' | 'text' | 'visualizer' | 'fx' | 'keyframes'
 
 export interface SidePanelProps {
   // 附加图层（0.8.0）
@@ -116,6 +119,13 @@ export interface SidePanelProps {
   editLabel: string
   editIsSegment: boolean
   onEditGlobal: () => void
+  // 关键帧编辑器（1.0.0 T5）
+  kfSegId: string | null
+  kfSegStartSec: number
+  kfSegEndSec: number
+  kfTracks: PropertyTrack[]
+  kfView: ProjectLayout
+  onKfTracksChange: (tracks: PropertyTrack[]) => void
 }
 
 const TABS: { id: SideTab; labelKey: string }[] = [
@@ -123,7 +133,8 @@ const TABS: { id: SideTab; labelKey: string }[] = [
   { id: 'layers', labelKey: 'layers.tab' },
   { id: 'text', labelKey: 'tabs.text' },
   { id: 'visualizer', labelKey: 'tabs.visualizer' },
-  { id: 'fx', labelKey: 'tabs.fx' }
+  { id: 'fx', labelKey: 'tabs.fx' },
+  { id: 'keyframes', labelKey: 'tabs.keyframes' }
 ]
 
 /** 布局四面板（1.0.0 T4）：顶部显示「当前编辑对象」上下文条 */
@@ -256,6 +267,17 @@ export function SidePanel(props: SidePanelProps): React.JSX.Element {
             visualizer={props.visualizerForBeat}
             onBeatFxChange={props.onBeatFxChange}
             onVisualizerChange={props.onVisualizerForBeatChange}
+          />
+        )}
+        {tab === 'keyframes' && (
+          <KeyframePanel
+            segId={props.kfSegId}
+            segStartSec={props.kfSegStartSec}
+            segEndSec={props.kfSegEndSec}
+            tracks={props.kfTracks}
+            currentT={props.currentTime}
+            view={props.kfView}
+            onTracksChange={props.onKfTracksChange}
           />
         )}
       </div>

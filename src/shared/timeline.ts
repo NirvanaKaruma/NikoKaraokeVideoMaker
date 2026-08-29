@@ -51,8 +51,8 @@ export function hasTimeline(layout: ProjectLayout): boolean {
   return (layout.timeline?.segments ?? []).length > 0
 }
 
-/** 缓动函数表（注入点：新增缓动只改这里） */
-const EASINGS: Record<EasingName, (x: number) => number> = {
+/** 缓动函数表（注入点：新增缓动只改这里）；导出供关键帧编辑器下拉复用 */
+export const EASINGS: Record<EasingName, (x: number) => number> = {
   linear: (x) => x,
   easeInOutQuad,
   easeOutCubic,

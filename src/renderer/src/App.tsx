@@ -1175,6 +1175,9 @@ function App(): React.JSX.Element {
   const project = useProject()
   /** 编辑上下文（1.0.0 T4）：null=全局基线；选中片段 = 段视图（所有面板写入自动路由） */
   const edit = useEditableLayout(project)
+  /** 当前编辑片段（关键帧编辑器用；不存在则 null） */
+  const editKfSeg =
+    (project.layout.timeline?.segments ?? []).find((s) => s.id === edit.segId) ?? null
   const [selectedId, setSelectedId] = useState<SelectableId>(null)
   const [helpOpen, setHelpOpen] = useState(false)
   const [exportOpen, setExportOpen] = useState(false)
@@ -2013,6 +2016,14 @@ function App(): React.JSX.Element {
             editLabel={edit.label}
             editIsSegment={edit.isSegment}
             onEditGlobal={() => project.setEditSegment(null)}
+            kfSegId={edit.segId}
+            kfSegStartSec={editKfSeg?.startSec ?? 0}
+            kfSegEndSec={editKfSeg?.endSec ?? 0}
+            kfTracks={editKfSeg?.keyframes ?? []}
+            kfView={edit.view}
+            onKfTracksChange={(tracks) => {
+              if (edit.segId) project.updateSegmentTracks(edit.segId, tracks)
+            }}
           />
           <main className="canvas-wrap">
             <CanvasStage

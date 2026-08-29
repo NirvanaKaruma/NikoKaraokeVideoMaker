@@ -792,3 +792,133 @@ body {
   padding: 3px 8px;
   font-size: 12px;
 }
+
+/* ===== 关键帧编辑器（1.0.0 T5） ===== */
+.kf-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.kf-track-list {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.kf-track {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 6px 8px;
+  border: 1px solid var(--ev-c-gray-2);
+  border-radius: 6px;
+  background: var(--ev-c-black-mute);
+  color: var(--ev-c-text-2);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.kf-track.active {
+  border-color: #7ce3ff;
+  color: #bfefff;
+}
+
+.kf-dot {
+  color: #7ce3ff;
+  font-size: 10px;
+}
+
+.kf-addbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.kf-time {
+  font-variant-numeric: tabular-nums;
+  color: var(--ev-c-text-2);
+}
+
+.kf-cur {
+  flex: 1;
+  color: var(--ev-c-text-2);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.kf-strip {
+  position: relative;
+  height: 40px;
+  border: 1px solid var(--ev-c-gray-2);
+  border-radius: 6px;
+  background: #1a1a22;
+  cursor: crosshair;
+}
+
+.kf-strip.empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  color: var(--ev-c-text-2);
+  cursor: default;
+}
+
+.kf-point {
+  position: absolute;
+  top: 50%;
+  width: 12px;
+  height: 12px;
+  margin: -6px 0 0 -6px;
+  border-radius: 50%;
+  background: #7ce3ff;
+  border: 2px solid #123;
+  cursor: ew-resize;
+}
+
+.kf-point.active {
+  background: #ff5f9e;
+  box-shadow: 0 0 6px #ff5f9e;
+}
+
+.kf-editor {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.kf-editor-label {
+  color: var(--ev-c-text-2);
+}
+
+.kf-num {
+  width: 76px;
+  padding: 4px 6px;
+  border: 1px solid var(--ev-c-gray-2);
+  border-radius: 6px;
+  background: var(--ev-c-black-mute);
+  color: var(--ev-c-text-1);
+  font-size: 12px;
+  text-align: center;
+}
+
+.kf-color {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.kf-select {
+  padding: 4px 6px;
+  border: 1px solid var(--ev-c-gray-2);
+  border-radius: 6px;
+  background: var(--ev-c-black-mute);
+  color: var(--ev-c-text-1);
+  font-size: 12px;
+}

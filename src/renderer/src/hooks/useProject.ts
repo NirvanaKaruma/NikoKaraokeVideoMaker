@@ -150,6 +150,8 @@ export function useProject(): {
   removeSegment: (segId: string) => void
   splitSegment: (atSec: number) => void
   updateSegmentBounds: (segId: string, startSec: number, endSec: number) => void
+  /** 段关键帧整体替换（T5；t 相对片段起点） */
+  updateSegmentTracks: (segId: string, tracks: PropertyTrack[]) => void
   applySegmentToAll: (segId: string) => void
   /** 图层（0.9.0）：隐藏/锁定切换（None-null 时物化默认序） */
   updateLayerState: (id: string, patch: Partial<Pick<LayerItem, 'hidden' | 'locked'>>) => void
@@ -719,6 +721,19 @@ export function useProject(): {
     [applyLayout, pushHistory]
   )
 
+  /** 段关键帧整体替换（1.0.0 T5：关键帧编辑器提交；t 相对片段起点） */
+  const updateSegmentTracks = useCallback(
+    (segId: string, tracks: PropertyTrack[]) => {
+      pushHistory()
+      const cur = layoutRef.current
+      const segments = (cur.timeline?.segments ?? []).map((s) =>
+        s.id === segId ? { ...s, keyframes: tracks } : s
+      )
+      applyLayout({ ...cur, timeline: { ...cur.timeline, segments } })
+    },
+    [applyLayout, pushHistory]
+  )
+
   /** 将该段布局（视图）复制给全部其他段（批量覆盖；关键帧不动） */
   const applySegmentToAll = useCallback(
     (segId: string) => {
@@ -1116,6 +1131,7 @@ export function useProject(): {
     removeSegment,
     splitSegment,
     updateSegmentBounds,
+    updateSegmentTracks,
     applySegmentToAll,
     saveProject,
     loadProject,
