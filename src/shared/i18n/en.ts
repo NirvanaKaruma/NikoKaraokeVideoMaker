@@ -421,7 +421,7 @@ export const en = {
       leadMs: 'Lead silence: {v}ms',
       fadeInSec: 'Audio fade-in: {v}s',
       fadeOutSec: 'Audio fade-out: {v}s',
-      note: 'Lead applies to the export only (black/title-card fill at the head; preview keeps the original timeline); fades apply to the exported audio.'
+      note: 'Lead = intro silence at the video head (filled with black/title card); the preview behaves the same as export (WYSIWYG). Fades apply to the exported audio only.'
     }
   },
   closeGuard: {

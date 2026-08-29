@@ -41,6 +41,8 @@ export interface SidePanelProps {
   /** 超长音频警告（0.7.0 护栏） */
   audioWarning: string | null
   duration: number
+  /** 播放时间轴总长（音频 + 前导，秒）——进度/时间显示用 */
+  timelineDuration: number
   currentTime: number
   isPlaying: boolean
   audioFileName: string | null
@@ -104,6 +106,7 @@ export function SidePanel(props: SidePanelProps): React.JSX.Element {
         status={props.audioStatus}
         error={props.audioError}
         duration={props.duration}
+        timelineDuration={props.timelineDuration}
         currentTime={props.currentTime}
         isPlaying={props.isPlaying}
         fileName={props.audioFileName}

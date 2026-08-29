@@ -884,6 +884,68 @@ async function runAudioSmoke(
   project.updateVisualizer({ bpm: null, beatIntervalSec: null })
   project.updateBeatFx({ pulse: 0, burst: 0, particleDensity: 0 })
 
+  // ── 0.7.0 前导 WYSIWYG（预览与导出同时间轴：前奏黑场/标题卡 + 音乐延后 + 静音柱）──
+  project.updateAudioEngine({ leadMs: 1500 })
+  await sleep(250)
+  // ① 前导段（时间轴 0–1.5s）：黑幕 opacity≈1、场景中心全黑、频谱为静音柱、时间轴总长=2+1.5
+  pbRef.current.seek(0.5)
+  await sleep(300)
+  const leadCap = captureRegion(stage, 0.3 * 1920, 0.3 * 1080, 0.7 * 1920, 0.7 * 1080)
+  const leadBlackOp = stage.find('.fx-black').length ? stage.find('.fx-black')[0].opacity() : -1
+  const leadBars = pbRef.current.bars.slice()
+  const leadBlack = meanSum(leadCap) < 30 && leadBlackOp >= 0.9 && !leadBars.some((v) => v > 0.02)
+  if (
+    leadBlack &&
+    Math.abs(pbRef.current.currentTime - 0.5) < 0.05 &&
+    Math.abs(pbRef.current.timelineDuration - 3.5) < 0.01
+  ) {
+    pass(
+      '前导 WYSIWYG（黑场+静音柱）',
+      't=0.5 亮度 ' +
+        meanSum(leadCap).toFixed(0) +
+        '（黑幕 op=' +
+        leadBlackOp.toFixed(2) +
+        '），柱全 0，时间轴 ' +
+        pbRef.current.timelineDuration.toFixed(2) +
+        's = 音频 2s + 前导 1.5s'
+    )
+  } else {
+    fail(
+      '前导 WYSIWYG（黑场+静音柱）',
+      '亮度=' +
+        meanSum(leadCap).toFixed(0) +
+        ' 黑幕op=' +
+        leadBlackOp.toFixed(2) +
+        ' 柱峰值=' +
+        Math.max(...leadBars, 0).toFixed(2) +
+        ' 时间轴=' +
+        pbRef.current.timelineDuration.toFixed(2)
+    )
+  }
+  // ② 跨过前导（时间轴 1.95s = 音频 0.45s）：音乐起、440Hz 段频谱恢复、画面亮起
+  pbRef.current.seek(1.95)
+  await sleep(300)
+  const postBars = pbRef.current.bars.slice()
+  const postCap = captureRegion(stage, 0.3 * 1920, 0.3 * 1080, 0.7 * 1920, 0.7 * 1080)
+  if (postBars.some((v) => v > 0.05) && meanSum(postCap) > 40) {
+    pass(
+      '前导后音乐起（频谱恢复）',
+      't=1.95（音频 0.45s）柱峰值 ' +
+        Math.max(...postBars).toFixed(2) +
+        '，中心亮度 ' +
+        meanSum(postCap).toFixed(0)
+    )
+  } else {
+    fail(
+      '前导后音乐起（频谱恢复）',
+      '柱峰值=' + Math.max(...postBars, 0).toFixed(2) + ' 亮度=' + meanSum(postCap).toFixed(0)
+    )
+  }
+  project.updateAudioEngine({ leadMs: 0 })
+  await sleep(250)
+  pbRef.current.seek(0.45)
+  await sleep(200)
+
   // 长音频导入性能探针（用户反馈：导入后长时间卡顿）：180s WAV → 解码耗时。
   // 注意：必须等 status 先进入 loading（否则读到就绪旧状态直接跳过）
   const pbStatus = (): string => pbRef.current.status
@@ -1048,7 +1110,8 @@ function App(): React.JSX.Element {
     barsHandleRef,
     frameTRef,
     layerFxRef,
-    playTimeRef
+    playTimeRef,
+    project.layout.audio.leadMs
   )
   const pbRef = useRef<PlaybackApi>(pb)
 
@@ -1106,7 +1169,10 @@ function App(): React.JSX.Element {
     }
     window.__runAudioSmoke = () =>
       stageRef.current
-        ? runAudioSmoke(project, pbRef, stageRef.current, projectRef)
+        ? runAudioSmoke(project, pbRef, stageRef.current, projectRef).catch((e) => ({
+            ok: false,
+            checks: [{ label: '异常', pass: false, detail: String(e) }]
+          }))
         : Promise.resolve({ ok: false, checks: [] })
     window.__runEncodeBenchmark = () => benchmarkEncoder(1920, 1080)
     return () => {
@@ -1566,6 +1632,7 @@ function App(): React.JSX.Element {
           audioError={pb.error}
           audioWarning={pb.warning}
           duration={pb.duration}
+          timelineDuration={pb.timelineDuration}
           currentTime={pb.currentTime}
           isPlaying={pb.isPlaying}
           audioFileName={project.assets.audioFile?.name ?? null}

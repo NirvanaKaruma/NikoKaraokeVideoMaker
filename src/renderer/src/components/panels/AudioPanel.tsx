@@ -12,6 +12,8 @@ interface AudioPanelProps {
   status: AudioStatus
   error: string | null
   duration: number
+  /** 播放时间轴总长（音频 + 前导，秒） */
+  timelineDuration: number
   currentTime: number
   isPlaying: boolean
   fileName: string | null
@@ -28,8 +30,7 @@ interface AudioPanelProps {
 /** 预览播放面板（T14）：播放/暂停、进度、seek；播完停止不循环 */
 export function AudioPanel(props: AudioPanelProps): React.JSX.Element {
   const { t } = useLocale()
-  const { status, error, duration, currentTime, isPlaying, fileName, onPlay, onPause, onSeek } =
-    props
+  const { status, error, currentTime, isPlaying, fileName, onPlay, onPause, onSeek } = props
   return (
     <section className="panel-section">
       <h2>{t('audio.title')}</h2>
@@ -44,16 +45,16 @@ export function AudioPanel(props: AudioPanelProps): React.JSX.Element {
               {isPlaying ? t('audio.pause') : t('audio.play')}
             </button>
             <span className="audio-time">
-              {formatTime(currentTime)} / {formatTime(duration)}
+              {formatTime(currentTime)} / {formatTime(props.timelineDuration)}
             </span>
           </div>
           <input
             type="range"
             className="audio-seek"
             min={0}
-            max={duration || 1}
+            max={props.timelineDuration || 1}
             step={0.1}
-            value={Math.min(currentTime, duration || 1)}
+            value={Math.min(currentTime, props.timelineDuration || 1)}
             onChange={(e) => onSeek(Number(e.target.value))}
           />
         </>

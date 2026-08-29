@@ -112,7 +112,10 @@ function startPcmStreamDecode(decodePath: string): {
 export interface PlaybackApi {
   status: AudioStatus
   error: string | null
+  /** 音频本体时长（秒）——导出/编码用（不含前导） */
   duration: number
+  /** 播放时间轴总长（音频 + 前导，秒）——进度/seek 显示用（所见即所得） */
+  timelineDuration: number
   currentTime: number
   isPlaying: boolean
   /** 0–1 频谱柱高度（长度 = config.barCount）；无音频时为占位柱 */
@@ -142,7 +145,9 @@ export function useAudioPlayback(
   /** 播放中同步帧时间（动效：背景/主图/文本层每帧更新）；第二参 audioT 为音频轴（预览 = t） */
   layerFxSink?: { current: ((t: number, audioT?: number) => void) | null },
   /** 播放时间值盒（CanvasFX overlay 等 rAF 自绘组件读取最新 t） */
-  timeBoxRef?: { current: number }
+  timeBoxRef?: { current: number },
+  /** 前导留白（0.7.0，ms）：播放时间轴含前导——前奏黑场/标题卡 + 音乐延后（与导出一致）；0 = 旧行为 */
+  leadMs = 0
 ): PlaybackApi {
   const ctxRef = useRef<AudioContext | null>(null)
   const bufferRef = useRef<AudioBuffer | null>(null)
@@ -155,6 +160,8 @@ export function useAudioPlayback(
   const smoothFxRef = useRef<SmoothFxState>({ prev: null, peak: null })
   const lastBarsRef = useRef<Float32Array | null>(null)
   const configRef = useRef(config)
+  /** 前导秒（ref 化：rAF/回调里读到最新值；0 = 无前导） */
+  const leadSecRef = useRef(Math.max(0, leadMs) / 1000)
   const sinkRef = useRef(barsSink)
   const frameTSinkRef = useRef(frameTSink)
   const layerFxSinkRef = useRef(layerFxSink)
@@ -188,6 +195,10 @@ export function useAudioPlayback(
     configRef.current = config
   }, [config])
 
+  useEffect(() => {
+    leadSecRef.current = Math.max(0, leadMs) / 1000
+  }, [leadMs])
+
   const ensureCtx = (): AudioContext | null => {
     if (!ctxRef.current) {
       try {
@@ -208,14 +219,24 @@ export function useAudioPlayback(
     return { freqMin: lo, freqMax: hi }
   }, [])
 
+  /** t = 播放时间轴（含前导，秒）；音频驱动量 = t − 前导（与导出 audioT 同口径，所见即所得） */
   const computeBars = useCallback((t: number, viaState: boolean) => {
     if (timeBoxRefStable.current) timeBoxRefStable.current.current = t
     const an = analyzerRef.current
     if (!an) return
     const cfg = configRef.current
+    const lead = leadSecRef.current
     // 可视化-音频偏移校准：仅可视化时间轴偏移 ms，音频播放不动
-    const tVis = t + cfg.offsetMs / 1000
-    const target = spectrumAt(an, tVis, cfg.barCount, null, cfg.sensitivity)
+    const audioT = t - lead
+    // 0.7.0 前导：音乐未开始 → 静音柱（与导出 lead 段一致；清平滑态——从零起而非缓慢衰减）；
+    // 避免负 t 采样
+    let target: Float32Array
+    if (audioT < 0) {
+      smoothFxRef.current = { prev: null, peak: null }
+      target = new Float32Array(cfg.barCount)
+    } else {
+      target = spectrumAt(an, audioT + cfg.offsetMs / 1000, cfg.barCount, null, cfg.sensitivity)
+    }
     const smoothed = smoothBarsFx(smoothFxRef.current, target, cfg.attack, cfg.decay, cfg.peakFall)
     lastBarsRef.current = smoothed
     const arr = Array.from(smoothed)
@@ -226,6 +247,7 @@ export function useAudioPlayback(
     }
   }, [])
 
+  /** 从播放时间轴位置 offset（含前导）起播：前导内 → 音乐延后当秒数；跨过前导 → 立即从音频 offset 播 */
   const startSource = useCallback((ctx: AudioContext, offset: number): void => {
     const buf = bufferRef.current
     if (!buf) return
@@ -233,19 +255,22 @@ export function useAudioPlayback(
     src.buffer = buf
     src.connect(ctx.destination)
     manualStopRef.current = false
+    const lead = leadSecRef.current
+    // AudioBufferSourceNode.start(when, offset)：when 未来 = 前导剩余；offset = 音频内位置
+    src.start(ctx.currentTime + Math.max(0, lead - offset), Math.max(0, offset - lead))
     src.onended = () => {
       // 身份守卫：seek/暂停替换过的旧音源的事件一律忽略（曾误判为自然播完）
       if (src !== sourceRef.current) return
       sourceRef.current = null
       if (!manualStopRef.current) {
-        // 自然播完：停止，指针停在结尾（Q5：播完停止不循环）
+        // 自然播完：停止，指针停在时间轴结尾（Q5：播完停止不循环；含前导总长）
         playingRef.current = false
-        offsetRef.current = buf.duration
+        const timeline = buf.duration + leadSecRef.current
+        offsetRef.current = timeline
         setIsPlaying(false)
-        setCurrentTime(buf.duration)
+        setCurrentTime(timeline)
       }
     }
-    src.start(0, offset)
     startedAtRef.current = ctx.currentTime
     sourceRef.current = src
     playingRef.current = true
@@ -385,8 +410,10 @@ export function useAudioPlayback(
         setStatus('ready')
         setError(null)
         setCurrentTime(0)
-        // 立即显示 t=0 频谱
+        // 立即显示时间轴 t=0（含前导：黑场/标题卡先入画，频谱静音柱）
         computeBars(0, true)
+        frameTSinkRef.current?.current?.(0)
+        layerFxSinkRef.current?.current?.(0, 0)
       } catch (e) {
         if (!cancelled) {
           setStatus('error')
@@ -406,8 +433,10 @@ export function useAudioPlayback(
     const ctx = ensureCtx()
     if (!ctx || !bufferRef.current) return
     if (playingRef.current) return
-    // 播完后再点播放 → 从头开始
-    if (offsetRef.current >= bufferRef.current.duration - 0.01) offsetRef.current = 0
+    // 播完后再点播放 → 从头开始（时间轴 = 音频 + 前导）
+    if (offsetRef.current >= bufferRef.current.duration + leadSecRef.current - 0.01) {
+      offsetRef.current = 0
+    }
     void ctx.resume()
     startSource(ctx, offsetRef.current)
   }, [startSource])
@@ -425,15 +454,18 @@ export function useAudioPlayback(
     // command 路径下同步最后一帧（lastBars / lastT）到 state/渲染侧，
     // 避免后续声明式重渲染回退到旧值（flow 相位与暂停点一致，防突变）
     if (lastBarsRef.current) setBars(Array.from(lastBarsRef.current))
-    frameTSinkRef.current?.current?.(offsetRef.current)
-    layerFxSinkRef.current?.current?.(offsetRef.current)
+    // 同步到 wall/音频双轴（0.7.0 前导：动效时间函数按 audioT 驱动）
+    const at = Math.max(0, offsetRef.current - leadSecRef.current)
+    frameTSinkRef.current?.current?.(at)
+    layerFxSinkRef.current?.current?.(offsetRef.current, at)
   }, [])
 
   const seek = useCallback(
     (t: number) => {
       const buf = bufferRef.current
       if (!buf) return
-      const clamped = Math.min(Math.max(t, 0), buf.duration)
+      // 0.7.0：seek 瞄准播放时间轴（含前导，0..音频+前导）——前导段 = 黑场 + 音乐未起
+      const clamped = Math.min(Math.max(t, 0), buf.duration + leadSecRef.current)
       if (playingRef.current) {
         const ctx = ctxRef.current
         if (ctx) {
@@ -445,9 +477,10 @@ export function useAudioPlayback(
       }
       offsetRef.current = clamped
       setCurrentTime(clamped)
-      // 同步可视化帧时间（flow 相位/动效跟随 seek 后时间轴，避免突变）
-      frameTSinkRef.current?.current?.(clamped)
-      layerFxSinkRef.current?.current?.(clamped)
+      // 同步可视化帧时间（flow 相位/动效跟随 seek 后时间轴，避免突变）——音频轴
+      const at = Math.max(0, clamped - leadSecRef.current)
+      frameTSinkRef.current?.current?.(at)
+      layerFxSinkRef.current?.current?.(clamped, at)
       computeBars(clamped, true)
     },
     [computeBars, startSource]
@@ -461,11 +494,13 @@ export function useAudioPlayback(
       const ctx = ctxRef.current
       if (!ctx || !playingRef.current) return
       const t = offsetRef.current + (ctx.currentTime - startedAtRef.current)
-      const dur = bufferRef.current?.duration ?? t
-      setCurrentTime(Math.min(t, dur))
+      const wallDur = (bufferRef.current?.duration ?? t) + leadSecRef.current
+      setCurrentTime(Math.min(t, wallDur))
       computeBars(t, false)
-      frameTSinkRef.current?.current?.(t)
-      layerFxSinkRef.current?.current?.(t)
+      // wall/音频双轴分发（与导出同口径：运镜/入场=wall，频谱/踩点/呼吸=音频轴）
+      const at = Math.max(0, t - leadSecRef.current)
+      frameTSinkRef.current?.current?.(at)
+      layerFxSinkRef.current?.current?.(t, at)
       raf = requestAnimationFrame(tick)
     }
     raf = requestAnimationFrame(tick)
@@ -508,6 +543,7 @@ export function useAudioPlayback(
     error,
     warning,
     duration,
+    timelineDuration: duration + Math.max(0, leadMs) / 1000,
     currentTime,
     isPlaying,
     bars,

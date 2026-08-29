@@ -172,7 +172,7 @@ export interface CanvasFxConfig {
 export type ParticlePreset = 'snow' | 'sakura' | 'star' | 'bubble'
 
 /** 音频工程（0.7.0，默认全 0 = 与 0.6.5 输出一致）：
- * leadMs 仅作用导出侧（视频帧 +前导、黑场/标题卡填充；预览编辑态保持原音轨），
+ * leadMs = 前导留白：导出视频帧 +前导、黑场/标题卡填充；预览播放同时间轴（所见即所得），
  * 淡入淡出作用导出音频（afade）；偏移校准见 visualizer.offsetMs（预览/导出同偏移）。 */
 export interface AudioEngineConfig {
   /** 前导留白毫秒（KTV 前奏；0=关；1ms 精度，存储取整） */

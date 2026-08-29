@@ -28,6 +28,7 @@ function CanvasFxOverlay({
   visualizer,
   analyzer,
   playTimeRef,
+  leadSec,
   scale,
   offX,
   offY
@@ -37,6 +38,8 @@ function CanvasFxOverlay({
   visualizer: VisualizerConfig
   analyzer?: SpectrumAnalyzer | null
   playTimeRef?: { current: number }
+  /** 前导秒（0.7.0）：前导期间不叠加粒子/后期（与导出同口径） */
+  leadSec?: number
   scale: number
   offX: number
   offY: number
@@ -58,9 +61,11 @@ function CanvasFxOverlay({
       raf = requestAnimationFrame(draw)
       // 空闲跳过：暂停/未加载且信号未变时整帧跳过（省全画布 clear+重绘）
       const offset = visualizer.offsetMs / 1000
-      const t = (playTimeRef?.current ?? 0) + offset
+      // 音频时间轴：playTimeRef 为总轴（含前导）；前导期间 < 0 → 不叠加（与导出一致）
+      const tAudio = (playTimeRef?.current ?? 0) - (leadSec ?? 0)
+      const t = Math.max(0, tAudio) + offset
       const sig = [
-        t,
+        tAudio.toFixed(3),
         canvasFx.vignette,
         canvasFx.grain,
         canvasFx.scanline,
@@ -81,6 +86,8 @@ function CanvasFxOverlay({
       const ctx = c.getContext('2d')
       if (!ctx) return
       ctx.clearRect(0, 0, c.width, c.height)
+      // 前导段：纯黑（舞台内 intro 黑幕）——粒子/后期全部跳过，防止把黑场打扫成"灰"
+      if (tAudio < 0) return
       const period = beatPeriod(visualizer.bpm, visualizer.beatIntervalSec)
       const env = period != null ? beatEnvelope(t, period) : 0
       // 粒子：beat 爆发 boost（音乐响应）
@@ -113,7 +120,7 @@ function CanvasFxOverlay({
     }
     raf = requestAnimationFrame(draw)
     return () => cancelAnimationFrame(raf)
-  }, [enabled, canvasFx, beat, visualizer, analyzer, playTimeRef])
+  }, [enabled, canvasFx, beat, visualizer, analyzer, playTimeRef, leadSec])
 
   return (
     <canvas
@@ -207,6 +214,7 @@ export function CanvasStage(props: CanvasStageProps): React.JSX.Element {
         visualizer={layout.visualizer}
         analyzer={analyzer}
         playTimeRef={playTimeRef}
+        leadSec={layout.audio.leadMs / 1000}
         scale={scale}
         offX={offX}
         offY={offY}
@@ -250,6 +258,7 @@ export function CanvasStage(props: CanvasStageProps): React.JSX.Element {
           frameTRef={frameTRef}
           analyzer={analyzer}
           layerFxRef={layerFxRef}
+          audioLeadSec={layout.audio.leadMs / 1000}
           mediaDurationSec={mediaDurationSec}
         />
       </Stage>
