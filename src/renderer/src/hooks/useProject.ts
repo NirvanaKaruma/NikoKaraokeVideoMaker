@@ -17,7 +17,12 @@ import {
   VisualizerConfig,
   defaultLayerOrder
 } from '@shared/layout'
-import { clampSegmentsToDuration, type PropertyTrack } from '@shared/timeline'
+import {
+  clampSegmentBoundsToNeighbors,
+  clampSegmentsToDuration,
+  splitTimelineAt,
+  type PropertyTrack
+} from '@shared/timeline'
 import type { ProjectFile } from '@shared/project'
 import { t } from '@shared/i18n'
 
@@ -677,73 +682,25 @@ export function useProject(): {
   const splitSegment = useCallback(
     (atSec: number, durationSec?: number) => {
       const cur = layoutRef.current
-      const segs = cur.timeline?.segments ?? []
-      const idx = segs.findIndex((s) => atSec > s.startSec && atSec < s.endSec)
-      if (idx < 0 && segs.length === 0) {
-        // 无片段：创建两段（dur 从音频时长取；未知则静默）
-        if (durationSec == null || durationSec <= 0 || atSec <= 0 || atSec >= durationSec - 0.05) {
-          return
-        }
-        pushHistory()
-        applyLayout({
-          ...cur,
-          timeline: {
-            segments: [
-              { id: crypto.randomUUID(), startSec: 0, endSec: atSec, layout: null, keyframes: [] },
-              {
-                id: crypto.randomUUID(),
-                startSec: atSec,
-                endSec: durationSec,
-                layout: null,
-                keyframes: []
-              }
-            ]
-          }
-        })
-        return
-      }
-      if (idx < 0) return
+      // 纯函数（含无片段=整首切两段；连续多次分割无重叠——单测覆盖）
+      const res = splitTimelineAt({ segments: cur.timeline?.segments ?? [] }, atSec, durationSec)
+      if (!res.changed) return
       pushHistory()
-      const seg = (cur.timeline?.segments ?? [])[idx]
-      const id2 = crypto.randomUUID()
-      const t0 = atSec - seg.startSec
-      const kf1 = (seg.keyframes ?? [])
-        .map((tr) => ({ ...tr, frames: tr.frames.filter((f) => f.t <= t0) }))
-        .filter((tr) => tr.frames.length > 0)
-      const kf2 = (seg.keyframes ?? [])
-        .map((tr) => ({
-          ...tr,
-          frames: tr.frames.filter((f) => f.t > t0).map((f) => ({ ...f, t: f.t - t0 }))
-        }))
-        .filter((tr) => tr.frames.length > 0)
-      const segments = [...(cur.timeline?.segments ?? [])]
-      segments.splice(
-        idx,
-        1,
-        { ...seg, endSec: atSec, keyframes: kf1 },
-        {
-          id: id2,
-          startSec: atSec,
-          endSec: seg.endSec,
-          layout: seg.layout,
-          keyframes: kf2
-        }
-      )
-      applyLayout({ ...cur, timeline: { segments } })
+      applyLayout({ ...cur, timeline: { segments: res.segments } })
     },
     [applyLayout, pushHistory]
   )
 
-  /** 边界调整（move/resize）：排序；重叠不拦截（T9 交互校验） */
+  /** 边界调整（move/resize）：钳制到相邻段（用户反馈"段间重叠"——不再允许侵入；保留 0.05s 最小缝） */
   const updateSegmentBounds = useCallback(
     (segId: string, startSec: number, endSec: number) => {
       pushHistory()
       const cur = layoutRef.current
-      const segments = (cur.timeline?.segments ?? [])
-        .map((s) =>
-          s.id === segId ? { ...s, startSec, endSec: Math.max(startSec + 0.1, endSec) } : s
-        )
-        .sort((a, b) => a.startSec - b.startSec)
+      const curSegs = cur.timeline?.segments ?? []
+      const [a, b] = clampSegmentBoundsToNeighbors(curSegs, segId, startSec, endSec)
+      const segments = curSegs
+        .map((s) => (s.id === segId ? { ...s, startSec: a, endSec: b } : s))
+        .sort((x, y) => x.startSec - y.startSec)
       applyLayout({ ...cur, timeline: { segments } })
     },
     [applyLayout, pushHistory]

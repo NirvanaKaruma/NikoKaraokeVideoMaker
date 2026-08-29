@@ -177,6 +177,87 @@ export function clampSegmentsToDuration(
   return { segments, changed }
 }
 
+/** 相邻段边界钳制（用户反馈"段间重叠"根因：手柄拖拽可侵入相邻段——修复为不允许）：
+ * 返回钳制后的 [startSec, endSec]；与相邻段保持 MIN_EDGE_GAP 间隙；不修改输入。 */
+export const EDGE_GAP = 0.05
+export function clampSegmentBoundsToNeighbors(
+  segments: TimelineSegment[],
+  id: string,
+  startSec: number,
+  endSec: number
+): [number, number] {
+  const sorted = [...segments].sort((a, b) => a.startSec - b.startSec)
+  const idx = sorted.findIndex((s) => s.id === id)
+  if (idx < 0) return [startSec, Math.max(startSec + 0.1, endSec)]
+  // 首段左界钳回 0（时间轴起点）；末段右界不设上界（可拖出再钳回时长）
+  const prevEnd = idx > 0 ? sorted[idx - 1].endSec : null
+  const nextStart = idx < sorted.length - 1 ? sorted[idx + 1].startSec : null
+  const a = prevEnd == null ? Math.max(0, startSec) : Math.max(startSec, prevEnd + EDGE_GAP)
+  let b =
+    nextStart == null
+      ? Math.max(startSec + 0.1, endSec)
+      : Math.min(Math.max(startSec + 0.1, endSec), nextStart - EDGE_GAP)
+  if (b <= a + 0.1) b = a + 0.1
+  return [a, b]
+}
+
+/** 分割（纯函数，供 useProject 调用）：含"无片段=整首切两段"（用户验收补丁）；
+ * 数据上保证 [start,end) 无重叠（连续多次分割同样成立——单测覆盖）。 */
+export function splitTimelineAt(
+  doc: TimelineDocument,
+  atSec: number,
+  durationSec?: number
+): { segments: TimelineSegment[]; changed: boolean } {
+  const segs = doc.segments
+  const idx = segs.findIndex((s) => atSec > s.startSec && atSec < s.endSec)
+  if (idx < 0 && segs.length === 0) {
+    if (durationSec == null || durationSec <= 0 || atSec <= 0 || atSec >= durationSec - 0.05) {
+      return { segments: segs, changed: false }
+    }
+    return {
+      changed: true,
+      segments: [
+        { id: crypto.randomUUID(), startSec: 0, endSec: atSec, layout: null, keyframes: [] },
+        {
+          id: crypto.randomUUID(),
+          startSec: atSec,
+          endSec: durationSec,
+          layout: null,
+          keyframes: []
+        }
+      ]
+    }
+  }
+  if (idx < 0) return { segments: segs, changed: false }
+  const seg = segs[idx]
+  const id2 = crypto.randomUUID()
+  const t0 = atSec - seg.startSec
+  const kf1 = (seg.keyframes ?? [])
+    .map((tr) => ({ ...tr, frames: tr.frames.filter((f) => f.t <= t0) }))
+    .filter((tr) => tr.frames.length > 0)
+  const kf2 = (seg.keyframes ?? [])
+    .map((tr) => ({
+      ...tr,
+      frames: tr.frames.filter((f) => f.t > t0).map((f) => ({ ...f, t: f.t - t0 }))
+    }))
+    .filter((tr) => tr.frames.length > 0)
+  return {
+    changed: true,
+    segments: [
+      ...segs.slice(0, idx),
+      { ...seg, endSec: atSec, keyframes: kf1 },
+      {
+        id: id2,
+        startSec: atSec,
+        endSec: seg.endSec,
+        layout: seg.layout,
+        keyframes: kf2
+      },
+      ...segs.slice(idx + 1)
+    ]
+  }
+}
+
 /**
  * 解析 tSec 的完整布局：段布局（或全局基线）→ 关键帧轨道覆盖。
  * 不修改输入（返回新对象）；path 命中失败/值类型不符 → 跳过该轨道（容错）。
