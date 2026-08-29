@@ -16,7 +16,7 @@
 - [x] T4: 吸附对齐线——shared/snap.ts 纯函数（拖动矩形 × 目标矩形集（画布中心/边缘 + 其余元素边/中线）→ { x, y, guides }，阈值 8 逻辑像素）；SceneLayers 增 `SnapGuidesLayer`（透明引导线）+ 三处可拖组 onDragMove 接入（拖中亮线、松手清除）；`editor.snapEnabled=false` 时不吸附；单测（中心/边缘/元素间/阈值内不误吸附）
 - [x] T5: 数值精调——DeferredSlider 增数字输入框（显示单位值=模型值×unitScale，步进=step，↑↓ 微调 ∧⇧10×，失焦/回车提交模型值）；各面板滑块按单位配置 unitScale（百分比=100，秒=10，°=1 等）；单测（format/parse/step 计算）
 - [x] T6: 端到端与回归——typecheck/lint/测试（新增 layers/snap 单测）/build；smoke-visual 扩展（隐藏主图 → 区域像素变化；锁定层 draggable=false 探针；吸附运行态用 Konva 探针 + 纯函数单测）；smoke-project 扩展（层顺序/隐藏/锁定/吸附开关 保存→还原校验）
-- [ ] T7: 文档与交付——ROADMAP 0.9.0 勾选+验收记录；DECISIONS §24（0.9.0 决策：全部元素自由排序+特效层置顶、锁定=画布锁定、吸附阈值/默认开、导出拆分路径仅默认序）；README 简述；版本 0.8.0→0.9.0；提交推送 + 汇报等用户验收
+- [x] T7: 文档与交付——ROADMAP 0.9.0 勾选+验收记录；DECISIONS §24（0.9.0 决策：全部元素自由排序+特效层置顶、锁定=画布锁定、吸附阈值/默认开、导出拆分路径仅默认序）；README 简述；版本 0.8.0→0.9.0；提交推送 + 汇报等用户验收
 
 ## 执行记录
 

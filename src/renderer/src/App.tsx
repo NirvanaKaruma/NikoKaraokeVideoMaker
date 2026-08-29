@@ -394,12 +394,18 @@ async function runAudioSmoke(
   const hideDiff = countDiffPixels(mainShown, mainHiddenTmp)
   project.updateLayerState('main', { hidden: false })
   await sleep(250)
-  let lockProbe = true
+  project.updateLayerState('main', { locked: true })
+  await sleep(250)
+  let lockProbe = false
+  {
+    const layer = stage.getLayers().find((l) => l.name() === 'main')
+    const g = layer?.findOne('Group')
+    lockProbe = g != null && g.draggable() === false
+  }
+  project.updateLayerState('main', { locked: false })
+  await sleep(250)
   if (hideDiff > 300 && lockProbe) {
-    pass(
-      '图层隐藏/锁定',
-      '隐藏主图差异像素 ' + hideDiff + '；锁定后主图层 draggable=false（临时探针）'
-    )
+    pass('图层隐藏/锁定', '隐藏主图差异像素 ' + hideDiff + '；锁定后主图层 draggable=false')
   } else {
     fail('图层隐藏/锁定', 'hideDiff=' + hideDiff + ' lockProbe=' + lockProbe)
   }
