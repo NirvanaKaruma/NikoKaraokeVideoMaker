@@ -90,6 +90,13 @@ function createWindow(): BrowserWindow {
       mainWindow.show()
   })
 
+  // 渲染进程崩溃诊断（任何模式）：无头长跑（smoke-export 60min 内存验收）曾静默死亡——
+  // 记录 reason 并立即退出（避免挂死；提交内存不足等由系统决定）
+  mainWindow.webContents.on('render-process-gone', (_e, details) => {
+    console.error('[main] render-process-gone:', details.reason, JSON.stringify(details))
+    app.exit(1)
+  })
+
   mainWindow.webContents.setWindowOpenHandler((details) => {
     shell.openExternal(details.url)
     return { action: 'deny' }
