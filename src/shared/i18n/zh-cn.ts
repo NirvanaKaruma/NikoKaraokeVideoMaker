@@ -267,6 +267,8 @@ export const zhCn = {
     bgLoadFail: '背景图片加载失败，请换一张试试',
     audioMissing: '音频文件未找到（{path}），请重新拖入音频',
     audioNoPath: '项目保存时音频无磁盘路径，请重新拖入音频',
+    overlayType: '附加层仅支持 png/jpg/webp（收到 .{ext}）',
+    overlayLoadFail: '附加层图片加载失败，请换一张试试',
     defaultName: '未命名项目'
   },
   exporter: {

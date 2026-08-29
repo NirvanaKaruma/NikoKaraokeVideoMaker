@@ -8,7 +8,8 @@ import {
   hasDynamicFx,
   normToPixel,
   pixelToNorm,
-  sanitizeNormRect
+  sanitizeNormRect,
+  type OverlayLayerConfig
 } from './layout'
 
 describe('归一化布局模型', () => {
@@ -92,6 +93,8 @@ describe('归一化布局模型', () => {
     expect(DEFAULT_LAYOUT.audio.leadMs).toBe(0)
     expect(DEFAULT_LAYOUT.audio.fadeInSec).toBe(0)
     expect(DEFAULT_LAYOUT.audio.fadeOutSec).toBe(0)
+    // 0.8.0 附加层：默认空（多层自由增删，z 序=数组序）
+    expect(DEFAULT_LAYOUT.overlayLayers).toEqual([])
   })
 
   it('主图默认高≈90%、宽≈40%，左侧垂直居中（上移后 y=3%）', () => {
@@ -131,6 +134,70 @@ describe('归一化布局模型', () => {
     withMask.mainImage.fx.mask = 'star'
     withMask.mainImage.fx.border = 0.01
     expect(hasDynamicFx(withMask)).toBe(false)
+  })
+
+  it('hasDynamicFx：附加层的呼吸/旋转/发光/入场 = true；纯静态（无图或者 mask/border）不触发', () => {
+    const base = structuredClone(DEFAULT_LAYOUT)
+    const mk = (patch: Partial<OverlayLayerConfig>): OverlayLayerConfig => ({
+      id: 'o1',
+      rect: { x: 0.7, y: 0.7, w: 0.2, h: 0.15 },
+      opacity: 1,
+      fx: {
+        breathe: 0,
+        breathePeriod: 4,
+        rotateDeg: 0,
+        glowPulse: 0,
+        mask: 'none',
+        border: 0,
+        borderColor: '#fff'
+      },
+      entry: { type: 'none', durationSec: 1.2, delaySec: 0 },
+      fillMode: 'contain',
+      ...patch
+    })
+    expect(hasDynamicFx({ ...base, overlayLayers: [mk({})] })).toBe(false)
+    expect(
+      hasDynamicFx({
+        ...base,
+        overlayLayers: [
+          mk({
+            fx: {
+              breathe: 0,
+              breathePeriod: 4,
+              rotateDeg: 2,
+              glowPulse: 0,
+              mask: 'none',
+              border: 0,
+              borderColor: '#fff'
+            }
+          })
+        ]
+      })
+    ).toBe(true)
+    expect(
+      hasDynamicFx({
+        ...base,
+        overlayLayers: [mk({ entry: { type: 'fade', durationSec: 1.2, delaySec: 0 } })]
+      })
+    ).toBe(true)
+    expect(
+      hasDynamicFx({
+        ...base,
+        overlayLayers: [
+          mk({
+            fx: {
+              breathe: 0,
+              breathePeriod: 4,
+              rotateDeg: 0,
+              glowPulse: 0,
+              mask: 'circle',
+              border: 0.004,
+              borderColor: '#fff'
+            }
+          })
+        ]
+      })
+    ).toBe(false)
   })
 
   it('normToPixel / pixelToNorm 往返一致', () => {

@@ -9,6 +9,7 @@ import {
   IntroOutroConfig,
   MainImageConfig,
   NormRect,
+  OverlayLayerConfig,
   ProjectLayout,
   TextLayerConfig,
   VisualizerConfig
@@ -34,6 +35,11 @@ export interface ProjectAssets {
   bgElement: CanvasImageElement | null
   audioUrl: string | null
   audioFile: File | null
+  /** 附加图像层资产（0.8.0）：layerId → 图像（url/file/解码元素）；与 layout.overlayLayers 平行 */
+  overlayImages: Record<
+    string,
+    { url: string | null; file: File | null; element: CanvasImageElement | null }
+  >
 }
 
 const EMPTY_ASSETS: ProjectAssets = {
@@ -44,7 +50,8 @@ const EMPTY_ASSETS: ProjectAssets = {
   bgFile: null,
   bgElement: null,
   audioUrl: null,
-  audioFile: null
+  audioFile: null,
+  overlayImages: {}
 }
 
 /** 大图解码上限（长边像素）：超过则在解码后缩放一次——12MP 原图直接给 Konva
@@ -72,7 +79,12 @@ function snapshotOf(l: ProjectLayout, a: ProjectAssets): string {
     layout: l,
     hasCover: a.coverUrl != null,
     hasBg: a.bgUrl != null,
-    hasAudio: a.audioUrl != null
+    hasAudio: a.audioUrl != null,
+    // 附加层图像存在性（按 id 稳定序列化——URL 是 objectURL 每次加载会变，只能比"有没有"）
+    overlays: Object.keys(a.overlayImages ?? {})
+      .sort()
+      .map((id) => id + ':' + (a.overlayImages[id].element != null ? 1 : 0))
+      .join(',')
   })
 }
 
@@ -100,6 +112,18 @@ export function useProject(): {
   updateExport: (patch: Partial<ExportConfig>) => void
   setCoverFile: (file: File | null) => void
   setCoverFromUrl: (url: string) => void
+  /** 附加层图像（0.8.0）：设置/清除某层图像；file=null 清除 */
+  setOverlayFile: (id: string, file: File | null) => void
+  /** 附加层图像：从 dataURL 恢复（打开项目时用） */
+  setOverlayFromUrl: (id: string, url: string) => void
+  /** 附加层：新增（默认右下角/水印位），返回新层 id */
+  addOverlayLayer: () => string
+  /** 附加层：改配置（rect/opacity/fx/entry） */
+  updateOverlayLayer: (id: string, patch: Partial<OverlayLayerConfig>) => void
+  /** 附加层：删除（连同其图像资产） */
+  removeOverlayLayer: (id: string) => void
+  /** 附加层：z 序上移/下移（-1=上，1=下） */
+  moveOverlayLayer: (id: string, dir: -1 | 1) => void
   setAudioFile: (file: File | null) => void
   setBgFile: (file: File | null) => void
   clearBgImage: () => void
@@ -326,6 +350,140 @@ export function useProject(): {
       loadCoverUrl(url, null)
     },
     [loadCoverUrl]
+  )
+
+  // ── 0.8.0 附加图像层：资产（id 平行存放）与层 CRUD（z 序=数组序）──
+
+  const loadOverlayUrl = useCallback((id: string, url: string, file: File | null) => {
+    const iid = String(id)
+    setAssets((prev) => {
+      const old = prev.overlayImages?.[iid]
+      if (old?.url) URL.revokeObjectURL(old.url)
+      return {
+        ...prev,
+        overlayImages: { ...(prev.overlayImages ?? {}), [iid]: { url, file, element: null } }
+      }
+    })
+    const img = new Image()
+    img.onload = () =>
+      setAssets((prev) => ({
+        ...prev,
+        overlayImages: {
+          ...(prev.overlayImages ?? {}),
+          [iid]: {
+            url,
+            file,
+            element: capImage(img)
+          }
+        }
+      }))
+    img.onerror = () => setFileError(t('project.overlayLoadFail'))
+    img.src = url
+  }, [])
+
+  const setOverlayFile = useCallback(
+    (id: string, file: File | null) => {
+      const iid = String(id)
+      if (!file) {
+        setAssets((prev) => {
+          const old = prev.overlayImages?.[iid]
+          if (old?.url) URL.revokeObjectURL(old.url)
+          const next = { ...(prev.overlayImages ?? {}) }
+          delete next[iid]
+          return { ...prev, overlayImages: next }
+        })
+        return
+      }
+      const ext = (file.name.split('.').pop() ?? '').toLowerCase()
+      if (!COVER_EXTENSIONS.includes(ext)) {
+        setFileError(t('project.overlayType', { ext }))
+        return
+      }
+      setFileError(null)
+      loadOverlayUrl(iid, URL.createObjectURL(file), file)
+    },
+    [loadOverlayUrl]
+  )
+
+  const setOverlayFromUrl = useCallback(
+    (id: string, url: string) => loadOverlayUrl(String(id), url, null),
+    [loadOverlayUrl]
+  )
+
+  const overlayDefaults = useCallback((): OverlayLayerConfig => {
+    return {
+      id: crypto.randomUUID(),
+      // 默认落位：右下角（水印位），用户可拖/摆位
+      rect: { x: 0.7, y: 0.66, w: 0.2, h: 0.15 },
+      opacity: 1,
+      fx: {
+        breathe: 0,
+        breathePeriod: 4,
+        rotateDeg: 0,
+        glowPulse: 0,
+        mask: 'none',
+        border: 0,
+        borderColor: '#ffffff'
+      },
+      entry: { type: 'none', durationSec: 1.2, delaySec: 0 },
+      fillMode: 'contain'
+    }
+  }, [])
+
+  const addOverlayLayer = useCallback((): string => {
+    const layer = overlayDefaults()
+    pushHistory()
+    applyLayout({
+      ...layoutRef.current,
+      overlayLayers: [...layoutRef.current.overlayLayers, layer]
+    })
+    return layer.id
+  }, [applyLayout, overlayDefaults, pushHistory])
+
+  const updateOverlayLayer = useCallback(
+    (id: string, patch: Partial<OverlayLayerConfig>) => {
+      pushHistory()
+      applyLayout({
+        ...layoutRef.current,
+        overlayLayers: layoutRef.current.overlayLayers.map((o) =>
+          o.id === id ? { ...o, ...patch, id: o.id } : o
+        )
+      })
+    },
+    [applyLayout, pushHistory]
+  )
+
+  const removeOverlayLayer = useCallback(
+    (id: string) => {
+      pushHistory()
+      applyLayout({
+        ...layoutRef.current,
+        overlayLayers: layoutRef.current.overlayLayers.filter((o) => o.id !== id)
+      })
+      setAssets((prev) => {
+        const old = prev.overlayImages?.[id]
+        if (old?.url) URL.revokeObjectURL(old.url)
+        const next = { ...(prev.overlayImages ?? {}) }
+        delete next[id]
+        return { ...prev, overlayImages: next }
+      })
+    },
+    [applyLayout, pushHistory]
+  )
+
+  const moveOverlayLayer = useCallback(
+    (id: string, dir: -1 | 1) => {
+      pushHistory()
+      const arr = [...layoutRef.current.overlayLayers]
+      const i = arr.findIndex((o) => o.id === id)
+      const j = i + dir
+      if (i < 0 || j < 0 || j >= arr.length) return
+      const tmp = arr[i]
+      arr[i] = arr[j]
+      arr[j] = tmp
+      applyLayout({ ...layoutRef.current, overlayLayers: arr })
+    },
+    [applyLayout, pushHistory]
   )
 
   const setAudioFile = useCallback((file: File | null) => {
@@ -643,6 +801,12 @@ export function useProject(): {
     setAudioFile,
     setBgFile,
     clearBgImage,
+    setOverlayFile,
+    setOverlayFromUrl,
+    addOverlayLayer,
+    updateOverlayLayer,
+    removeOverlayLayer,
+    moveOverlayLayer,
     saveProject,
     loadProject,
     resetProject,

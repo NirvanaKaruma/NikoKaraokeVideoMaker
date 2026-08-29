@@ -284,6 +284,8 @@ export const jp = {
     audioMissing: '音声ファイルが見つかりません（{path}）。音声を再度ドロップしてください',
     audioNoPath:
       'プロジェクト保存時に音声のディスクパスがありませんでした。音声を再度ドロップしてください',
+    overlayType: '附加レイヤーは png/jpg/webp のみ対応（受信 .{ext}）',
+    overlayLoadFail: '附加レイヤーの画像を読み込めませんでした。別の画像をお試しください',
     defaultName: '無題のプロジェクト'
   },
   exporter: {

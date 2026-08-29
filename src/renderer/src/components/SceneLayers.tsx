@@ -22,7 +22,10 @@ import {
   normToPixel,
   pixelToNorm,
   relToPixel,
-  type CanvasSize
+  type CanvasSize,
+  type ImageFxConfig,
+  type MainImageConfig,
+  type PixelRect
 } from '@shared/layout'
 import { colorAt } from '@shared/color'
 import {
@@ -590,63 +593,45 @@ function TextNode({
     </>
   )
 }
-interface MainImageLayerProps {
-  layout: ProjectLayout
-  coverElement: CanvasImageElement | null
-  canvas: CanvasSize
-  selectedId: SelectableId
-  onSelect: (id: SelectableId) => void
-  onMainRectChange: (rect: NormRect) => void
-}
-
-/** 主图层：Group 承载拖拽 + 等比缩放手柄；图片按 fillMode 填充（0.5.0：呼吸/旋转/发光脉冲/形状遮罩/边框）。 */
-function MainImageLayer({
-  layout,
-  coverElement,
+/** 共享图片动效内容（0.8.0 提取）：中心锚定图像（按 fillMode 落位）+ mask 裁剪 + 描边 + 整体透明度 +
+ * 命令式动效槽（呼吸/微旋转/发光脉冲/手动节拍 kick——音频轴 audioT 驱动，默认全关）。
+ * MainImageLayer 与附加层共用同一实现（核心约束 A：预览/导出同源渲染）。 */
+function SharedImageFxLayer({
+  imageElement,
+  px,
   canvas,
-  selectedId,
-  onSelect,
-  onMainRectChange,
+  fillMode,
+  fx,
+  opacity,
+  beatPulse,
+  beatPeriodSec,
   layerFxSlotRef
-}: MainImageLayerProps & {
-  /** 每帧动效更新槽（SceneLayers 分发 frame(t, audioT)） */
+}: {
+  imageElement: CanvasImageElement | null
+  /** 归一化矩形换算后的像素矩形（外层 Group 坐标系；内容以 rect 中心锚定） */
+  px: PixelRect
+  canvas: CanvasSize
+  fillMode: MainImageConfig['fillMode']
+  fx: ImageFxConfig
+  /** 整体不透明度 0–1（附加层用；主图恒 1） */
+  opacity: number
+  /** 手动节拍 kick 强度（layout.beat.pulse） */
+  beatPulse: number
+  /** 手动节拍周期秒（null=节拍关） */
+  beatPeriodSec: number | null
+  /** 每帧动效槽（SceneLayers 分发 frame(t, audioT)） */
   layerFxSlotRef?: { current: ((t: number, audioT: number) => void) | null }
 }): React.JSX.Element {
-  const { t } = useLocale()
-  const groupRef = useRef<Konva.Group>(null)
   const fxGroupRef = useRef<Konva.Group>(null)
   const imgRef = useRef<Konva.Image>(null)
-  const trRef = useRef<Konva.Transformer>(null)
-  const px = normToPixel(layout.mainImage.rect, canvas)
-  const fillMode = layout.mainImage.fillMode
-  const fx = layout.mainImage.fx
-
-  useEffect(() => {
-    const tr = trRef.current
-    const node = groupRef.current
-    if (tr && node && selectedId === 'mainImage') {
-      tr.nodes([node])
-      tr.getLayer()?.batchDraw()
-    }
-  }, [selectedId, coverElement, fillMode])
-
-  const commitFromGroup = (node: Konva.Group): void => {
-    const rect = {
-      x: node.x(),
-      y: node.y(),
-      w: node.width() * node.scaleX(),
-      h: node.height() * node.scaleY()
-    }
-    onMainRectChange(pixelToNorm(rect, canvas))
-  }
 
   // 图片（中心锚定：fxGroup 位于 rect 中心，图片以自身中心为原点，缩放/旋转绕中心）
   let imageNode: React.JSX.Element | null = null
   let dw = 0
   let dh = 0
-  if (coverElement) {
-    const iw = imgW(coverElement)
-    const ih = imgH(coverElement)
+  if (imageElement) {
+    const iw = imgW(imageElement)
+    const ih = imgH(imageElement)
     if (iw > 0 && ih > 0) {
       if (fillMode === 'stretch') {
         dw = px.w
@@ -654,7 +639,7 @@ function MainImageLayer({
         imageNode = (
           <KonvaImage
             ref={imgRef}
-            image={coverElement}
+            image={imageElement}
             x={-px.w / 2}
             y={-px.h / 2}
             width={px.w}
@@ -670,7 +655,7 @@ function MainImageLayer({
         imageNode = (
           <KonvaImage
             ref={imgRef}
-            image={coverElement}
+            image={imageElement}
             x={-dw / 2}
             y={-dh / 2}
             width={dw}
@@ -681,8 +666,6 @@ function MainImageLayer({
       }
     }
   }
-
-  const isCover = fillMode === 'cover'
 
   // 形状遮罩（React 静态驱动；随图像中心 0,0）：none=无 / circle=圆 / star=五角星
   const mR = Math.min(dw, dh) / 2
@@ -728,9 +711,8 @@ function MainImageLayer({
       // 微旋转：±rotateDeg° 慢速往复（16s 周期）
       const rotDeg = fx.rotateDeg > 0 ? fx.rotateDeg * Math.sin((twoPi * tt) / 16) : 0
       // 手动节拍 Kick 缩放（beat 起点微弹）——音频驱动 → 音频时间轴（前导期间无 kick）
-      const period = beatPeriod(layout.visualizer.bpm, layout.visualizer.beatIntervalSec)
-      const env = period != null ? beatEnvelope(audioT, period) : 0
-      const kick = env * layout.beat.pulse * 0.04
+      const env = beatPeriodSec != null ? beatEnvelope(audioT, beatPeriodSec) : 0
+      const kick = env * beatPulse * 0.04
       fg.scale({ x: breatheS + kick, y: breatheS + kick })
       fg.rotation(rotDeg)
       // 发光脉冲：shadowBlur 0→强度×60px（2.4s 周期）；无脉冲时关阴影
@@ -752,15 +734,82 @@ function MainImageLayer({
     }
   }, [
     layerFxSlotRef,
-    layout,
-    coverElement,
+    imageElement,
     px.w,
     px.h,
     fx.breathe,
     fx.breathePeriod,
     fx.rotateDeg,
-    fx.glowPulse
+    fx.glowPulse,
+    beatPulse,
+    beatPeriodSec
   ])
+
+  return (
+    <Group ref={fxGroupRef} x={px.w / 2} y={px.h / 2} opacity={opacity}>
+      <Group clipFunc={fx.mask === 'none' ? undefined : clipFn}>{imageNode}</Group>
+      {borderNode}
+    </Group>
+  )
+}
+
+/** 共享图片层（0.8.0 提取，主图与附加层复用——同一实现=预览/导出同源）：
+ * 外层可拖拽 Group（拖动/等比缩放/边界 clamp）+ Transformer 选中 + 无图占位提示 +
+ * SharedImageFxLayer 内容。 */
+function SharedImageLayer({
+  imageElement,
+  rect,
+  fillMode,
+  fx,
+  opacity,
+  beatPulse,
+  beatPeriodSec,
+  selected,
+  onSelect,
+  onRectChange,
+  canvas,
+  layerFxSlotRef,
+  placeholderLabelKey
+}: {
+  imageElement: CanvasImageElement | null
+  rect: NormRect
+  fillMode: MainImageConfig['fillMode']
+  fx: ImageFxConfig
+  opacity: number
+  beatPulse: number
+  beatPeriodSec: number | null
+  selected: boolean
+  onSelect: () => void
+  onRectChange: (rect: NormRect) => void
+  canvas: CanvasSize
+  layerFxSlotRef?: { current: ((t: number, audioT: number) => void) | null }
+  /** 无图占位提示文案 key（主图=拖入封面；附加层=添加图像） */
+  placeholderLabelKey: string
+}): React.JSX.Element {
+  const { t } = useLocale()
+  const groupRef = useRef<Konva.Group>(null)
+  const trRef = useRef<Konva.Transformer>(null)
+  const px = normToPixel(rect, canvas)
+  const isCover = fillMode === 'cover'
+
+  useEffect(() => {
+    const tr = trRef.current
+    const node = groupRef.current
+    if (tr && node && selected) {
+      tr.nodes([node])
+      tr.getLayer()?.batchDraw()
+    }
+  }, [selected, imageElement, fillMode])
+
+  const commitFromGroup = (node: Konva.Group): void => {
+    const r = {
+      x: node.x(),
+      y: node.y(),
+      w: node.width() * node.scaleX(),
+      h: node.height() * node.scaleY()
+    }
+    onRectChange(pixelToNorm(r, canvas))
+  }
 
   return (
     <>
@@ -771,9 +820,9 @@ function MainImageLayer({
         width={px.w}
         height={px.h}
         draggable
-        onClick={() => onSelect('mainImage')}
-        onTap={() => onSelect('mainImage')}
-        onDragStart={() => onSelect('mainImage')}
+        onClick={onSelect}
+        onTap={onSelect}
+        onDragStart={onSelect}
         onDragEnd={(e: KonvaEventObject<DragEvent>) => commitFromGroup(e.target as Konva.Group)}
         onTransformEnd={(e: KonvaEventObject<Event>) => {
           const node = e.target as Konva.Group
@@ -796,13 +845,19 @@ function MainImageLayer({
       >
         {/* 透明命中区：让整个矩形（含透明留白）都可拖动/选中 */}
         <Rect width={px.w} height={px.h} fill="rgba(0,0,0,0.01)" />
-        {imageNode && (
-          <Group ref={fxGroupRef} x={px.w / 2} y={px.h / 2}>
-            <Group clipFunc={fx.mask === 'none' ? undefined : clipFn}>{imageNode}</Group>
-            {borderNode}
-          </Group>
-        )}
-        {!imageNode && (
+        {imageElement ? (
+          <SharedImageFxLayer
+            imageElement={imageElement}
+            px={px}
+            canvas={canvas}
+            fillMode={fillMode}
+            fx={fx}
+            opacity={opacity}
+            beatPulse={beatPulse}
+            beatPeriodSec={beatPeriodSec}
+            layerFxSlotRef={layerFxSlotRef}
+          />
+        ) : (
           <>
             <Rect
               width={px.w}
@@ -814,7 +869,7 @@ function MainImageLayer({
               listening={false}
             />
             <KonvaText
-              text={t('canvas.dropCoverPlaceholder')}
+              text={t(placeholderLabelKey)}
               x={0}
               y={px.h / 2 - 26}
               width={px.w}
@@ -826,7 +881,7 @@ function MainImageLayer({
           </>
         )}
       </Group>
-      {selectedId === 'mainImage' && coverElement && (
+      {selected && imageElement && (
         <Transformer
           ref={trRef}
           keepRatio
@@ -850,6 +905,47 @@ function MainImageLayer({
         />
       )}
     </>
+  )
+}
+
+interface MainImageLayerProps {
+  layout: ProjectLayout
+  coverElement: CanvasImageElement | null
+  canvas: CanvasSize
+  selectedId: SelectableId
+  onSelect: (id: SelectableId) => void
+  onMainRectChange: (rect: NormRect) => void
+}
+
+/** 主图层：继承共享图片层（拖动/缩放/选中 + 完整 fx 与占位），形态与 0.5.0/0.7.0 完全一致（薄壳）。 */
+function MainImageLayer({
+  layout,
+  coverElement,
+  canvas,
+  selectedId,
+  onSelect,
+  onMainRectChange,
+  layerFxSlotRef
+}: MainImageLayerProps & {
+  /** 每帧动效更新槽（SceneLayers 分发 frame(t, audioT)） */
+  layerFxSlotRef?: { current: ((t: number, audioT: number) => void) | null }
+}): React.JSX.Element {
+  return (
+    <SharedImageLayer
+      imageElement={coverElement}
+      rect={layout.mainImage.rect}
+      fillMode={layout.mainImage.fillMode}
+      fx={layout.mainImage.fx}
+      opacity={1}
+      beatPulse={layout.beat.pulse}
+      beatPeriodSec={beatPeriod(layout.visualizer.bpm, layout.visualizer.beatIntervalSec)}
+      selected={selectedId === 'mainImage'}
+      onSelect={() => onSelect('mainImage')}
+      onRectChange={onMainRectChange}
+      canvas={canvas}
+      layerFxSlotRef={layerFxSlotRef}
+      placeholderLabelKey="canvas.dropCoverPlaceholder"
+    />
   )
 }
 

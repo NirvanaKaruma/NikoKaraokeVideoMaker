@@ -282,6 +282,8 @@ export const en = {
     audioMissing: 'Audio file not found ({path}); please drag in the audio again',
     audioNoPath:
       'The audio had no disk path when the project was saved; please drag in the audio again',
+    overlayType: 'Overlay layers support png/jpg/webp only (got .{ext})',
+    overlayLoadFail: 'Failed to load the overlay image; please try another image',
     defaultName: 'Untitled project'
   },
   exporter: {

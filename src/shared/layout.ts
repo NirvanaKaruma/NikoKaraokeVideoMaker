@@ -75,6 +75,34 @@ export interface MainImageConfig {
   fx: ImageFxConfig
 }
 
+/** 附加层入场动画类型（0.8.0 图像子集：打字机为文本专属，图像不适用） */
+export type OverlayEntryType = 'none' | 'fade' | 'slide' | 'bounce'
+
+/** 附加层入场动画（0.8.0）：确定性时间函数（entryProgress），默认 none */
+export interface OverlayEntryConfig {
+  type: OverlayEntryType
+  /** 动画时长秒（默认 1.2） */
+  durationSec: number
+  /** 相对播放起点的延迟秒（默认 0） */
+  delaySec: number
+}
+
+/** 附加图像层（0.8.0「素材与排版」）：Logo/水印/贴纸；**多层自由增删，z 序 = 数组序**（主图之上、文本之下）。
+ * fx 复用主图同套（SharedImageFxLayer 共享组件）；图像字节在 assets 侧按 id 平行存放（不入布局）。 */
+export interface OverlayLayerConfig {
+  /** 稳定 id（增删/排序时资产跟随；crypto.randomUUID） */
+  id: string
+  rect: NormRect
+  /** 整体不透明度 0–1（默认 1） */
+  opacity: number
+  /** 图像动效：与主图同套（共享组件复用，默认全关） */
+  fx: ImageFxConfig
+  /** 入场动画（图像子集；默认 none） */
+  entry: OverlayEntryConfig
+  /** 填充方式：仅等比适配完整显示（水印/Logo 必需语义；不做裁切/拉伸） */
+  fillMode: 'contain'
+}
+
 /** 主图动效（0.5.0） */
 export interface ImageFxConfig {
   /** 呼吸缩放 0–1（0=关；幅度 = 强度×4% 缩放） */
@@ -245,6 +273,8 @@ export interface ProjectLayout {
   beat: BeatFxConfig
   /** 音频工程（0.7.0） */
   audio: AudioEngineConfig
+  /** 附加图像层（0.8.0，默认空） */
+  overlayLayers: OverlayLayerConfig[]
   export: ExportConfig
 }
 
@@ -346,6 +376,7 @@ export const DEFAULT_LAYOUT: ProjectLayout = {
   introOutro: { introFade: 0, introTitleCard: 0, outroFade: 0 },
   beat: { pulse: 0, burst: 0, particlePreset: 'snow', particleDensity: 0 },
   audio: { leadMs: 0, fadeInSec: 0, fadeOutSec: 0 },
+  overlayLayers: [],
   export: {
     resolutionId: '1080p',
     fps: 30
@@ -360,6 +391,14 @@ export function hasDynamicFx(layout: ProjectLayout): boolean {
   if (i.breathe > 0 || i.rotateDeg > 0 || i.glowPulse > 0) return true
   if (layout.texts.songTitle.entry.type !== 'none' || layout.texts.artist.entry.type !== 'none')
     return true
+  // 0.8.0 附加层：任一层有随时间动画（呼吸/旋转/发光/入场）→ 动态路径（mask/border 为静态装饰，不算）
+  if (
+    (layout.overlayLayers ?? []).some(
+      (o) => o.fx.breathe > 0 || o.fx.rotateDeg > 0 || o.fx.glowPulse > 0 || o.entry.type !== 'none'
+    )
+  ) {
+    return true
+  }
   const io = layout.introOutro
   if (io.introFade > 0 || io.introTitleCard > 0 || io.outroFade > 0) return true
   return (

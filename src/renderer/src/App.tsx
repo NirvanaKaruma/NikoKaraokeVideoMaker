@@ -888,11 +888,19 @@ async function runAudioSmoke(
   project.updateAudioEngine({ leadMs: 1500 })
   await sleep(250)
   // ① 前导段（时间轴 0–1.5s）：黑幕 opacity≈1、场景中心全黑、频谱为静音柱、时间轴总长=2+1.5
-  pbRef.current.seek(0.5)
-  await sleep(300)
+  //（重试等待同「片头黑场」：防绘制调度/布局提交抖动）
+  let leadBlackOp = -1
+  let leadBars: number[] = []
+  const leadWait = Date.now()
+  while (Date.now() - leadWait < 4000) {
+    pbRef.current.seek(0.5)
+    await sleep(200)
+    leadBlackOp = stage.find('.fx-black').length ? stage.find('.fx-black')[0].opacity() : -1
+    leadBars = pbRef.current.bars.slice()
+    if (leadBlackOp >= 0.9 && !leadBars.some((v) => v > 0.02)) break
+    await sleep(100)
+  }
   const leadCap = captureRegion(stage, 0.3 * 1920, 0.3 * 1080, 0.7 * 1920, 0.7 * 1080)
-  const leadBlackOp = stage.find('.fx-black').length ? stage.find('.fx-black')[0].opacity() : -1
-  const leadBars = pbRef.current.bars.slice()
   const leadBlack = meanSum(leadCap) < 30 && leadBlackOp >= 0.9 && !leadBars.some((v) => v > 0.02)
   if (
     leadBlack &&
@@ -919,7 +927,9 @@ async function runAudioSmoke(
         ' 柱峰值=' +
         Math.max(...leadBars, 0).toFixed(2) +
         ' 时间轴=' +
-        pbRef.current.timelineDuration.toFixed(2)
+        pbRef.current.timelineDuration.toFixed(2) +
+        ' layout.leadMs=' +
+        project.layout.audio.leadMs
     )
   }
   // ② 跨过前导（时间轴 1.95s = 音频 0.45s）：音乐起、440Hz 段频谱恢复、画面亮起
