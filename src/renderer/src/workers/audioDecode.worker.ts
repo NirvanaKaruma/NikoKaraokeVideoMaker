@@ -32,8 +32,12 @@ interface FinalizeRequest {
   sampleRate: number
 }
 
+import { MAX_DECODE_STREAM_BYTES } from '@shared/audioGuard'
+
 /** 流式组装中间状态（单会话：一次只解码一个文件，重复导入会先 terminate 旧 Worker） */
 let streamParts: ArrayBuffer[] = []
+/** 已收字节数（0.7.0 护栏：超过硬上限立即中止并清空，防止探测失败时内存线性增长） */
+let streamBytes = 0
 
 function post(result: DecodeResult, transfers: Transferable[] = []): void {
   ;(self as unknown as Worker).postMessage(result, transfers)
@@ -86,14 +90,24 @@ self.onmessage = (e: MessageEvent<ArrayBuffer | ChunkRequest | FinalizeRequest>)
   const msg = e.data
   if (typeof msg === 'object' && msg !== null) {
     if ((msg as ChunkRequest).type === 'chunk') {
+      const data = (msg as ChunkRequest).data
+      // 0.7.0 护栏：流式字节超限 → 清空已收块 + 报 too-long（主线程侧取消 ffmpeg）
+      if (streamBytes + data.byteLength > MAX_DECODE_STREAM_BYTES) {
+        streamParts = []
+        streamBytes = 0
+        post({ ok: false, channels: null, mono: null, sampleRate: 0, error: 'too-long' })
+        return
+      }
       // 主线程 transfer 进来的块：只累积，不复制、不解析（内存与 CPU 全在 Worker）
-      streamParts.push((msg as ChunkRequest).data)
+      streamParts.push(data)
+      streamBytes += data.byteLength
       return
     }
     if ((msg as FinalizeRequest).type === 'finalize') {
       const req = msg as FinalizeRequest
       buildFromPcm(streamParts, Math.max(1, req.channels), req.sampleRate)
       streamParts = []
+      streamBytes = 0
       return
     }
   }

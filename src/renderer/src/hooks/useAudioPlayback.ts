@@ -7,6 +7,7 @@ import {
   type SpectrumAnalyzer
 } from '@shared/spectrum'
 import { smoothBarsFx, type SmoothFxState } from '@shared/fx'
+import { AUDIO_DURATION_REJECT_SEC, audioDurationPolicy } from '@shared/audioGuard'
 import { placeholderBars } from '@shared/color'
 import { t } from '@shared/i18n'
 
@@ -18,6 +19,10 @@ export interface WorkerDecodeResult {
   mono: Float32Array
   sampleRate: number
 }
+
+/** 路径① 结果：ok = 解析成功；fail = 流式失败（error='too-long' = 0.7.0 护栏触发，禁止走兜底路径） */
+export type StreamDecodeOutcome =
+  { kind: 'ok'; result: WorkerDecodeResult } | { kind: 'fail'; error: string | null }
 
 let decodeWorkerInst: Worker | null = null
 
@@ -43,16 +48,16 @@ function parseWorkerResult(e: MessageEvent): WorkerDecodeResult | null {
  * 的 GC 卡顿源。cancel：终止 Worker + 取消 main 侧 ffmpeg 子进程。
  */
 function startPcmStreamDecode(decodePath: string): {
-  promise: Promise<WorkerDecodeResult | null>
+  promise: Promise<StreamDecodeOutcome>
   cancel: () => void
 } {
-  let settleFn: ((r: WorkerDecodeResult | null) => void) | null = null
-  const promise = new Promise<WorkerDecodeResult | null>((resolve) => {
+  let settleFn: ((r: StreamDecodeOutcome) => void) | null = null
+  const promise = new Promise<StreamDecodeOutcome>((resolve) => {
     settleFn = resolve
   })
   let w: Worker | null = null
   let settled = false
-  const done = (r: WorkerDecodeResult | null): void => {
+  const done = (r: StreamDecodeOutcome): void => {
     if (settled) return
     settled = true
     w?.terminate()
@@ -65,14 +70,18 @@ function startPcmStreamDecode(decodePath: string): {
       type: 'module'
     })
     decodeWorkerInst = w
-    w.onmessage = (e: MessageEvent): void => done(parseWorkerResult(e))
-    w.onerror = (): void => done(null)
+    w.onmessage = (e: MessageEvent): void => {
+      const raw = e.data as { ok?: boolean; error?: string }
+      const parsed = parseWorkerResult(e)
+      done(parsed ? { kind: 'ok', result: parsed } : { kind: 'fail', error: raw?.error ?? null })
+    }
+    w.onerror = (): void => done({ kind: 'fail', error: null })
     const session = window.api.project.audioDecode(decodePath, (chunk: ArrayBuffer) => {
       // 块 transfer 进 Worker（零拷贝）；Worker 已终止则忽略
       try {
         w?.postMessage({ type: 'chunk', data: chunk }, [chunk])
       } catch {
-        done(null)
+        done({ kind: 'fail', error: 'chunk-forward-failed' })
       }
     })
     void session.result.then((res) => {
@@ -81,21 +90,21 @@ function startPcmStreamDecode(decodePath: string): {
         try {
           w?.postMessage({ type: 'finalize', channels: res.channels, sampleRate: res.sampleRate })
         } catch {
-          done(null)
+          done({ kind: 'fail', error: 'finalize-failed' })
         }
       } else {
-        done(null)
+        done({ kind: 'fail', error: res.error })
       }
     })
     return {
       promise,
       cancel: (): void => {
-        done(null)
+        done({ kind: 'fail', error: 'cancelled' })
         session.cancel()
       }
     }
   } catch {
-    done(null)
+    done({ kind: 'fail', error: null })
     return { promise, cancel: (): void => undefined }
   }
 }
@@ -110,6 +119,8 @@ export interface PlaybackApi {
   bars: number[]
   /** 共享频谱分析器（导出编码使用）；无音频时为 null */
   analyzer: SpectrumAnalyzer | null
+  /** 超长音频警告（0.7.0：>40min 提示；null = 无警告） */
+  warning: string | null
   play: () => void
   pause: () => void
   seek: (t: number) => void
@@ -166,6 +177,7 @@ export function useAudioPlayback(
 
   const [status, setStatus] = useState<AudioStatus>('empty')
   const [error, setError] = useState<string | null>(null)
+  const [warning, setWarning] = useState<string | null>(null)
   const [duration, setDuration] = useState(0)
   const [currentTime, setCurrentTime] = useState(0)
   const [isPlaying, setIsPlaying] = useState(false)
@@ -263,14 +275,36 @@ export function useAudioPlayback(
       if (cancelled) return
       setStatus('loading')
       setError(null)
+      setWarning(null)
       try {
+        // 0.7.0 超长音频护栏：ffmpeg -i 探测容器头时长（不解码，~百毫秒）→ >60min 直接拒绝。
+        // 探测在读取 file.arrayBuffer 之前进行（超长文件的字节读入本身也是内存压力）。
+        const filePath = window.api.getFilePath(audioFile)
+        if (filePath) {
+          const durProbe = await window.api.project.audioProbeDuration(filePath)
+          if (cancelled) return
+          const policy = durProbe != null && durProbe > 0 ? audioDurationPolicy(durProbe) : 'ok'
+          if (policy === 'reject') {
+            bufferRef.current = null
+            analyzerRef.current = null
+            offsetRef.current = 0
+            setDuration(0)
+            setCurrentTime(0)
+            setStatus('error')
+            setError(t('audio.tooLong', { mins: Math.round(AUDIO_DURATION_REJECT_SEC / 60) }))
+            return
+          }
+          if (policy === 'warn') {
+            setWarning(t('audio.longWarn', { mins: Math.round((durProbe ?? 0) / 60) }))
+          }
+        }
         const ab = await audioFile.arrayBuffer()
         const ctx = ensureCtx()
         if (!ctx) throw new Error(t('playback.noWebAudio'))
         let result: WorkerDecodeResult | null = null
         // 路径①：ffmpeg 子进程解码。拖放文件走磁盘路径；
         // 无路径来源（内存生成/粘贴）先写临时文件再交给 ffmpeg。
-        let decodePath = window.api.getFilePath(audioFile)
+        let decodePath = filePath
         if (!decodePath) {
           try {
             decodePath = await window.api.exportApi.saveAudio(
@@ -285,7 +319,21 @@ export function useAudioPlayback(
           try {
             const s = startPcmStreamDecode(decodePath)
             cancelDecode = s.cancel
-            result = await s.promise
+            const outcome = await s.promise
+            if (outcome.kind === 'ok') {
+              result = outcome.result
+            } else if (outcome.error === 'too-long') {
+              // 护栏触发：禁止走 decodeAudioData 兜底（同样会 OOM）→ 明示拒绝
+              cancelDecode = null
+              bufferRef.current = null
+              analyzerRef.current = null
+              offsetRef.current = 0
+              setDuration(0)
+              setCurrentTime(0)
+              setStatus('error')
+              setError(t('audio.tooLong', { mins: Math.round(AUDIO_DURATION_REJECT_SEC / 60) }))
+              return
+            }
           } catch {
             result = null
           }
@@ -458,6 +506,7 @@ export function useAudioPlayback(
   return {
     status,
     error,
+    warning,
     duration,
     currentTime,
     isPlaying,

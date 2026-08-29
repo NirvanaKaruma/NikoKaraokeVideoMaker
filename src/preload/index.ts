@@ -50,6 +50,9 @@ const api = {
   },
 
   project: {
+    /** 音频时长探测（0.7.0 护栏）：ffmpeg -i 容器头（不解码）；ffmpeg 缺失/失败 = null */
+    audioProbeDuration: (path: string): Promise<number | null> =>
+      ipcRenderer.invoke(IPC.audioProbeDuration, path),
     save: (
       json: string,
       defaultName: string

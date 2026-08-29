@@ -21,6 +21,9 @@ export const IPC = {
   /** main → renderer 进度事件 */
   ffmpegDownloadProgress: 'ffmpeg:download:progress',
 
+  /** 音频时长探测（0.7.0 护栏）：ffmpeg -i 容器头（不解码）→ 秒或 null */
+  audioProbeDuration: 'audio:probe-duration',
+
   /** 项目保存/加载（T23） */
   projectSave: 'project:save',
   projectLoad: 'project:load',

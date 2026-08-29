@@ -66,7 +66,10 @@ export const jp = {
     play: '▶ 再生',
     pause: '⏸ 一時停止',
     offset: 'ビジュアライザー偏移：{v}ms',
-    offsetNote: '正値=音声より先行、負値=遅延；±500ms。プレビュー/書き出しで同じ偏移（WYSIWYG）。'
+    offsetNote: '正値=音声より先行、負値=遅延；±500ms。プレビュー/書き出しで同じ偏移（WYSIWYG）。',
+    longWarn: '⚠ 音声が長い（約 {mins} 分）：デコード/書き出しのメモリ使用量が高くなります。',
+    tooLong:
+      '{mins} 分を超える音声（メモリ安全上限）のため、インポートを拒否しました。分割して再試行してください。'
   },
   background: {
     title: '背景',

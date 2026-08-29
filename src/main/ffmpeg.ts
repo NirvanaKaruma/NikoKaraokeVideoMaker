@@ -116,6 +116,24 @@ export async function validateFfmpeg(ffmpegPath: string): Promise<FfmpegDetectIn
   }
 }
 
+/** 探测媒体时长（秒）：ffmpeg -i 解析容器头（不解码、~百毫秒级）；缺失/失败返回 null。
+ * 0.7.0 超长音频护栏预检用（>60min 拒绝导入前先便宜探测，避免触发解析）。 */
+export async function probeMediaDurationSec(
+  ffmpegPath: string,
+  filePath: string
+): Promise<number | null> {
+  const run = runFfmpeg(ffmpegPath, ['-hide_banner', '-i', filePath])
+  // -i 单独调用必然以非 0 退出（无输出文件），但 stderr 已打印 Duration: HH:MM:SS.xx
+  const res = await run.promise
+  const m = /Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)/.exec((res.stderr || '') + (res.stdout || ''))
+  if (!m) return null
+  const h = Number(m[1])
+  const min = Number(m[2])
+  const s = Number(m[3])
+  if (!Number.isFinite(h + min + s)) return null
+  return h * 3600 + min * 60 + s
+}
+
 /** 检测系统 PATH 中的 ffmpeg */
 export async function detectSystemFfmpeg(): Promise<FfmpegDetectInfo | null> {
   const probe = runFfmpeg('ffmpeg', ['-version'])

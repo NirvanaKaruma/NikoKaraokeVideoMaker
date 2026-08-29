@@ -67,7 +67,10 @@ export const en = {
     pause: '⏸ Pause',
     offset: 'Visualizer offset: {v}ms',
     offsetNote:
-      'Positive = visualizer ahead of audio; negative = lags. ±500ms. Same in preview and export (WYSIWYG).'
+      'Positive = visualizer ahead of audio; negative = lags. ±500ms. Same in preview and export (WYSIWYG).',
+    longWarn: '⚠ Long audio (~{mins} min): decode/export memory usage is high; be careful.',
+    tooLong:
+      'Audio exceeds {mins} minutes (memory safety limit); import rejected. Split it and retry.'
   },
   background: {
     title: 'Background',

@@ -13,6 +13,7 @@ import {
   getFFmpegPath,
   installManagedFfmpeg,
   invalidateFfmpegStatus,
+  probeMediaDurationSec,
   runFfmpeg,
   validateFfmpeg
 } from './ffmpeg'
@@ -203,6 +204,18 @@ export function registerFfmpegIpc(): void {
       audioDecodeSessions.delete(tok)
     }
     return true
+  })
+
+  // 0.7.0 超长音频护栏：导入前探测容器头时长（不解码；ffmpeg 不可用/解析失败 → null 由调用方走原路径）
+  ipcMain.handle(IPC.audioProbeDuration, async (_e, path: string): Promise<number | null> => {
+    if (typeof path !== 'string' || !path) return null
+    try {
+      const ffmpegPath = await getFFmpegPath()
+      if (!ffmpegPath) return null
+      return await probeMediaDurationSec(ffmpegPath, path)
+    } catch {
+      return null
+    }
   })
 
   ipcMain.handle(IPC.exportPickOutput, async (e, defaultName: string) => {

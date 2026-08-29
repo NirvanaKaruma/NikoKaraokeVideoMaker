@@ -1554,6 +1554,7 @@ function App(): React.JSX.Element {
           onAudioFile={(f) => void project.setAudioFile(f)}
           audioStatus={pb.status}
           audioError={pb.error}
+          audioWarning={pb.warning}
           duration={pb.duration}
           currentTime={pb.currentTime}
           isPlaying={pb.isPlaying}

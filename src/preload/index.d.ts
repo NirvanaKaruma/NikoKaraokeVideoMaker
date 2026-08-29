@@ -33,6 +33,8 @@ declare global {
         onDownloadProgress: (cb: (p: DownloadProgress) => void) => () => void
       }
       project: {
+        /** 音频时长探测（0.7.0 护栏）：ffmpeg -i 容器头（不解码）；缺失/失败 = null */
+        audioProbeDuration: (path: string) => Promise<number | null>
         save: (
           json: string,
           defaultName: string

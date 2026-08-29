@@ -21,6 +21,8 @@ interface AudioPanelProps {
   /** 可视化-音频偏移（0.7.0 T4）：仅可视化时间轴，±500ms，预览/导出同偏移 */
   offsetMs: number
   onOffsetChange: (v: number) => void
+  /** 超长音频警告（0.7.0 护栏：>40min 提示；null = 无） */
+  warning: string | null
 }
 
 /** 预览播放面板（T14）：播放/暂停、进度、seek；播完停止不循环 */
@@ -66,6 +68,7 @@ export function AudioPanel(props: AudioPanelProps): React.JSX.Element {
         onCommit={props.onOffsetChange}
       />
       <p className="panel-note">{t('audio.offsetNote')}</p>
+      {props.warning && <p className="field-warn">{props.warning}</p>}
     </section>
   )
 }

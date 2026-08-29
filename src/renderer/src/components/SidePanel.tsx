@@ -38,6 +38,8 @@ export interface SidePanelProps {
   // 播放
   audioStatus: AudioStatus
   audioError: string | null
+  /** 超长音频警告（0.7.0 护栏） */
+  audioWarning: string | null
   duration: number
   currentTime: number
   isPlaying: boolean
@@ -110,6 +112,7 @@ export function SidePanel(props: SidePanelProps): React.JSX.Element {
         onSeek={props.onSeek}
         offsetMs={props.visualizer.offsetMs}
         onOffsetChange={(v) => props.onVisualizerChange({ offsetMs: v })}
+        warning={props.audioWarning}
       />
       <div className="tab-bar">
         {TABS.map((item) => (
