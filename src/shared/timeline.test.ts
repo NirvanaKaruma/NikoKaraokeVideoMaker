@@ -85,7 +85,10 @@ describe('timeline 时间轴与插值引擎（1.0.0，纯函数）', () => {
       keyframes: [
         {
           path: 'texts.songTitle.style.fontSize',
-          frames: [{ t: 0, value: 0.05, easing: 'linear' }, { t: 10, value: 0.15, easing: 'linear' }]
+          frames: [
+            { t: 0, value: 0.05, easing: 'linear' },
+            { t: 10, value: 0.15, easing: 'linear' }
+          ]
         }
       ]
     })
@@ -95,7 +98,10 @@ describe('timeline 时间轴与插值引擎（1.0.0，纯函数）', () => {
   })
 
   it('segmentAt：首个包含的段；重叠时先出现的优先；边界端点', () => {
-    const d = doc([seg({ id: 'a', startSec: 0, endSec: 5 }), seg({ id: 'b', startSec: 5, endSec: 10 })])
+    const d = doc([
+      seg({ id: 'a', startSec: 0, endSec: 5 }),
+      seg({ id: 'b', startSec: 5, endSec: 10 })
+    ])
     expect(segmentAt(d, 0)?.id).toBe('a')
     expect(segmentAt(d, 4.999)?.id).toBe('a')
     expect(segmentAt(d, 5)?.id).toBe('b')

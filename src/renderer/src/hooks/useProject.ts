@@ -17,6 +17,7 @@ import {
   VisualizerConfig,
   defaultLayerOrder
 } from '@shared/layout'
+import type { PropertyTrack } from '@shared/timeline'
 import type { ProjectFile } from '@shared/project'
 import { t } from '@shared/i18n'
 
@@ -133,6 +134,14 @@ export function useProject(): {
   removeOverlayLayer: (id: string) => void
   /** 附加层：z 序上移/下移（-1=上，1=下） */
   moveOverlayLayer: (id: string, dir: -1 | 1) => void
+  /** 1.0.0 时间轴段级 API */
+  getSegmentLayoutView: (segId: string) => ProjectLayout
+  updateSegmentLayout: (segId: string, patch: Partial<ProjectLayout>) => void
+  addSegment: (startSec: number, endSec: number) => string
+  removeSegment: (segId: string) => void
+  splitSegment: (atSec: number) => void
+  updateSegmentBounds: (segId: string, startSec: number, endSec: number) => void
+  applySegmentToAll: (segId: string) => void
   /** 图层（0.9.0）：隐藏/锁定切换（None-null 时物化默认序） */
   updateLayerState: (id: string, patch: Partial<Pick<LayerItem, 'hidden' | 'locked'>>) => void
   /** 图层（0.9.0）：z 序上移/下移 */
@@ -581,6 +590,128 @@ export function useProject(): {
     [applyLayout, pushHistory]
   )
 
+  // ── 1.0.0 时间轴：继承式全局基线（写时复制——改某段即物化）──
+
+  /** 段视图：该段布局（null=继承）或全局基线（面板读取用） */
+  const getSegmentLayoutView = useCallback((segId: string): ProjectLayout => {
+    const seg = (layoutRef.current.timeline?.segments ?? []).find((s) => s.id === segId)
+    return seg?.layout ?? layoutRef.current
+  }, [])
+
+  /** 段更新：写时复制——改为段视图 + patch，然后物化存回 seg.layout（其余段不受影响） */
+  const updateSegmentLayout = useCallback(
+    (segId: string, patch: Partial<ProjectLayout>) => {
+      pushHistory()
+      const cur = layoutRef.current
+      const segments = (cur.timeline?.segments ?? []).map((s) =>
+        s.id === segId ? { ...s, layout: { ...(s.layout ?? cur), ...patch } } : s
+      )
+      applyLayout({ ...cur, timeline: { segments } })
+    },
+    [applyLayout, pushHistory]
+  )
+
+  const addSegment = useCallback(
+    (startSec: number, endSec: number): string => {
+      pushHistory()
+      const cur = layoutRef.current
+      const id = crypto.randomUUID()
+      const segments = [
+        ...(cur.timeline?.segments ?? []),
+        { id, startSec, endSec, layout: null, keyframes: [] as PropertyTrack[] }
+      ].sort((a, b) => a.startSec - b.startSec)
+      applyLayout({ ...cur, timeline: { segments } })
+      return id
+    },
+    [applyLayout, pushHistory]
+  )
+
+  const removeSegment = useCallback(
+    (segId: string) => {
+      pushHistory()
+      const cur = layoutRef.current
+      applyLayout({
+        ...cur,
+        timeline: { segments: (cur.timeline?.segments ?? []).filter((s) => s.id !== segId) }
+      })
+    },
+    [applyLayout, pushHistory]
+  )
+
+  /** 分割：atSec（绝对）把所在段切成两段（布局继承/克隆；关键帧按相对时间拆轨平移） */
+  const splitSegment = useCallback(
+    (atSec: number) => {
+      const cur = layoutRef.current
+      const idx = (cur.timeline?.segments ?? []).findIndex(
+        (s) => atSec > s.startSec && atSec < s.endSec
+      )
+      if (idx < 0) return
+      pushHistory()
+      const seg = (cur.timeline?.segments ?? [])[idx]
+      const id2 = crypto.randomUUID()
+      const t0 = atSec - seg.startSec
+      const kf1 = (seg.keyframes ?? [])
+        .map((tr) => ({ ...tr, frames: tr.frames.filter((f) => f.t <= t0) }))
+        .filter((tr) => tr.frames.length > 0)
+      const kf2 = (seg.keyframes ?? [])
+        .map((tr) => ({
+          ...tr,
+          frames: tr.frames.filter((f) => f.t > t0).map((f) => ({ ...f, t: f.t - t0 }))
+        }))
+        .filter((tr) => tr.frames.length > 0)
+      const segments = [...(cur.timeline?.segments ?? [])]
+      segments.splice(
+        idx,
+        1,
+        { ...seg, endSec: atSec, keyframes: kf1 },
+        {
+          id: id2,
+          startSec: atSec,
+          endSec: seg.endSec,
+          layout: seg.layout,
+          keyframes: kf2
+        }
+      )
+      applyLayout({ ...cur, timeline: { segments } })
+    },
+    [applyLayout, pushHistory]
+  )
+
+  /** 边界调整（move/resize）：排序；重叠不拦截（T9 交互校验） */
+  const updateSegmentBounds = useCallback(
+    (segId: string, startSec: number, endSec: number) => {
+      pushHistory()
+      const cur = layoutRef.current
+      const segments = (cur.timeline?.segments ?? [])
+        .map((s) =>
+          s.id === segId ? { ...s, startSec, endSec: Math.max(startSec + 0.1, endSec) } : s
+        )
+        .sort((a, b) => a.startSec - b.startSec)
+      applyLayout({ ...cur, timeline: { segments } })
+    },
+    [applyLayout, pushHistory]
+  )
+
+  /** 将该段布局（视图）复制给全部其他段（批量覆盖；关键帧不动） */
+  const applySegmentToAll = useCallback(
+    (segId: string) => {
+      pushHistory()
+      const cur = layoutRef.current
+      const src = (cur.timeline?.segments ?? []).find((s) => s.id === segId)
+      if (!src) return
+      const snapshot = src.layout ?? cur
+      applyLayout({
+        ...cur,
+        timeline: {
+          segments: (cur.timeline?.segments ?? []).map((s) =>
+            s.id === segId ? s : { ...s, layout: structuredClone(snapshot) }
+          )
+        }
+      })
+    },
+    [applyLayout, pushHistory]
+  )
+
   const setAudioFile = useCallback((file: File | null) => {
     if (!file) return
     const ext = (file.name.split('.').pop() ?? '').toLowerCase()
@@ -952,6 +1083,13 @@ export function useProject(): {
     updateLayerState,
     moveLayerState,
     updateEditor,
+    getSegmentLayoutView,
+    updateSegmentLayout,
+    addSegment,
+    removeSegment,
+    splitSegment,
+    updateSegmentBounds,
+    applySegmentToAll,
     saveProject,
     loadProject,
     resetProject,

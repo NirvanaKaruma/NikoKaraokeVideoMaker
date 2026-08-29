@@ -102,7 +102,12 @@ function lerpHex(a: string, b: string, p: number): string {
     const c = Math.min(255, Math.max(0, Math.round(v))).toString(16)
     return c.length < 2 ? '0' + c : c
   }
-  return '#' + hex(pa[0] + (pb[0] - pa[0]) * p) + hex(pa[1] + (pb[1] - pa[1]) * p) + hex(pa[2] + (pb[2] - pa[2]) * p)
+  return (
+    '#' +
+    hex(pa[0] + (pb[0] - pa[0]) * p) +
+    hex(pa[1] + (pb[1] - pa[1]) * p) +
+    hex(pa[2] + (pb[2] - pa[2]) * p)
+  )
 }
 
 /** 轨道在 tSec 的值：帧排序后按区间插值；首帧前/末帧后=clamp（剪辑/动画惯例：保持最近值） */
@@ -127,19 +132,14 @@ export function trackValueAt(track: PropertyTrack, tSec: number): KeyframeValue 
 
 /** 所在片段（首个包含 tSec 的；无则 null） */
 export function segmentAt(doc: TimelineDocument, tSec: number): TimelineSegment | null {
-  return (
-    doc.segments.find((s) => tSec >= s.startSec && tSec < s.endSec) ?? null
-  )
+  return doc.segments.find((s) => tSec >= s.startSec && tSec < s.endSec) ?? null
 }
 
 /**
  * 解析 tSec 的完整布局：段布局（或全局基线）→ 关键帧轨道覆盖。
  * 不修改输入（返回新对象）；path 命中失败/值类型不符 → 跳过该轨道（容错）。
  */
-export function resolveLayoutAt(
-  layout: ProjectLayout,
-  tSec: number
-): ProjectLayout {
+export function resolveLayoutAt(layout: ProjectLayout, tSec: number): ProjectLayout {
   const doc = layout.timeline ?? { segments: [] }
   const seg = segmentAt(doc, tSec)
   if (!seg) return layout
@@ -150,7 +150,10 @@ export function resolveLayoutAt(
     const target = base as unknown as Record<string, unknown>
     const cur = getByPath(target, track.path)
     // 类型守卫：数值路径目标须为 number；颜色路径目标须为 string（键碰撞容错）
-    if ((typeof v === 'number' && typeof cur !== 'number' && cur != null) || (typeof v === 'string' && typeof cur !== 'string' && cur != null)) {
+    if (
+      (typeof v === 'number' && typeof cur !== 'number' && cur != null) ||
+      (typeof v === 'string' && typeof cur !== 'string' && cur != null)
+    ) {
       continue
     }
     setByPath(target, track.path, v)
