@@ -295,6 +295,14 @@ export const zhCn = {
     snapEnabled: '开启（拖到画布边缘/中心/元素线附近自动对齐）',
     note: '隐藏 = 不渲染（预览与导出一致）；锁定 = 画布上不可选中/拖动（参数仍可调）'
   },
+  timeline: {
+    title: '时间轴',
+    split: '✂ 在此分割',
+    remove: '删除片段',
+    hint: '点击/拖动轨道进行试听定位；将歌曲分割成段落后可单独编辑每段',
+    segmentLabel: '段落 {i}',
+    inherit: '继承全局'
+  },
   overlay: {
     title: '附加图层',
     add: '➕ 添加图像',

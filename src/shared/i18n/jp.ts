@@ -295,6 +295,14 @@ export const jp = {
     fontNoPath: '保存時にフォントのディスクパスがありません。フォントを選択し直してください',
     defaultName: '無題のプロジェクト'
   },
+  timeline: {
+    title: 'タイムライン',
+    split: '✂ ここで分割',
+    remove: 'セグメント削除',
+    hint: 'トラックをクリック/ドラッグで位置決め；曲をセグメントに分割して個別編集できます',
+    segmentLabel: 'セグ {i}',
+    inherit: 'グローバル継承'
+  },
   layers: {
     tab: 'レイヤー',
     bg: '背景',

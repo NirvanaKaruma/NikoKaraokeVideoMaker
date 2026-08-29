@@ -294,6 +294,14 @@ export const en = {
       'The font had no disk path when the project was saved; please pick the font file again',
     defaultName: 'Untitled project'
   },
+  timeline: {
+    title: 'Timeline',
+    split: '✂ Split here',
+    remove: 'Remove segment',
+    hint: 'Click/drag the track to position; split the song into segments and edit each one separately',
+    segmentLabel: 'Seg {i}',
+    inherit: 'inherits global'
+  },
   layers: {
     tab: 'Layers',
     bg: 'Background',

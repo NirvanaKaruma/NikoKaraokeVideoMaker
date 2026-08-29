@@ -13,7 +13,7 @@
 
 - [x] T1: 时间轴数据模型 + 插值引擎（纯函数模块 shared/timeline.ts + timeline.test）——Segment {id,startSec,endSec,layout: ProjectLayout|null(=继承全局),keyframes: PropertyTrack[]}；PropertyTrack {path:'texts.songTitle.style.fontSize', frames:[{t,value,easing}]}；点路径导航/设置 layout；resolveLayoutAt(segments, global, tSec, segId) → ProjectLayout（快照 + 各轨道插值覆盖；数值与 #rrggbb 颜色两类值；easing 注入复用 fx.ts——开闭原则）；单测（插值/缓动/边界/异常路径/缺段回退）
 - [x] T2: 继承式全局基线（写时复制）——useProject 段级 API：getSegmentLayout(segId)（null=继承）、updateSegmentLayout(segId,patch)（**首次修改自动物化拆分**）、splitSegment(atSec)/deleteSegment/moveSegment；undo/redo 入栈（段=布局 JSON，素材仍不入历史）；渲染合并函数 resolve 复用 T1；segment 面板「应用到全部段」按钮（批量覆盖其他段）
-- [ ] T3: 底部时间轴 UI（独立组件 TimelineBar，props 纯配置——单职责/可复用）：播放头/帧刻度/缩放、片段块（选中/拖动边界/分割/删除）、点击/拖动 seek 同步预览播放；布局改造：app-body 改为「上（左面板330→400 + 画布），下（时间轴 220px，可折叠收起）」
+- [x] T3: 底部时间轴 UI（独立组件 TimelineBar，props 纯配置——单职责/可复用）：播放头/帧刻度/缩放、片段块（选中/拖动边界/分割/删除）、点击/拖动 seek 同步预览播放；布局改造：app-body 改为「上（左面板330→400 + 画布），下（时间轴 220px，可折叠收起）」
 - [ ] T4: 面板上下文化（统一 hook useEditableLayout()：返回当前编辑对象视图 + setter 代理（继承语义）——新增面板零散改动）——「动效与后期」「文本样式」「音频可视化」「图层」四面板顶部加「当前编辑对象」条（全局 | 片段N）；锁定/隐藏语义沿用（段级布局视图）；i18n 三语
 - [ ] T5: 关键帧编辑器（片段内）：属性轨道列表（v1 可动画属性清单：数值/颜色类——字号/位置/透明度/字号色/描边/辉光/Ken Burns/呼吸…）、关键帧点拖拽/删除/缓动下拉（复用 fx.ts 缓动）、「添加关键帧」捕获当前面板值；与 T4 面板联动（选中轨道属性→该属性值在面板可改并可写帧）
 - [ ] T6: 预览接入——播放时钟每帧 resolveLayoutAt → **patch 应用器**（命令式更新受影响 Konva 节点：fontSize/color/rect/opacity 等 v1 setter 表，与 barsHandleRef 同构，不触发 React 逐帧重渲染）；暂停/seek/前导时间轴同步；时间轴播放头跟随

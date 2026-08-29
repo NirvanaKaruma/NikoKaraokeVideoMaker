@@ -17,6 +17,7 @@ import { ExportDialog } from './components/ExportDialog'
 import { SettingsDialog } from './components/SettingsDialog'
 import type { SelectableId } from './components/SceneLayers'
 import { HelpDialog } from './components/HelpDialog'
+import { TimelineBar } from './components/TimelineBar'
 
 const IS_VISUAL_SMOKE = new URLSearchParams(window.location.search).has('smokeVisual')
 const IS_SMOKE_EXPORT = new URLSearchParams(window.location.search).has('smokeExport')
@@ -1174,6 +1175,8 @@ function App(): React.JSX.Element {
   const [helpOpen, setHelpOpen] = useState(false)
   const [exportOpen, setExportOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [timelineOpen, setTimelineOpen] = useState(true)
+  const [selectedSegmentId, setSelectedSegmentId] = useState<string | null>(null)
   const stageRef = useRef<Konva.Stage | null>(null)
   const projectRef = useRef(project)
 
@@ -1922,112 +1925,128 @@ function App(): React.JSX.Element {
         </div>
       )}
       <div className="app-body">
-        <SidePanel
-          customFontFamily={project.assets.fontFile ? customFont.family : null}
-          customFontName={customFont.name}
-          onPickFont={project.setFontFile}
-          layerRows={layerRows}
-          snapEnabled={project.layout.editor.snapEnabled}
-          onLayerToggleHidden={(id) =>
-            project.updateLayerState(id, {
-              hidden: !(project.layout.layers?.find((l) => l.id === id)?.hidden ?? false)
-            })
-          }
-          onLayerToggleLocked={(id) =>
-            project.updateLayerState(id, {
-              locked: !(project.layout.layers?.find((l) => l.id === id)?.locked ?? false)
-            })
-          }
-          onLayerMove={(id, dir) => project.moveLayerState(id, dir)}
-          onSnapToggle={(v) => project.updateEditor({ snapEnabled: v })}
-          overlayLayers={project.layout.overlayLayers}
-          overlayImageUrls={overlayUrls}
-          selectedId={selectedId}
-          onOverlaySelect={setSelectedId}
-          onOverlayAdd={project.addOverlayLayer}
-          onOverlayPickImage={project.setOverlayFile}
-          onOverlayUpdate={project.updateOverlayLayer}
-          onOverlayRemove={project.removeOverlayLayer}
-          onOverlayMove={project.moveOverlayLayer}
-          songTitle={project.layout.texts.songTitle.text}
-          artist={project.layout.texts.artist.text}
-          coverUrl={project.assets.coverUrl}
-          coverFile={project.assets.coverFile}
-          audioFile={project.assets.audioFile}
-          fileError={project.fileError}
-          onSongTitleChange={(t) => project.updateText('songTitle', { text: t })}
-          onArtistChange={(t) => project.updateText('artist', { text: t })}
-          onCoverFile={(f) => void project.setCoverFile(f)}
-          onAudioFile={(f) => void project.setAudioFile(f)}
-          audioStatus={pb.status}
-          audioError={pb.error}
-          audioWarning={pb.warning}
-          duration={pb.duration}
-          timelineDuration={pb.timelineDuration}
-          currentTime={pb.currentTime}
-          isPlaying={pb.isPlaying}
-          audioFileName={project.assets.audioFile?.name ?? null}
-          onPlay={pb.play}
-          onPause={pb.pause}
-          onSeek={pb.seek}
-          mainImage={project.layout.mainImage}
-          onMainImageChange={project.updateMainImage}
-          background={project.layout.background}
-          bgUrl={project.assets.bgUrl}
-          bgFile={project.assets.bgFile}
-          onBackgroundChange={project.updateBackground}
-          onBgFile={(f) => void project.setBgFile(f)}
-          onClearBg={project.clearBgImage}
-          songTitleCfg={project.layout.texts.songTitle}
-          artistCfg={project.layout.texts.artist}
-          onSongTitleCfgChange={(x) => project.updateText('songTitle', x)}
-          onArtistCfgChange={(x) => project.updateText('artist', x)}
-          visualizer={project.layout.visualizer}
-          onVisualizerChange={project.updateVisualizer}
-          backgroundFx={project.layout.background.fx}
-          imageFx={project.layout.mainImage.fx}
-          songTitleEntry={project.layout.texts.songTitle.entry}
-          artistEntry={project.layout.texts.artist.entry}
-          canvasFx={project.layout.canvasFx}
-          introOutro={project.layout.introOutro}
-          onBackgroundFxChange={project.updateBackgroundFx}
-          onImageFxChange={project.updateImageFx}
-          onSongTitleEntryChange={(x) => project.updateTextEntry('songTitle', x)}
-          onArtistEntryChange={(x) => project.updateTextEntry('artist', x)}
-          onCanvasFxChange={project.updateCanvasFx}
-          onIntroOutroChange={project.updateIntroOutro}
-          audio={project.layout.audio}
-          onAudioChange={project.updateAudioEngine}
-          beat={project.layout.beat}
-          visualizerForBeat={project.layout.visualizer}
-          onBeatFxChange={project.updateBeatFx}
-          onVisualizerForBeatChange={project.updateVisualizer}
-        />
-        <main className="canvas-wrap">
-          <CanvasStage
-            layout={project.layout}
-            coverElement={project.assets.coverElement}
-            bgElement={project.assets.bgElement}
+        <div className="app-main-row">
+          <SidePanel
+            customFontFamily={project.assets.fontFile ? customFont.family : null}
+            customFontName={customFont.name}
+            onPickFont={project.setFontFile}
+            layerRows={layerRows}
+            snapEnabled={project.layout.editor.snapEnabled}
+            onLayerToggleHidden={(id) =>
+              project.updateLayerState(id, {
+                hidden: !(project.layout.layers?.find((l) => l.id === id)?.hidden ?? false)
+              })
+            }
+            onLayerToggleLocked={(id) =>
+              project.updateLayerState(id, {
+                locked: !(project.layout.layers?.find((l) => l.id === id)?.locked ?? false)
+              })
+            }
+            onLayerMove={(id, dir) => project.moveLayerState(id, dir)}
+            onSnapToggle={(v) => project.updateEditor({ snapEnabled: v })}
+            overlayLayers={project.layout.overlayLayers}
+            overlayImageUrls={overlayUrls}
             selectedId={selectedId}
-            onSelect={setSelectedId}
-            onMainRectChange={project.updateMainRect}
-            onTextRectChange={(kind, rect) => project.updateText(kind, { rect })}
-            onVisualizerRectChange={(rect) => project.updateVisualizer({ rect })}
-            overlayElements={overlayElements}
-            onOverlayRectChange={(id, rect) => project.updateOverlayLayer(id, { rect })}
-            bars={pb.bars}
-            barsHandleRef={barsHandleRef}
-            frameTRef={frameTRef}
-            analyzer={pb.analyzer}
-            layerFxRef={layerFxRef}
-            mediaDurationSec={pb.duration}
-            playTimeRef={playTimeRef}
-            onStageReady={(s) => {
-              stageRef.current = s
-            }}
+            onOverlaySelect={setSelectedId}
+            onOverlayAdd={project.addOverlayLayer}
+            onOverlayPickImage={project.setOverlayFile}
+            onOverlayUpdate={project.updateOverlayLayer}
+            onOverlayRemove={project.removeOverlayLayer}
+            onOverlayMove={project.moveOverlayLayer}
+            songTitle={project.layout.texts.songTitle.text}
+            artist={project.layout.texts.artist.text}
+            coverUrl={project.assets.coverUrl}
+            coverFile={project.assets.coverFile}
+            audioFile={project.assets.audioFile}
+            fileError={project.fileError}
+            onSongTitleChange={(t) => project.updateText('songTitle', { text: t })}
+            onArtistChange={(t) => project.updateText('artist', { text: t })}
+            onCoverFile={(f) => void project.setCoverFile(f)}
+            onAudioFile={(f) => void project.setAudioFile(f)}
+            audioStatus={pb.status}
+            audioError={pb.error}
+            audioWarning={pb.warning}
+            duration={pb.duration}
+            timelineDuration={pb.timelineDuration}
+            currentTime={pb.currentTime}
+            isPlaying={pb.isPlaying}
+            audioFileName={project.assets.audioFile?.name ?? null}
+            onPlay={pb.play}
+            onPause={pb.pause}
+            onSeek={pb.seek}
+            mainImage={project.layout.mainImage}
+            onMainImageChange={project.updateMainImage}
+            background={project.layout.background}
+            bgUrl={project.assets.bgUrl}
+            bgFile={project.assets.bgFile}
+            onBackgroundChange={project.updateBackground}
+            onBgFile={(f) => void project.setBgFile(f)}
+            onClearBg={project.clearBgImage}
+            songTitleCfg={project.layout.texts.songTitle}
+            artistCfg={project.layout.texts.artist}
+            onSongTitleCfgChange={(x) => project.updateText('songTitle', x)}
+            onArtistCfgChange={(x) => project.updateText('artist', x)}
+            visualizer={project.layout.visualizer}
+            onVisualizerChange={project.updateVisualizer}
+            backgroundFx={project.layout.background.fx}
+            imageFx={project.layout.mainImage.fx}
+            songTitleEntry={project.layout.texts.songTitle.entry}
+            artistEntry={project.layout.texts.artist.entry}
+            canvasFx={project.layout.canvasFx}
+            introOutro={project.layout.introOutro}
+            onBackgroundFxChange={project.updateBackgroundFx}
+            onImageFxChange={project.updateImageFx}
+            onSongTitleEntryChange={(x) => project.updateTextEntry('songTitle', x)}
+            onArtistEntryChange={(x) => project.updateTextEntry('artist', x)}
+            onCanvasFxChange={project.updateCanvasFx}
+            onIntroOutroChange={project.updateIntroOutro}
+            audio={project.layout.audio}
+            onAudioChange={project.updateAudioEngine}
+            beat={project.layout.beat}
+            visualizerForBeat={project.layout.visualizer}
+            onBeatFxChange={project.updateBeatFx}
+            onVisualizerForBeatChange={project.updateVisualizer}
           />
-          {subzoneWarning && <div className="warn-banner">{t('canvas.subtitleZoneWarn')}</div>}
-        </main>
+          <main className="canvas-wrap">
+            <CanvasStage
+              layout={project.layout}
+              coverElement={project.assets.coverElement}
+              bgElement={project.assets.bgElement}
+              selectedId={selectedId}
+              onSelect={setSelectedId}
+              onMainRectChange={project.updateMainRect}
+              onTextRectChange={(kind, rect) => project.updateText(kind, { rect })}
+              onVisualizerRectChange={(rect) => project.updateVisualizer({ rect })}
+              overlayElements={overlayElements}
+              onOverlayRectChange={(id, rect) => project.updateOverlayLayer(id, { rect })}
+              bars={pb.bars}
+              barsHandleRef={barsHandleRef}
+              frameTRef={frameTRef}
+              analyzer={pb.analyzer}
+              layerFxRef={layerFxRef}
+              mediaDurationSec={pb.duration}
+              playTimeRef={playTimeRef}
+              onStageReady={(s) => {
+                stageRef.current = s
+              }}
+            />
+            {subzoneWarning && <div className="warn-banner">{t('canvas.subtitleZoneWarn')}</div>}
+          </main>
+        </div>
+        {timelineOpen && (
+          <TimelineBar
+            segments={project.layout.timeline?.segments ?? []}
+            durationSec={pb.duration}
+            currentT={pb.currentTime}
+            selectedSegmentId={selectedSegmentId}
+            onSeek={pb.seek}
+            onSelectSegment={setSelectedSegmentId}
+            onSplitAt={(t) => project.splitSegment(t)}
+            onRemoveSegment={project.removeSegment}
+            onUpdateBounds={project.updateSegmentBounds}
+            onClose={() => setTimelineOpen(false)}
+          />
+        )}
       </div>
       <HelpDialog open={helpOpen} onClose={() => setHelpOpen(false)} />
       <ExportDialog
