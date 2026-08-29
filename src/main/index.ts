@@ -38,6 +38,8 @@ const isSmokeExport = smokeExportArg !== undefined
 const isSmokeBench = process.argv.includes('--smoke-bench') || smokeEnv === 'bench'
 /** smoke-project：项目保存/加载自测 */
 const isSmokeProject = process.argv.includes('--smoke-project') || smokeEnv === 'project'
+/** smoke-time（1.0.0 T10a）：时间轴预览端到端——关键帧/片段切换像素断言 + 引擎插值断言 */
+const isSmokeTime = process.argv.includes('--smoke-time') || smokeEnv === 'time'
 /** smoke-detect：只做三源检测并落盘（来源矩阵测试用，配合 PATH 操控） */
 const isSmokeDetect = process.argv.includes('--smoke-detect') || smokeEnv === 'detect'
 /** smoke-download：走一遍托管安装（--smoke-download=default 或完整 URL / file:// 本地镜像） */
@@ -74,7 +76,14 @@ function createWindow(): BrowserWindow {
   })
 
   mainWindow.on('ready-to-show', () => {
-    if (!isSmokeTest && !isSmokeVisual && !isSmokeExport && !isSmokeBench && !isSmokeProject)
+    if (
+      !isSmokeTest &&
+      !isSmokeVisual &&
+      !isSmokeExport &&
+      !isSmokeBench &&
+      !isSmokeProject &&
+      !isSmokeTime
+    )
       mainWindow.show()
   })
 
@@ -90,6 +99,7 @@ function createWindow(): BrowserWindow {
     isSmokeExport ||
     isSmokeBench ||
     isSmokeProject ||
+    isSmokeTime ||
     isSmokeDetect ||
     smokeDownloadArg !== undefined
   if (!isSmokeMode) {
@@ -143,6 +153,8 @@ function createWindow(): BrowserWindow {
     mainWindow.loadFile(join(__dirname, '../renderer/index.html'), { query: { smokeExport: '1' } })
   } else if (isSmokeProject) {
     mainWindow.loadFile(join(__dirname, '../renderer/index.html'), { query: { smokeProject: '1' } })
+  } else if (isSmokeTime) {
+    mainWindow.loadFile(join(__dirname, '../renderer/index.html'), { query: { smokeTime: '1' } })
   } else if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
     mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL'])
   } else {
@@ -225,6 +237,25 @@ async function runSmokeVisual(win: BrowserWindow): Promise<void> {
     app.exit(staticOk && audioOk ? 0 : 1)
   } catch (error) {
     console.error('[smoke-visual] 截图失败:', error)
+    app.exit(1)
+  }
+}
+
+/** T10a：时间轴预览端到端（关键帧/片段切换像素断言 + 引擎插值断言）——预览即解析即渲染链路 */
+async function runSmokeTime(win: BrowserWindow): Promise<void> {
+  try {
+    const report: unknown = await win.webContents.executeJavaScript('window.__runTimeSmoke()')
+    await writeFile(
+      join(smokeDir, 'smoke-time-report.json'),
+      JSON.stringify(report, null, 2),
+      'utf-8'
+    )
+    const ok = (report as { ok?: boolean })?.ok === true
+    console.log('[smoke-time]', ok ? '全部通过' : '存在失败项')
+    console.log(JSON.stringify(report, null, 2))
+    app.exit(ok ? 0 : 1)
+  } catch (error) {
+    console.error('[smoke-time] 失败:', error)
     app.exit(1)
   }
 }
@@ -509,7 +540,7 @@ async function runSmokeTest(win: BrowserWindow): Promise<void> {
   }
 }
 
-if (isSmokeVisual || isSmokeExport) {
+if (isSmokeVisual || isSmokeExport || isSmokeTime) {
   // 无头自测：无用户手势也允许音频上下文运行
   app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required')
 }
@@ -625,6 +656,13 @@ app.whenReady().then(async () => {
     mainWindow.webContents.once('did-finish-load', () => {
       setTimeout(() => {
         void runSmokeProject(mainWindow)
+      }, 3500)
+    })
+  }
+  if (isSmokeTime) {
+    mainWindow.webContents.once('did-finish-load', () => {
+      setTimeout(() => {
+        void runSmokeTime(mainWindow)
       }, 3500)
     })
   }

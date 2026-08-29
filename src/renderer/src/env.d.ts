@@ -42,4 +42,6 @@ interface Window {
     ok: boolean
     results: { resolution: string; phase: string; seconds: number; error: string | null }[]
   }>
+  /** 仅 --smoke-time：时间轴预览端到端（关键帧/片段切换像素断言 + 引擎插值断言） */
+  __runTimeSmoke?: () => Promise<{ ok: boolean; checks: VisualCheckItem[] }>
 }

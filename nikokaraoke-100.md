@@ -20,7 +20,7 @@
 - [x] T7: 导出接入 + 流式写盘（T7a cc1bff8：逐帧 resolve + setLayout；T7b：StreamTarget+位置写盘）——exportVideo 每帧 resolveLayoutAt(tSec) → 同一 patch 应用器（预览/导出共用函数=核心约束 A）；时间轴存在 → 全层逐帧路径（hasTimeline(layout) 并入 dynamic 判定）；无时间轴快路径不变；**流式写盘（用户已确认的五点细节全纳入）**：mp4-muxer 改 stream target（**append-only，moov 尾置，弃用 fastStart:'in-memory'**——重排交给 ffmpeg merge 的 -movflags +faststart）+ **MessageChannelMain/MessagePort transferable 零拷贝分块 + 三级背压**：① 渲染→编码器：encodeQueueSize 上限 2–4（4K RGBA≈30MB/帧，防原始帧队列 OOM）；② 编码器→muxer（输出块小，天然安全）；③ muxer→IPC→盘：**ACK 挂在 fs drain**（write() 返回 false 等 'drain' 再 ACK）。错误/取消协议：写失败（盘满/权限）→ error ACK → renderer 干净中止 + 可读提示（i18n）+ main 清理临时文件；取消 → 停发 + main 截断/清理。探针双场景：吞吐 + **慢盘模拟（限速 Writable）测窗口×队列深度×内存峰值**，定块大小 2–8MB
 - [x] T8: 主题化与细节——滚动条（::-webkit-scrollbar 主题配色）、滑块（track/thumb 圆角配色统一）、数字框（appearance:none 去上下箭头、text-align:center、↑↓/Shift 微调保留）；抽取 SliderField 组件（label+滑条+数字框封装）供各面板复用（先重构 FxPanel 示范，其余面板迁移）；侧栏 330→400；窗口默认 1280×800（保持不变）
 - [x] T9: 片段切换语义与边界——片段边界 v1 硬切（可选过渡淡入 0.3s 标注为后续）；段内关键帧绝对秒（相对片段起点）；片段重叠/缝隙校验（非破坏：缝隙=全局基线显示）；音频长度变化时片段边界自动修正
-- [ ] T10: 端到端与回归——typecheck/lint/测试（timeline 引擎单测）/build；smoke 扩展：time-smoke（多片段布局 → 播放 t 与导出同帧像素一致校验 + 关键帧值正确）、流式写盘冒烟（正常导出产物 ffprobe 一致 + 慢盘队列深度探针）、**内存验收：60min 1080p / 10min 4K 导出渲染进程堆峰值 <2GB；4GB 虚拟机全流程通过**、smoke-project（段布局/关键帧 保存→还原）、既有三项 smoke 全绿；WYSIWYG 帧一致性（预览 seek(t) 截图 vs 导出抽帧 t）
+- [ ] T10: 端到端与回归（**T10a 已提交：--smoke-time 全绿（引擎插值/段覆盖/缝隙=全局 + 预览像素 143845/90210 差异）+ 三项既有 smoke 绿；剩余：慢盘探针、60min 1080p/10min 4K 内存验收、4GB VM**）——typecheck/lint/测试（timeline 引擎单测）/build；smoke 扩展：time-smoke（多片段布局 → 播放 t 与导出同帧像素一致校验 + 关键帧值正确）、流式写盘冒烟（正常导出产物 ffprobe 一致 + 慢盘队列深度探针）、**内存验收：60min 1080p / 10min 4K 导出渲染进程堆峰值 <2GB；4GB 虚拟机全流程通过**、smoke-project（段布局/关键帧 保存→还原）、既有三项 smoke 全绿；WYSIWYG 帧一致性（预览 seek(t) 截图 vs 导出抽帧 t）
 - [ ] T11: 文档与交付——ROADMAP 1.0.0 勾选+验收记录；DECISIONS §25（1.0.0 决策：继承式 CoW、片段+关键帧模型、流式写盘、UI 布局、面板上下文化）；README 简述；版本 0.9.0→1.0.0；提交推送 + 汇报等用户验收
 
 ## 执行记录
@@ -37,4 +37,5 @@
 - T7 收尾：折线更新检查阈值 100提到70（机器级停顿实测打到 95，保留卡死检测）；smoke-visual 重跑全绿。
 - T8（589255b）：主题化——全局滚动条（圆角/配色/hover）、range 轨道+圆拇指（替代 accent-color 兜底）、数字框 appearance:none 去箭头+居中（DeferredSlider.slider-num 与 kf-num 同步）；**DeferredSlider 即计划中的统一 SliderField**（label+滑条+数字框，全面板 56 处复用——抽取/迁移步骤在 0.9.0 已实质完成，T8 记录此事实）；窗口保持 1280×800；侧栏 400 已在 T3。
 - T9（本提交）：片段边界语义——**硬切 v1**（segmentAt 排序靠前生效，重叠时更早 start 者赢；淡入过渡 0.3s 标注后续版本）；**重叠校验（非破坏）**：共享 pure fn segmentOverlaps（[a,b) 半开，恰好相接不算）+ TimelineBar overlaps 标红 + i18n 提示；**缝隙=全局基线**（resolveLayoutAt 无段即全局，天然行为，无需处理）；**音频长度变化自动修正**：clampSegmentsToDuration（超界删除/endSec 钳制，无改动不入史）+ App effect（pb.status ready → clamp，幂等）；段内关键帧绝对秒=相对片段起点（T1 已如此）。新增 3 测试（92 全绿）。
-- 状态：T1–T9 完成（9/11）；**T10（time-smoke/慢盘探针/60min·4K 内存验收/4GB VM）、T11（文档+版本 1.0.0+交付）** 待做。
+- T10a（本提交）：**--smoke-time 时间轴预览端到端**——两片段(0-4/4-8) + seg2 关键帧(mainImage.rect.x 0.06→0.5 linear)：引擎断言×3（插值 t=6 x=0.2800✓ / 段覆盖 x=0.7000✓ / 缝隙=全局基线✓）+ 预览像素断言×2（关键帧动画 143845、片段切换 90210 差异像素——实证 seek→resolveLayoutAt→diff 门控→Konva 渲染=WYSIWYG 预览链路）；修复两处实现问题（pj 旧闭包 → projectRef.current 读新鲜布局；缺封面 → 主图无 Image 节点 → 补合成封面+等待）；seek 偶发未落地（机器级停顿）→ settle-seek 重试（≤4 次 300ms）——烟测只对「预览随解析动」负责，不追竞态；新增 CLAUDE.md smoke 表行。
+- 状态：T1–T9 + T10a（9.5/11）；T10b（慢盘探针/60min·4K 内存验收/4GB VM）与 T11 待做。

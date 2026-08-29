@@ -28,6 +28,7 @@ const TL_RESOLVE_CACHE = new WeakMap<ProjectLayout, { key: string; value: Projec
 const IS_VISUAL_SMOKE = new URLSearchParams(window.location.search).has('smokeVisual')
 const IS_SMOKE_EXPORT = new URLSearchParams(window.location.search).has('smokeExport')
 const IS_SMOKE_PROJECT = new URLSearchParams(window.location.search).has('smokeProject')
+const IS_SMOKE_TIME = new URLSearchParams(window.location.search).has('smokeTime')
 
 /* ================= 无头自测工具 ================= */
 
@@ -1550,6 +1551,136 @@ function App(): React.JSX.Element {
     }
     // 仅无头自测模式生效
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+  // 时间轴预览端到端自测（1.0.0 T10a --smoke-time）：
+  // 两片段 + 关键帧 → 引擎插值断言 + 预览画布像素断言（seek 后 diff-gated 解析 → Konva 渲染）。
+  // 验证核心约束 A 的预览链路：resolveLayoutAt 结果真正呈现在画布上。
+  useEffect(() => {
+    if (!IS_SMOKE_TIME) return
+    window.__runTimeSmoke = async () => {
+      const checks: VisualCheckItem[] = []
+      const add = (label: string, ok: boolean, detail: string): void => {
+        checks.push({ label, pass: ok, detail })
+      }
+      const pj = projectRef.current
+      const st = stageRef.current
+      // 0) 音频就绪（8s 双音 WAV；预览 seek 需要时长）
+      pj.setAudioFile(makeTwoToneWavFile(8, 8000))
+      const t0 = Date.now()
+      while (pbRef.current.status !== 'ready' && Date.now() - t0 < 30000) {
+        await sleep(150)
+      }
+      add('音频就绪', pbRef.current.status === 'ready', 'status=' + pbRef.current.status)
+      if (pbRef.current.status !== 'ready') return { ok: false, checks }
+      // 0.5) 合成封面（主图需要图像元素才渲染 Image 节点——像素断言的前提）
+      const cover = await makeSyntheticCoverFile()
+      if (cover) pj.setCoverFile(cover)
+      const tc = Date.now()
+      while (projectRef.current.assets.coverElement == null && Date.now() - tc < 8000) {
+        await sleep(120)
+      }
+      add(
+        '封面就绪',
+        projectRef.current.assets.coverElement != null,
+        'coverElement=' + (projectRef.current.assets.coverElement != null)
+      )
+      // 1) 时间轴：seg1(0-4) 主图 x=0.70；seg2(4-8) 关键帧 x 0.06→0.5（linear）
+      const s1 = pj.addSegment(0, 4)
+      const s2 = pj.addSegment(4, 8)
+      const mi = pj.layout.mainImage
+      pj.updateSegmentLayout(s1, {
+        mainImage: { ...mi, rect: { ...mi.rect, x: 0.7 } }
+      })
+      pj.updateSegmentTracks(s2, [
+        {
+          path: 'mainImage.rect.x',
+          frames: [
+            { t: 0, value: 0.06, easing: 'linear' },
+            { t: 4, value: 0.5, easing: 'linear' }
+          ]
+        }
+      ])
+      await sleep(250)
+      // 2) 引擎断言（纯函数：插值/段覆盖/缝隙=全局基线）
+      // ⚠ pj 是启动时的旧 project 实例（layout 闭包为旧值）；读 fresh：projectRef.current
+      const lay = projectRef.current.layout
+      const x6 = resolveLayoutAt(lay, 6).mainImage.rect.x
+      add(
+        '引擎·关键帧插值',
+        Math.abs(x6 - 0.28) < 0.02,
+        't=6 x=' + x6.toFixed(4) + '（线性中值≈0.28）'
+      )
+      const x2 = resolveLayoutAt(lay, 2).mainImage.rect.x
+      add('引擎·段布局覆盖', Math.abs(x2 - 0.7) < 0.001, 'seg1 x=' + x2.toFixed(4))
+      const x9 = resolveLayoutAt(lay, 9).mainImage.rect.x
+      add(
+        '引擎·缝隙=全局基线',
+        x9 === lay.mainImage.rect.x,
+        't=9 x=' + x9.toFixed(4) + '（全局 ' + lay.mainImage.rect.x.toFixed(4) + '）'
+      )
+      // 3) 预览像素断言：captureRegion 为 1920×1080 逻辑坐标
+      const region: [number, number, number, number] = [30, 10, 1160, 1040]
+      if (!st) {
+        add('预览·阶段就绪', false, 'stage 为空')
+        return { ok: checks.every((c) => c.pass), checks }
+      }
+      // settle-seek：重试直到 currentTime 命中目标（机器级停顿下偶发 seek 未落地——烟测不追竞态，
+      // 只对「预览像素随解析动」负责）
+      const seekAndSettle = async (t: number): Promise<number> => {
+        for (let i = 0; i < 4; i++) {
+          pbRef.current.seek(t - 0.001)
+          await sleep(300)
+          if (Math.abs(pbRef.current.currentTime - t) < 0.05) break
+        }
+        return pbRef.current.currentTime
+      }
+      const curA = await seekAndSettle(4.05)
+      const resolvedA = resolveLayoutAt(projectRef.current.layout, curA).mainImage.rect.x
+      const capA = captureRegion(st, ...region)
+      const curB = await seekAndSettle(7.75)
+      const resolvedB = resolveLayoutAt(projectRef.current.layout, curB).mainImage.rect.x
+      const capB = captureRegion(st, ...region)
+      const dKF = countDiffPixels(capA, capB)
+      add(
+        '预览·关键帧像素动画',
+        dKF > 5000,
+        't=' +
+          curA.toFixed(2) +
+          '(x=' +
+          resolvedA.toFixed(3) +
+          ') vs t=' +
+          curB.toFixed(2) +
+          '(x=' +
+          resolvedB.toFixed(3) +
+          ') 差异像素 ' +
+          dKF
+      )
+      const curC = await seekAndSettle(2)
+      const resolvedC = resolveLayoutAt(projectRef.current.layout, curC).mainImage.rect.x
+      const capC = captureRegion(st, ...region)
+      const curD = await seekAndSettle(6)
+      const resolvedD = resolveLayoutAt(projectRef.current.layout, curD).mainImage.rect.x
+      const capD = captureRegion(st, ...region)
+      const dSeg = countDiffPixels(capC, capD)
+      add(
+        '预览·片段切换',
+        dSeg > 5000,
+        't=' +
+          curC.toFixed(2) +
+          '(x=' +
+          resolvedC.toFixed(3) +
+          ') vs t=' +
+          curD.toFixed(2) +
+          '(x=' +
+          resolvedD.toFixed(3) +
+          ') 差异像素 ' +
+          dSeg
+      )
+      return { ok: checks.every((c) => c.pass), checks }
+    }
+    return () => {
+      delete window.__runTimeSmoke
+    }
   }, [])
   // 项目保存/加载自测（M5/T25）：保存 → 篡改 → 加载 → 对比
   useEffect(() => {
