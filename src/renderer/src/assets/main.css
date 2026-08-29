@@ -238,13 +238,51 @@ body {
 
 .slider-num {
   width: 64px;
-  text-align: right;
+  /* 1.0.0 T8：去原生箭头 + 数字居中 */
+  appearance: none;
+  -moz-appearance: textfield;
+  text-align: center;
   padding: 2px 4px;
   font-size: 12px;
   background: var(--ev-c-black-mute);
   border: 1px solid var(--ev-c-gray-2);
   border-radius: 6px;
   color: var(--ev-c-text-1);
+}
+
+.slider-num::-webkit-inner-spin-button,
+.slider-num::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+/* 1.0.0 T8：原生 range 主题化（track/thumb 统一圆角配色；保留 accenter-color 兜底） */
+.slider-row input[type='range'] {
+  appearance: none;
+  -webkit-appearance: none;
+  height: 22px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.slider-row input[type='range']::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 999px;
+  background: var(--ev-c-gray-3);
+}
+
+.slider-row input[type='range']::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px;
+  height: 14px;
+  margin-top: -5px;
+  border-radius: 50%;
+  background: #ff5f9e;
+  border: 2px solid rgba(255, 255, 255, 0.35);
+}
+
+.slider-row input[type='range']:disabled::-webkit-slider-thumb {
+  background: var(--ev-c-gray-3);
 }
 
 .field select {
@@ -921,4 +959,44 @@ body {
   background: var(--ev-c-black-mute);
   color: var(--ev-c-text-1);
   font-size: 12px;
+}
+
+/* ===== 主题滚动条（1.0.0 T8）：全局配色统一 ===== */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--ev-c-gray-3);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--ev-c-text-2);
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* 关键帧数字框同主题（去箭头居中） */
+.kf-num {
+  appearance: none;
+  -moz-appearance: textfield;
+  text-align: center;
+}
+
+.kf-num::-webkit-inner-spin-button,
+.kf-num::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
 }
