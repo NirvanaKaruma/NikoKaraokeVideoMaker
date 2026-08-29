@@ -4,6 +4,7 @@ import { SUBTITLE_ZONE_Y } from '@shared/layout'
 import { useLocale } from './hooks/useLocale'
 import { useProject, type CanvasImageElement } from './hooks/useProject'
 import { useAudioPlayback, type PlaybackApi } from './hooks/useAudioPlayback'
+import { useCustomFont } from './hooks/useCustomFont'
 import { useFfmpegDownload, useFfmpegStatus } from './hooks/useFfmpeg'
 import { useExporter } from './hooks/useExporter'
 import { benchmarkEncoder } from './export/exportVideo'
@@ -1139,6 +1140,8 @@ function App(): React.JSX.Element {
     project.layout.audio.leadMs
   )
   const pbRef = useRef<PlaybackApi>(pb)
+  // 自定义字体（0.8.0）：项目 assets.fontFile → FontFace 注册（预览/导出同进程同字形）
+  const customFont = useCustomFont(project.assets.fontFile ?? null)
 
   const ffmpeg = useFfmpegStatus()
   const ffmpegDl = useFfmpegDownload(() => void ffmpeg.refresh())
@@ -1418,6 +1421,14 @@ function App(): React.JSX.Element {
         rect: { x: 0.78, y: 0.83, w: 0.2, h: 0.15 }
       })
       await sleep(400)
+      // 自定义字体（0.8.0）：从系统字体读取字节 → 注册；项目文件只存路径引用（不内嵌）
+      const fontPath = 'C:\\Windows\\Fonts\\arial.ttf'
+      const fres = await window.api.project.readFile(fontPath)
+      if (fres.ok && fres.buffer) {
+        const f = new File([fres.buffer], 'arial.ttf', { type: 'font/ttf' })
+        project.setFontFile(f)
+        await sleep(300)
+      }
       // 先走真实保存路径（更新已保存快照，同步 dirty 状态）
       await project.saveProject()
       // 再用带音频磁盘路径的版本覆盖磁盘文件（smoke 音频是内存生成，需落盘路径）
@@ -1427,6 +1438,11 @@ function App(): React.JSX.Element {
         'smoke-audio.wav'
       )
       pf.audio = { name: 'smoke-audio.wav', path: audioPath }
+      // 字体同样需落盘路径（smoke 从系统字体字节构造 File，无磁盘路径 → 手动写临时文件）
+      if (fres.ok && fres.buffer) {
+        const fontDiskPath = await window.api.exportApi.saveAudio(fres.buffer, 'smoke-font.ttf')
+        pf.font = { name: 'arial.ttf', path: fontDiskPath }
+      }
       const saveRes = await window.api.project.save(JSON.stringify(pf, null, 2), 'smoke-project')
       add('保存项目', saveRes.ok, saveRes.ok ? '已写入 ' + saveRes.path : '保存失败')
       add('保存后未脏', !projectRef.current.dirty, 'dirty=' + projectRef.current.dirty)
@@ -1444,7 +1460,17 @@ function App(): React.JSX.Element {
       await sleep(120)
       project.undo()
       await sleep(200)
-      const ul = projectRef.current.layout
+      // 轮询等待 React 提交（读取 projectRef.current.layout 与提交之间曾因 GC 竞态读到半程状态）
+      let ul = projectRef.current.layout
+      const undoWait = Date.now()
+      while (
+        Date.now() - undoWait < 3000 &&
+        !(ul.texts.songTitle.text === '项目测试曲' && ul.visualizer.barCount === 140) &&
+        projectRef.current.canUndo
+      ) {
+        await sleep(120)
+        ul = projectRef.current.layout
+      }
       add(
         '撤销',
         ul.texts.songTitle.text === '项目测试曲' &&
@@ -1455,7 +1481,11 @@ function App(): React.JSX.Element {
           ' 柱数=' +
           ul.visualizer.barCount +
           ' 模糊=' +
-          ul.background.blur
+          ul.background.blur +
+          ' 可撤销=' +
+          projectRef.current.canUndo +
+          ' 附加层=' +
+          ul.overlayLayers.length
       )
       project.redo()
       await sleep(120)
@@ -1465,7 +1495,15 @@ function App(): React.JSX.Element {
       await sleep(120)
       project.redo()
       await sleep(200)
-      const rl = projectRef.current.layout
+      let rl = projectRef.current.layout
+      const redoWait = Date.now()
+      while (
+        Date.now() - redoWait < 3000 &&
+        !(rl.texts.songTitle.text === '已修改' && rl.visualizer.barCount === 100)
+      ) {
+        await sleep(120)
+        rl = projectRef.current.layout
+      }
       add(
         '重做',
         rl.texts.songTitle.text === '已修改' &&
@@ -1559,6 +1597,20 @@ function App(): React.JSX.Element {
           ' 全部解码=' +
           Object.values(ovAssets).every((v) => v.element != null)
       )
+      // 自定义字体恢复（0.8.0）：路径引用 → 重建 File（FontFace 由 useCustomFont 注册）
+      if (fres.ok && fres.buffer) {
+        const fontWait = Date.now()
+        while (projectRef.current.assets.fontFile == null && Date.now() - fontWait < 5000) {
+          await sleep(150)
+        }
+        add(
+          '字体恢复',
+          projectRef.current.assets.fontFile?.name === 'arial.ttf',
+          'font=' + (projectRef.current.assets.fontFile?.name ?? 'null')
+        )
+      } else {
+        add('字体恢复', true, '跳过（未读取到系统字体样本 arial.ttf）')
+      }
       // 新建项目：应回到默认布局并清空素材
       project.resetProject()
       // 竞态防护：轮询等待 reset 的异步提交完成（曾偶发读到旧状态）
@@ -1696,6 +1748,9 @@ function App(): React.JSX.Element {
       )}
       <div className="app-body">
         <SidePanel
+          customFontFamily={project.assets.fontFile ? customFont.family : null}
+          customFontName={customFont.name}
+          onPickFont={project.setFontFile}
           overlayLayers={project.layout.overlayLayers}
           overlayImageUrls={overlayUrls}
           selectedId={selectedId}

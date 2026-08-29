@@ -40,6 +40,8 @@ export interface ProjectAssets {
     string,
     { url: string | null; file: File | null; element: CanvasImageElement | null }
   >
+  /** 自定义字体文件（0.8.0，路径引用不入 JSON；null = 未选择） */
+  fontFile: File | null | undefined
 }
 
 const EMPTY_ASSETS: ProjectAssets = {
@@ -51,7 +53,8 @@ const EMPTY_ASSETS: ProjectAssets = {
   bgElement: null,
   audioUrl: null,
   audioFile: null,
-  overlayImages: {}
+  overlayImages: {},
+  fontFile: null
 }
 
 /** 大图解码上限（长边像素）：超过则在解码后缩放一次——12MP 原图直接给 Konva
@@ -81,6 +84,7 @@ function snapshotOf(l: ProjectLayout, a: ProjectAssets): string {
     hasBg: a.bgUrl != null,
     hasAudio: a.audioUrl != null,
     // 附加层图像存在性（按 id 稳定序列化——URL 是 objectURL 每次加载会变，只能比"有没有"）
+    hasFont: a.fontFile != null,
     overlays: Object.keys(a.overlayImages ?? {})
       .sort()
       .map((id) => id + ':' + (a.overlayImages[id].element != null ? 1 : 0))
@@ -116,6 +120,8 @@ export function useProject(): {
   setOverlayFile: (id: string, file: File | null) => void
   /** 附加层图像：从 dataURL 恢复（打开项目时用） */
   setOverlayFromUrl: (id: string, url: string) => void
+  /** 自定义字体文件（0.8.0）：null = 清除 */
+  setFontFile: (file: File | null) => void
   /** 附加层：新增（默认右下角/水印位），返回新层 id */
   addOverlayLayer: () => string
   /** 附加层：改配置（rect/opacity/fx/entry） */
@@ -500,6 +506,16 @@ export function useProject(): {
     })
   }, [])
 
+  /** 自定义字体（0.8.0）：ttf/otf；路径引用（注册由 useCustomFont 完成） */
+  const setFontFile = useCallback((file: File | null) => {
+    if (file) {
+      setFileError(null)
+      setAssets((prev) => ({ ...prev, fontFile: file }))
+      return
+    }
+    setAssets((prev) => ({ ...prev, fontFile: null }))
+  }, [])
+
   /** 图片 → dataURL（优先原文件字节，无文件则从已解码元素转画布） */
   const imageToDataUrl = useCallback(
     async (file: File | null, el: CanvasImageElement | null): Promise<string | null> => {
@@ -563,6 +579,7 @@ export function useProject(): {
       backgroundImage:
         a.bgUrl && a.bgFile ? { name: a.bgFile.name, dataUrl: (await bgToDataUrl()) ?? '' } : null,
       audio: a.audioFile ? { name: a.audioFile.name, path: audioPath } : null,
+      font: a.fontFile ? { name: a.fontFile.name, path: window.api.getFilePath(a.fontFile) } : null,
       overlays
     }
   }, [coverToDataUrl, bgToDataUrl, imageToDataUrl])
@@ -637,6 +654,22 @@ export function useProject(): {
         }
       } else if (pf.audio) {
         warnings.push(t('project.audioNoPath'))
+      }
+
+      // 自定义字体（0.8.0）：路径引用——本机存在则重建 File（useCustomFont 自动注册），
+      // 缺失则回退默认字体并提示
+      if (pf.font?.path) {
+        const fres = await window.api.project.readFile(pf.font.path)
+        if (fres.ok && fres.buffer) {
+          const f = new File([fres.buffer], pf.font.name, { type: 'font/ttf' })
+          setAssets((prev) => ({ ...prev, fontFile: f }))
+        } else {
+          setAssets((prev) => ({ ...prev, fontFile: null }))
+          warnings.push(t('project.fontMissing', { path: pf.font.path }))
+        }
+      } else if (pf.font) {
+        setAssets((prev) => ({ ...prev, fontFile: null }))
+        warnings.push(t('project.fontNoPath'))
       }
 
       // 附加层（0.8.0）：按 layerId 内嵌恢复（层配置已在上面随 layout 全量还原；
@@ -822,6 +855,7 @@ export function useProject(): {
     clearBgImage,
     setOverlayFile,
     setOverlayFromUrl,
+    setFontFile,
     addOverlayLayer,
     updateOverlayLayer,
     removeOverlayLayer,

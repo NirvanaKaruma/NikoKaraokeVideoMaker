@@ -91,6 +91,9 @@ export const zhCn = {
     font: '字体',
     commonFonts: '常用字体',
     systemFonts: '系统字体',
+    customFontGroup: '自定义字体（ttf/otf）',
+    customFontLoaded: '已加载：{name}（换机器缺文件时回退默认）',
+    customFontHint: '选择字体文件（仅存路径引用，不入项目文件）',
     rescan: '重新载入系统字体',
     scanning: '扫描中…',
     loaded: '已载入 {n} 个系统字体',
@@ -270,6 +273,8 @@ export const zhCn = {
     audioNoPath: '项目保存时音频无磁盘路径，请重新拖入音频',
     overlayType: '附加层仅支持 png/jpg/webp（收到 .{ext}）',
     overlayLoadFail: '附加层图片加载失败，请换一张试试',
+    fontMissing: '字体文件未找到（{path}），已回退默认字体。请重新选择字体文件',
+    fontNoPath: '项目保存时字体无磁盘路径，请重新选择字体文件',
     defaultName: '未命名项目'
   },
   overlay: {

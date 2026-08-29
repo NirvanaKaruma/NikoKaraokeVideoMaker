@@ -16,7 +16,7 @@
 - [x] T3: 附加层渲染——SceneLayers 新增 'overlay' 层（位于主图之上、文本之下）：遍历 `overlayLayers` 渲染 SharedImageFxLayer（拖动/Transformer/选中/边界 clamp 复用）+ 每层命令式 fx 槽注册；ExportStageHost 静态/全层清单含 'overlay'（预览/导出同源）
 - [x] T4: 附加层面板 UI——「素材与画面」页签新增附加层分组：添加图像（文件选择）、层列表（选中/上移/下移/删除）、透明度滑块、四角快速摆位、遮罩/描边复用完整 fx 控件、入场动画（fade/slide/bounce + 时长/延迟）；i18n 三语
 - [x] T5: 附加层资产与项目文件——setOverlayFile(id,file)（解码上限 3200px 同封面）；buildProjectFile/applyProjectFile 内嵌 dataURL；dirty snapshot 纳入（层 id + 图像存在性）；smoke-project 扩展（多层 → 保存 → 还原 → 层数/图像/参数恢复）
-- [ ] T6: 自定义字体（路径引用，不内嵌）——TextPanel「自定义字体」：选择 ttf/otf → FontFace 注册（document.fonts.add，家庭名=确定性合成名，与文件基名绑定）→ 歌名/作者下拉可选（内置/系统/自定义分组）；项目文件只存 { name, path }（同音频模型）；打开项目：本机路径存在 → 读文件重建 FontFace；缺失 → 提示 + 回退默认字体（下拉标记缺失）；字体=导出与预览同字形（同进程 FontFace，smoke 校验渲染字体名）
+- [x] T6: 自定义字体（路径引用，不内嵌）——TextPanel「自定义字体」：选择 ttf/otf → FontFace 注册（document.fonts.add，家庭名=确定性合成名，与文件基名绑定）→ 歌名/作者下拉可选（内置/系统/自定义分组）；项目文件只存 { name, path }（同音频模型）；打开项目：本机路径存在 → 读文件重建 FontFace；缺失 → 提示 + 回退默认字体；字体=导出与预览同字形（同进程 FontFace，smoke-project 校验保存/还原）
 - [ ] T7: 自动主题色——shared 纯函数：封面 32×32 降采样 → 亮度过滤（去过暗/过曝）→ 频次桶主色 → 派生背景基色 + 可视化渐变双色；单测（固定像素数组 → 确定性输出）；「一键应用」按钮（只改 background.color + visualizer.colors，入撤销栈一次撤销）
 - [ ] T8: 端到端与回归——typecheck/lint/测试（新增模型/主题色/字体序列化单测）/build；smoke-visual 扩展（附加层渲染位置像素校验 + 主题应用后背景色变化）；smoke-export 含附加层+字体用例（全层动态路径与 WYSIWYG）；smoke-project（含 T5 扩展）
 - [ ] T9: 文档与交付——ROADMAP 0.8.0 勾选+验收记录；DECISIONS §23（0.8.0 决策：多层模型、fx 全量复用提取、字体内嵌+版权提示、主题色范围只改背景+可视化）；README 简述；版本 0.7.0→0.8.0；提交推送 + 汇报等用户验收

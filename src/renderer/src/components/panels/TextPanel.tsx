@@ -24,6 +24,9 @@ interface StyleControlsProps {
   title: string
   cfg: TextLayerConfig
   systemFonts: string[]
+  /** 自定义字体（0.8.0）：注册成功后的家庭名 + 文件名 */
+  customFontFamily?: string | null
+  customFontName?: string | null
   onChange: (patch: Partial<TextLayerConfig>) => void
 }
 
@@ -31,6 +34,8 @@ function StyleControls({
   title,
   cfg,
   systemFonts,
+  customFontFamily,
+  customFontName,
   onChange
 }: StyleControlsProps): React.JSX.Element {
   const { t } = useLocale()
@@ -50,6 +55,11 @@ function StyleControls({
               </option>
             ))}
           </optgroup>
+          {customFontFamily && (
+            <optgroup label={t('textPanel.customFontGroup')}>
+              <option value={customFontFamily}>{customFontName ?? customFontFamily}</option>
+            </optgroup>
+          )}
           {systemFonts.length > 0 && (
             <optgroup label={t('textPanel.systemFonts')}>
               {systemFonts.map((f) => (
@@ -130,15 +140,35 @@ interface TextPanelProps {
   artist: TextLayerConfig
   onSongTitleChange: (patch: Partial<TextLayerConfig>) => void
   onArtistChange: (patch: Partial<TextLayerConfig>) => void
+  /** 自定义字体（0.8.0） */
+  customFontFamily?: string | null
+  customFontName?: string | null
+  onPickFont?: (file: File | null) => void
 }
 
-/** 文本样式面板：歌曲名 / 作者分别独立可调（T11）；支持扫描系统全部字体 */
+/** 文本样式面板：歌曲名 / 作者分别独立可调（T11）；支持扫描系统全部字体 + 自定义 ttf/otf */
 export function TextPanel(props: TextPanelProps): React.JSX.Element {
   const { t } = useLocale()
   const sys = useSystemFonts()
   return (
     <section className="panel-section">
       <h2>{t('textPanel.title')}</h2>
+      <label className="field">
+        <span>{t('textPanel.customFontGroup')}</span>
+        <input
+          type="file"
+          accept=".ttf,.otf,font/ttf,font/otf"
+          onChange={(e) => {
+            props.onPickFont?.(e.target.files?.[0] ?? null)
+            e.target.value = ''
+          }}
+        />
+        <span className="panel-note">
+          {props.customFontName
+            ? t('textPanel.customFontLoaded', { name: props.customFontName })
+            : t('textPanel.customFontHint')}
+        </span>
+      </label>
       <div className="gradient-row">
         <button type="button" className="mini-btn" onClick={() => void sys.scan()}>
           {sys.loading ? t('textPanel.scanning') : t('textPanel.rescan')}
@@ -155,12 +185,16 @@ export function TextPanel(props: TextPanelProps): React.JSX.Element {
         title={t('textPanel.songTitle')}
         cfg={props.songTitle}
         systemFonts={sys.fonts}
+        customFontFamily={props.customFontFamily}
+        customFontName={props.customFontName}
         onChange={props.onSongTitleChange}
       />
       <StyleControls
         title={t('textPanel.artist')}
         cfg={props.artist}
         systemFonts={sys.fonts}
+        customFontFamily={props.customFontFamily}
+        customFontName={props.customFontName}
         onChange={props.onArtistChange}
       />
     </section>

@@ -37,6 +37,10 @@ export interface SidePanelProps {
   onOverlayUpdate: (id: string, patch: Partial<OverlayLayerConfig>) => void
   onOverlayRemove: (id: string) => void
   onOverlayMove: (id: string, dir: -1 | 1) => void
+  // 自定义字体（0.8.0）
+  customFontFamily: string | null
+  customFontName: string | null
+  onPickFont: (file: File | null) => void
   // 输入
   songTitle: string
   artist: string
@@ -185,6 +189,9 @@ export function SidePanel(props: SidePanelProps): React.JSX.Element {
             artist={props.artistCfg}
             onSongTitleChange={props.onSongTitleCfgChange}
             onArtistChange={props.onArtistCfgChange}
+            customFontFamily={props.customFontFamily}
+            customFontName={props.customFontName}
+            onPickFont={props.onPickFont}
           />
         )}
         {tab === 'visualizer' && (

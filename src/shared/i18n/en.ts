@@ -92,6 +92,9 @@ export const en = {
     font: 'Font',
     commonFonts: 'Common fonts',
     systemFonts: 'System fonts',
+    customFontGroup: 'Custom font (ttf/otf)',
+    customFontLoaded: 'Loaded: {name} (falls back to default if missing on another machine)',
+    customFontHint: 'Pick a font file (path reference only, not embedded in the project)',
     rescan: 'Reload system fonts',
     scanning: 'Scanning…',
     loaded: 'Loaded {n} system fonts',
@@ -285,6 +288,10 @@ export const en = {
       'The audio had no disk path when the project was saved; please drag in the audio again',
     overlayType: 'Overlay layers support png/jpg/webp only (got .{ext})',
     overlayLoadFail: 'Failed to load the overlay image; please try another image',
+    fontMissing:
+      'Font file not found ({path}); fell back to the default font. Please pick the font file again',
+    fontNoPath:
+      'The font had no disk path when the project was saved; please pick the font file again',
     defaultName: 'Untitled project'
   },
   overlay: {

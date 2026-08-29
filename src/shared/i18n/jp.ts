@@ -91,6 +91,9 @@ export const jp = {
     font: 'フォント',
     commonFonts: 'よく使うフォント',
     systemFonts: 'システムフォント',
+    customFontGroup: 'カスタムフォント（ttf/otf）',
+    customFontLoaded: '読み込み済み：{name}（他のマシンで欠けたらデフォルトにフォールバック）',
+    customFontHint: 'フォントファイルを選択（パス参照のみ、プロジェクトに埋め込みません）',
     rescan: 'システムフォントを再読み込み',
     scanning: 'スキャン中…',
     loaded: '{n} 個のシステムフォントを読み込みました',
@@ -287,6 +290,9 @@ export const jp = {
       'プロジェクト保存時に音声のディスクパスがありませんでした。音声を再度ドロップしてください',
     overlayType: '附加レイヤーは png/jpg/webp のみ対応（受信 .{ext}）',
     overlayLoadFail: '附加レイヤーの画像を読み込めませんでした。別の画像をお試しください',
+    fontMissing:
+      'フォントファイルが見つかりません（{path}）。デフォルトフォントにフォールバックしました。フォントを選択し直してください',
+    fontNoPath: '保存時にフォントのディスクパスがありません。フォントを選択し直してください',
     defaultName: '無題のプロジェクト'
   },
   overlay: {
