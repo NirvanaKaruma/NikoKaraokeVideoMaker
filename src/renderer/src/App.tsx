@@ -1451,8 +1451,8 @@ function App(): React.JSX.Element {
         let phase = exporterStateRef.current.phase
         // 每变体等待上限（默认 15min；内存验收长跑可用 NIKO_SMOKE_EXPORT_TIMEOUT_MS 放宽）
         const variantCap = Number(
-          (window as unknown as { NIKO_SMOKE_EXPORT_TIMEOUT_MS?: string }).NIKO_SMOKE_EXPORT_TIMEOUT_MS ??
-            900000
+          (window as unknown as { NIKO_SMOKE_EXPORT_TIMEOUT_MS?: string })
+            .NIKO_SMOKE_EXPORT_TIMEOUT_MS ?? 900000
         )
         while (
           phase !== 'done' &&
