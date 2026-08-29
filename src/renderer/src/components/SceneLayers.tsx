@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   Circle,
   Group,
   Image as KonvaImage,
+  Line as SnapLineNode,
   Layer,
   Line as KonvaLine,
   Rect,
@@ -46,6 +47,7 @@ import {
   type BandEnergies
 } from '@shared/fx'
 import { bandEnergiesAt, type SpectrumAnalyzer } from '@shared/spectrum'
+import { snapPosition, type SnapLine, type SnapRect } from '@shared/snap'
 import { useLocale } from '../hooks/useLocale'
 import type { CanvasImageElement } from '../hooks/useProject'
 
@@ -57,7 +59,28 @@ export type SelectableId =
   'mainImage' | 'songTitle' | 'artist' | 'visualizer' | `overlay:${string}` | null
 
 export type SceneLayerName =
-  'background' | 'main' | 'overlay' | 'songTitle' | 'artist' | 'visualizer' | 'fx'
+  'background' | 'main' | 'overlay' | 'songTitle' | 'artist' | 'visualizer' | 'fx' | 'snap-guides'
+
+/** 吸附上下文（0.9.0）：拖动中读取目标集与开关，写回引导线 */
+export interface SnapCtx {
+  enabled: boolean
+  targets: SnapRect[]
+  setGuides: (lines: SnapLine[]) => void
+}
+
+/** 拖动中吸附（0.9.0）：位置按阈值对齐目标线 + 画线；关/无命中保持原位 */
+function snapDragNode(node: Konva.Group, ctx: SnapCtx | null, canvas: CanvasSize): void {
+  if (!ctx) return
+  const pos = node.position()
+  const w = node.width() * node.scaleX()
+  const h = node.height() * node.scaleY()
+  const move: SnapRect = { x: pos.x, y: pos.y, w, h }
+  const r = ctx.enabled
+    ? snapPosition(move, ctx.targets, { width: canvas.width, height: canvas.height })
+    : { x: pos.x, y: pos.y, lines: [] }
+  node.position({ x: r.x, y: r.y })
+  ctx.setGuides(r.lines)
+}
 
 /** 图像源尺寸（Image 用 naturalWidth，Canvas 用 width） */
 function imgW(el: CanvasImageElement): number {
@@ -441,6 +464,7 @@ function TextNode({
   canvas,
   selected,
   locked,
+  snapCtxRef,
   onSelect,
   onRectChange,
   textFxSlotRef
@@ -451,6 +475,8 @@ function TextNode({
   selected: boolean
   /** 0.9.0 画布锁定 */
   locked?: boolean
+  /** 0.9.0 吸附上下文 */
+  snapCtxRef?: { current: SnapCtx }
   onSelect: (id: SelectableId) => void
   onRectChange: (rect: NormRect) => void
   /** 每帧入场动画更新槽（SceneLayers 分发 frame(t)） */
@@ -540,7 +566,13 @@ function TextNode({
         onDragStart={() => {
           if (!locked) onSelect(kind)
         }}
-        onDragEnd={(e: KonvaEventObject<DragEvent>) => commit(e.target as Konva.Group)}
+        onDragMove={(e: KonvaEventObject<DragEvent>) =>
+          snapDragNode(e.target as Konva.Group, snapCtxRef?.current ?? null, canvas)
+        }
+        onDragEnd={(e: KonvaEventObject<DragEvent>) => {
+          snapCtxRef?.current?.setGuides([])
+          commit(e.target as Konva.Group)
+        }}
         onTransform={() => {
           // 文本框缩放：字号保持不变，宽度实时重排文字
           const node = groupRef.current
@@ -819,6 +851,7 @@ function SharedImageLayer({
   entry,
   selected,
   locked,
+  snapCtxRef,
   onSelect,
   onRectChange,
   canvas,
@@ -837,6 +870,8 @@ function SharedImageLayer({
   selected: boolean
   /** 0.9.0 画布锁定：不可选中/拖动/缩放（参数面板仍可调） */
   locked?: boolean
+  /** 0.9.0 吸附上下文（SceneLayers 提供） */
+  snapCtxRef?: { current: SnapCtx }
   onSelect: () => void
   onRectChange: (rect: NormRect) => void
   canvas: CanvasSize
@@ -887,7 +922,13 @@ function SharedImageLayer({
         onDragStart={() => {
           if (!locked) onSelect()
         }}
-        onDragEnd={(e: KonvaEventObject<DragEvent>) => commitFromGroup(e.target as Konva.Group)}
+        onDragMove={(e: KonvaEventObject<DragEvent>) =>
+          snapDragNode(e.target as Konva.Group, snapCtxRef?.current ?? null, canvas)
+        }
+        onDragEnd={(e: KonvaEventObject<DragEvent>) => {
+          snapCtxRef?.current?.setGuides([])
+          commitFromGroup(e.target as Konva.Group)
+        }}
         onTransformEnd={(e: KonvaEventObject<Event>) => {
           const node = e.target as Konva.Group
           const sx = node.scaleX()
@@ -989,6 +1030,7 @@ function MainImageLayer({
   canvas,
   selectedId,
   locked,
+  snapCtxRef,
   onSelect,
   onMainRectChange,
   layerFxSlotRef
@@ -997,6 +1039,8 @@ function MainImageLayer({
   layerFxSlotRef?: { current: ((t: number, audioT: number) => void) | null }
   /** 0.9.0 画布锁定 */
   locked?: boolean
+  /** 0.9.0 吸附上下文 */
+  snapCtxRef?: { current: SnapCtx }
 }): React.JSX.Element {
   return (
     <SharedImageLayer
@@ -1009,6 +1053,7 @@ function MainImageLayer({
       beatPeriodSec={beatPeriod(layout.visualizer.bpm, layout.visualizer.beatIntervalSec)}
       selected={selectedId === 'mainImage'}
       locked={locked}
+      snapCtxRef={snapCtxRef}
       onSelect={() => onSelect('mainImage')}
       onRectChange={onMainRectChange}
       canvas={canvas}
@@ -1025,6 +1070,7 @@ function OverlayLayer({
   canvas,
   selected,
   locked,
+  snapCtxRef,
   onSelect,
   onRectChange,
   slotRegistryRef,
@@ -1037,6 +1083,8 @@ function OverlayLayer({
   selected: boolean
   /** 0.9.0 画布锁定 */
   locked?: boolean
+  /** 0.9.0 吸附上下文 */
+  snapCtxRef?: { current: SnapCtx }
   onSelect: (id: SelectableId) => void
   onRectChange: (rect: NormRect) => void
   /** 动效槽注册表（SceneLayers 持有）；本层自持 ref，经 effect 注册/注销 */
@@ -1066,6 +1114,7 @@ function OverlayLayer({
       entry={cfg.entry}
       selected={selected}
       locked={locked}
+      snapCtxRef={snapCtxRef}
       onSelect={() => onSelect(`overlay:${cfg.id}`)}
       onRectChange={onRectChange}
       canvas={canvas}
@@ -1083,6 +1132,8 @@ interface VisualizerLayerProps {
   selected: boolean
   /** 0.9.0 画布锁定 */
   locked?: boolean
+  /** 0.9.0 吸附上下文 */
+  snapCtxRef?: { current: SnapCtx }
   onSelect: (id: SelectableId) => void
   onRectChange: (rect: NormRect) => void
   barsHandleRef?: { current: ((bars: number[]) => void) | null }
@@ -1112,6 +1163,7 @@ function VisualizerLayer({
   canvas,
   selected,
   locked,
+  snapCtxRef,
   onSelect,
   onRectChange,
   barsHandleRef,
@@ -1447,7 +1499,11 @@ function VisualizerLayer({
         onDragStart={() => {
           if (!configLocked) onSelect('visualizer')
         }}
+        onDragMove={(e: KonvaEventObject<DragEvent>) =>
+          snapDragNode(e.target as Konva.Group, snapCtxRef?.current ?? null, canvas)
+        }
         onDragEnd={(e: KonvaEventObject<DragEvent>) => {
+          snapCtxRef?.current?.setGuides([])
           const node = e.target as Konva.Group
           const w = Math.max(40, node.width())
           const h = Math.max(20, node.height())
@@ -1523,8 +1579,31 @@ export function SceneLayers(props: SceneLayersProps): React.JSX.Element {
     overlayElements,
     onOverlayRectChange
   } = props
-  const canvas = canvasSize ?? { width: LOGICAL_WIDTH, height: LOGICAL_HEIGHT }
+  const defaultCanvas = useMemo(() => ({ width: LOGICAL_WIDTH, height: LOGICAL_HEIGHT }), [])
+  const canvas = canvasSize ?? defaultCanvas
   const show = (name: SceneLayerName): boolean => !layers || layers.includes(name)
+  // 吸附上下文（0.9.0）：目标集（排除自身由拖动组负责）+ 开关；引导线 state 驱动 SnapGuidesLayer
+  const [snapGuides, setSnapGuides] = useState<SnapLine[]>([])
+  const snapCtxRef = useRef<SnapCtx>({ enabled: true, targets: [], setGuides: () => undefined })
+  useEffect(() => {
+    const cw = canvas
+    const hiddenIds = new Set((layout.layers ?? []).filter((l) => l.hidden).map((l) => l.id))
+    const targets: SnapRect[] = []
+    const push = (id: string, r: NormRect): void => {
+      if (hiddenIds.has(id)) return
+      targets.push(normToPixel(r, cw))
+    }
+    push('main', layout.mainImage.rect)
+    push('songTitle', layout.texts.songTitle.rect)
+    push('artist', layout.texts.artist.rect)
+    push('visualizer', layout.visualizer.rect)
+    for (const o of layout.overlayLayers ?? []) push('overlay:' + o.id, o.rect)
+    snapCtxRef.current = {
+      enabled: layout.editor.snapEnabled,
+      targets,
+      setGuides: setSnapGuides
+    }
+  }, [layout, canvas])
   // 非可视化动效每帧分发：SceneLayers 统一注册外部 layerFxRef，
   // 各子层（背景/主图/文本/片头片尾）写入自己的 slot（getter 惰性读取不回退重绘）。
   // 0.7.0：audioT = 音频时间轴（导出 lead>0 时由 setFrame 传入；预览缺省 = t）。
@@ -1592,6 +1671,7 @@ export function SceneLayers(props: SceneLayersProps): React.JSX.Element {
                   canvas={canvas}
                   selectedId={selectedId}
                   locked={item.locked}
+                  snapCtxRef={snapCtxRef}
                   onSelect={onSelect}
                   onMainRectChange={onMainRectChange}
                   layerFxSlotRef={imgFxSlot}
@@ -1609,6 +1689,7 @@ export function SceneLayers(props: SceneLayersProps): React.JSX.Element {
                   canvas={canvas}
                   selected={selectedId === kind}
                   locked={item.locked}
+                  snapCtxRef={snapCtxRef}
                   onSelect={onSelect}
                   onRectChange={(rect) => onTextRectChange(kind, rect)}
                   textFxSlotRef={kind === 'songTitle' ? titleFxSlot : artistFxSlot}
@@ -1625,6 +1706,7 @@ export function SceneLayers(props: SceneLayersProps): React.JSX.Element {
                   canvas={canvas}
                   selected={selectedId === 'visualizer'}
                   locked={item.locked}
+                  snapCtxRef={snapCtxRef}
                   onSelect={onSelect}
                   onRectChange={onVisualizerRectChange}
                   barsHandleRef={barsHandleRef}
@@ -1644,6 +1726,7 @@ export function SceneLayers(props: SceneLayersProps): React.JSX.Element {
                   canvas={canvas}
                   selected={selectedId === 'overlay:' + o.id}
                   locked={item.locked}
+                  snapCtxRef={snapCtxRef}
                   onSelect={onSelect}
                   onRectChange={(rect) => onOverlayRectChange?.(o.id, rect)}
                   slotRegistryRef={overlaySlotsRef}
@@ -1658,6 +1741,22 @@ export function SceneLayers(props: SceneLayersProps): React.JSX.Element {
           }
         }
       })}
+      {snapGuides.length > 0 && (
+        <Layer key="snap-guides" name="snap-guides" listening={false}>
+          {snapGuides.map((l, i) => (
+            <SnapLineNode
+              key={i}
+              points={
+                l.axis === 'v' ? [l.pos, 0, l.pos, canvas.height] : [0, l.pos, canvas.width, l.pos]
+              }
+              stroke="#ff5f9e"
+              strokeWidth={1}
+              dash={[6, 4]}
+              listening={false}
+            />
+          ))}
+        </Layer>
+      )}
       {show('fx') && (
         <Layer key="fx" name="fx" listening={false}>
           <IntroOutroLayer
