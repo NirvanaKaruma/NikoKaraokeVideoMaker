@@ -1225,7 +1225,7 @@ function App(): React.JSX.Element {
         project.updateText('songTitle', { text: 'smoke-' + rid })
         project.updateExport({ resolutionId: rid, fps: 30 })
         const done = await runExportOnce()
-        results.push(done)
+        results.push({ ...done, resolution: rid })
         if (done.phase !== 'done') break
       }
       // 0.5.0/0.6.0：含特效导出（动效+音乐响应默认关→全开一次）——动态路径与 WYSIWYG 端到端
@@ -1237,10 +1237,20 @@ function App(): React.JSX.Element {
       project.updateVisualizer({ bpm: 120 })
       project.updateBeatFx({ pulse: 0.8, burst: 1, particlePreset: 'snow', particleDensity: 0.6 })
       project.updateExport({ resolutionId: '1080p', fps: 30 })
+      project.updateText('songTitle', { text: 'smoke-fx' })
       await sleep(400)
       const fxDone = await runExportOnce()
       results.push({ ...fxDone, resolution: '1080p+fx' })
-      // 复位（防污染）
+      // 0.7.0 音频工程端到端：lead 2s + fade 0.5s（视频总长 = 音频 + 2s；黑场/标题卡填充）
+      project.updateAudioEngine({ leadMs: 2000, fadeInSec: 0.5, fadeOutSec: 0.5 })
+      project.updateIntroOutro({ introFade: 0.5, introTitleCard: 1.5, outroFade: 0.5 })
+      project.updateExport({ resolutionId: '720p', fps: 30 })
+      project.updateText('songTitle', { text: 'smoke-af' })
+      await sleep(400)
+      const afDone = await runExportOnce()
+      results.push({ ...afDone, resolution: '720p+af' })
+      project.updateAudioEngine({ leadMs: 0, fadeInSec: 0, fadeOutSec: 0 })
+      // 复位（防污染）——af 的 introOutro 已由下面统一复位
       project.updateBackgroundFx({
         kenBurns: 0,
         kenBurnsDuration: 30,

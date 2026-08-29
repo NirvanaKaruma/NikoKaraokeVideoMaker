@@ -12,7 +12,8 @@ import {
   detectFfmpegStatus,
   detectManagedFfmpeg,
   getFFmpegPath,
-  installManagedFfmpeg
+  installManagedFfmpeg,
+  probeMediaDurationSec
 } from './ffmpeg'
 import { spawn } from 'child_process'
 
@@ -245,6 +246,156 @@ async function runSmokeProject(win: BrowserWindow): Promise<void> {
   }
 }
 
+/** 抽帧亮度统计（signalstats）：返回 { avg, max }（YUV Y 分量 0–255）；失败 null */
+async function lumaStatsAt(
+  ff: string,
+  outputPath: string,
+  tSec: number,
+  extraVf?: string
+): Promise<{ avg: number; max: number } | null> {
+  try {
+    const vf = ['signalstats,metadata=print', extraVf].filter(Boolean).join(',')
+    const res = await new Promise<string>((resolve, reject) => {
+      const p = spawn(ff, [
+        '-hide_banner',
+        '-ss',
+        String(tSec),
+        '-i',
+        outputPath,
+        '-frames:v',
+        '1',
+        '-vf',
+        vf,
+        '-f',
+        'null',
+        '-'
+      ])
+      let out = ''
+      p.stderr.on('data', (d) => (out += String(d)))
+      p.on('close', (code) => (code === 0 ? resolve(out) : reject(new Error('luma exit ' + code))))
+      p.on('error', reject)
+    })
+    const avg = /YAVG=([0-9.]+)/.exec(res)
+    const max = /YMAX=([0-9.]+)/.exec(res)
+    if (!avg || !max) return null
+    return { avg: Number(avg[1]), max: Number(max[1]) }
+  } catch {
+    return null
+  }
+}
+
+/** 0.7.0 音频工程端到端校验：时长 = 音频 + lead；t≈0.5s 黑场（lead）；标题卡可读；
+ * 片尾淡出双边帧差异（outro 在动）；末帧近黑（outro 完成）。 */
+async function verifyAudioEngineExport(outputPath: string, durationSec: number): Promise<boolean> {
+  const LEAD = 2
+  const ff = await getFFmpegPath()
+  if (!ff) {
+    console.log('[smoke-export] af 校验: 跳过（无 ffmpeg）')
+    return true
+  }
+  const artifacts = join(smokeDir, 'TEST-ARTIFACTS')
+  await mkdir(artifacts, { recursive: true })
+  const diag = (label: string, st: { avg: number; max: number } | null): void => {
+    console.log(
+      '[smoke-export] af 校验 ' +
+        label +
+        ': ' +
+        (st ? 'YAVG=' + st.avg.toFixed(1) + ' YMAX=' + st.max.toFixed(0) : '统计失败')
+    )
+  }
+  try {
+    // 1) 时长 = 音频 + 2s（±1.2s 容差）
+    const dur = await probeMediaDurationSec(ff, outputPath)
+    const expected = durationSec + LEAD
+    if (dur == null) {
+      console.log('[smoke-export] af 校验: 失败（无法读取时长）')
+      return false
+    }
+    if (Math.abs(dur - expected) > 1.2) {
+      console.log(
+        '[smoke-export] af 校验: 失败（时长 ' +
+          dur.toFixed(2) +
+          's ≠ ' +
+          expected.toFixed(2) +
+          's = 音频+' +
+          LEAD +
+          's）'
+      )
+      return false
+    }
+    // 2) 抽帧（同时落盘 TEST-ARTIFACTS 供目视）
+    const grab = async (
+      label: string,
+      tSec: number
+    ): Promise<{ avg: number; max: number } | null> => {
+      const p = join(artifacts, 'af-' + label + '.png')
+      await new Promise<void>((resolve) => {
+        const child = spawn(ff, ['-y', '-ss', String(tSec), '-i', outputPath, '-frames:v', '1', p])
+        child.on('close', () => resolve())
+      })
+      const st = await lumaStatsAt(ff, outputPath, tSec)
+      diag(label + ' (t=' + tSec + 's)', st)
+      return st
+    }
+    const lead = await grab('lead', 0.5) // 前导段 → 全黑
+    const title = await grab('title', LEAD + 1.5) // 标题卡全显（intro 0.5 后窗口 [0.875,1.625] 音频轴）
+    const mid = await grab('mid', LEAD + durationSec * 0.5) // 音乐中段 → 画面可见
+    const fadeA = await grab('fade-a', LEAD + durationSec - 0.5) // 淡出起（outro 0.0–）
+    const fadeB = await grab('fade-b', LEAD + durationSec - 0.2) // 淡出中（outro ≈0.6）
+    const last = await grab('end', LEAD + durationSec - 0.05) // 片尾（outro →1）
+    if (!lead || !title || !mid || !fadeA || !fadeB || !last) {
+      console.log('[smoke-export] af 校验: 失败（亮度统计缺失）')
+      return false
+    }
+    // 标题卡检查：标题行带状区域亮度峰值（白色文字出现）
+    const titleStripe = await lumaStatsAt(
+      ff,
+      outputPath,
+      LEAD + 1.5,
+      'crop=iw/2:ih*0.16:iw/4:ih*0.30'
+    )
+    const checks: { name: string; pass: boolean; detail: string }[] = [
+      {
+        // H.264 有限范围：纯黑 ≈ Y=16（BT.601/709 black level），故用「均匀且暗」判定
+        name: 'lead 黑场',
+        pass: lead.max < 24 && lead.max - lead.avg < 8,
+        detail: 'YAVG=' + lead.avg.toFixed(1) + ' YMAX=' + lead.max.toFixed(0)
+      },
+      {
+        name: '标题卡文字（title 带状 YMAX）',
+        pass: titleStripe != null && titleStripe.max > 80,
+        detail: titleStripe != null ? 'YMAX=' + titleStripe.max.toFixed(0) : '统计失败'
+      },
+      { name: '音乐中段可见', pass: mid.avg > 15, detail: 'YAVG=' + mid.avg.toFixed(1) },
+      {
+        name: '淡出段帧间差异（outro 在动）',
+        pass: Math.abs(fadeA.avg - fadeB.avg) > 1.5,
+        detail: 'dAVG=' + Math.abs(fadeA.avg - fadeB.avg).toFixed(1)
+      },
+      {
+        // outro≈1（黑幕叠加 90%+）：平均亮度应远低于淡出起点帧
+        name: '片尾近黑（outro 完成）',
+        pass: last.avg < fadeA.avg * 0.35 && last.avg < 70,
+        detail: 'YAVG=' + last.avg.toFixed(1) + '（fadeA ' + fadeA.avg.toFixed(1) + '）'
+      }
+    ]
+    const allPass = checks.every((c) => c.pass)
+    console.log(
+      '[smoke-export] af 校验: ' +
+        (allPass ? '通过' : '失败') +
+        '（时长 ' +
+        dur.toFixed(2) +
+        's；' +
+        checks.map((c) => c.name + (c.pass ? ' ✓' : ' ✗')).join('，') +
+        '）'
+    )
+    return allPass
+  } catch (e) {
+    console.log('[smoke-export] af 校验: 异常 ' + String(e))
+    return false
+  }
+}
+
 async function runSmokeBench(win: BrowserWindow): Promise<void> {
   try {
     const report: unknown = await win.webContents.executeJavaScript('window.__runEncodeBenchmark()')
@@ -329,6 +480,13 @@ async function runSmokeExport(win: BrowserWindow): Promise<void> {
     )?.results?.find((r) => (r.resolution ?? '').includes('fx'))
     if (ok && fxEntry?.phase === 'done' && fxEntry.outputPath) {
       ok = await verifyFxExport(fxEntry.outputPath, durationSec)
+    }
+    // 0.7.0：音频工程导出校验（lead 2s + fade 0.5s：时长 + 黑场/标题卡/淡出帧）
+    const afEntry = (
+      report as { results?: Array<{ resolution?: string; phase?: string; outputPath?: string }> }
+    )?.results?.find((r) => (r.resolution ?? '').includes('af'))
+    if (ok && afEntry?.phase === 'done' && afEntry.outputPath) {
+      ok = await verifyAudioEngineExport(afEntry.outputPath, durationSec)
     }
     app.exit(ok ? 0 : 1)
   } catch (error) {
