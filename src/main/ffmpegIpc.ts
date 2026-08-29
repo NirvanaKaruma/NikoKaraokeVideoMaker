@@ -85,30 +85,31 @@ async function streamAudioDecode(
     })
   }
   let errTail = ''
-  let pending: Buffer = Buffer.alloc(0)
   let totalBytes = 0
   let exitCode: number | null = null
-  let draining = false
   let finished = false
-  /** 累积到 4MB 就推一块；进程结束后收尾（尾块 + end/error）。块间 setImmediate 让出 */
-  const drain = async (): Promise<void> => {
-    if (draining || finished) return
-    draining = true
-    while (pending.length >= PCM_CHUNK_BYTES) {
-      const part = pending.subarray(0, PCM_CHUNK_BYTES)
-      pending = pending.subarray(PCM_CHUNK_BYTES)
-      totalBytes += part.byteLength
-      sendChunk(part)
-      await new Promise((r) => setImmediate(r))
-    }
-    draining = false
-    if (exitCode === null) return
+  /**
+   * 背压修复（60min 验收实测：主进程 OOM Buffer.concat）：
+   * 原实现每 64KB data 事件做一次 Buffer.concat([pending, d]) 且无 socket 背压——
+   * 渲染进程消费慢时 4MB 消息在 main 内排队至 GB 级；1.27GB(2ch f32) 流叠加 concat 拷贝 → 主进程 OOM。
+   * 修复：① 池化批拼接（每 4MB 才 concat 一次）；② stdout.pause() 真背压（池超 2×块暂停，
+   * ffmpeg 阻塞在着 OS 管道，消费追上再 resume）——main 侧常驻上限 ≈ 8MB。
+   */
+  let pool: Buffer[] = []
+  let poolLen = 0
+  let sending = false
+  /** 收尾：必须等所有在途泵完成（否则在途块晚于 end 到达 → worker 截断，曾致音频 60s→24.9s） */
+  const finish = async (): Promise<void> => {
+    if (finished) return
+    while (sending) await new Promise((r) => setImmediate(r))
+    if (finished) return
     finished = true
     audioDecodeSessions.delete(token)
-    if (pending.length > 0) {
-      totalBytes += pending.length
-      sendChunk(pending)
-      pending = Buffer.alloc(0)
+    if (poolLen > 0) {
+      totalBytes += poolLen
+      sendChunk(Buffer.concat(pool))
+      pool = []
+      poolLen = 0
     }
     if (exitCode === 0 && totalBytes > 0) {
       sender.send('audio:pcm', { token, type: 'end', sampleRate: 44100, channels: 2 })
@@ -116,20 +117,45 @@ async function streamAudioDecode(
       sender.send('audio:pcm', { token, type: 'error', error: errTail || 'decode-failed' })
     }
   }
+  const pump = async (): Promise<void> => {
+    if (sending || finished) return
+    sending = true
+    try {
+      while (!finished && poolLen >= PCM_CHUNK_BYTES) {
+        proc.stdout.pause()
+        const joined = poolLen === PCM_CHUNK_BYTES ? pool[0] : Buffer.concat(pool)
+        pool = []
+        poolLen = 0
+        let off = 0
+        while (off < joined.length) {
+          const part = joined.subarray(off, off + PCM_CHUNK_BYTES)
+          off += part.byteLength
+          totalBytes += part.byteLength
+          sendChunk(part)
+          await new Promise((r) => setImmediate(r))
+        }
+      }
+    } finally {
+      if (!finished && poolLen < PCM_CHUNK_BYTES) proc.stdout.resume()
+      sending = false
+    }
+  }
   proc.stdout.on('data', (d: Buffer) => {
-    pending = pending.length > 0 ? Buffer.concat([pending, d]) : d
-    void drain()
+    pool.push(d)
+    poolLen += d.length
+    // 未到 4MB 上限前保持流动；pump 内部对 ffmpeg 施加 pause/resume（超过阈值的真背压）
+    if (poolLen >= PCM_CHUNK_BYTES) void pump()
   })
   proc.stderr.on('data', (d: Buffer) => {
     errTail = String(d).slice(-500)
   })
   proc.on('error', () => {
     exitCode = 1
-    void drain()
+    void finish()
   })
   proc.on('close', (code) => {
     exitCode = code ?? 1
-    void drain()
+    void finish()
   })
 }
 
