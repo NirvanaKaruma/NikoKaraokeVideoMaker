@@ -9,6 +9,7 @@ import { useLocale } from '../hooks/useLocale'
 import type { AudioStatus } from '../hooks/useAudioPlayback'
 import { AudioPanel } from './panels/AudioPanel'
 import { InputPanel } from './panels/InputPanel'
+import { OverlayPanel } from './panels/OverlayPanel'
 import { MainImagePanel } from './panels/MainImagePanel'
 import { BackgroundPanel } from './panels/BackgroundPanel'
 import { TextPanel } from './panels/TextPanel'
@@ -18,12 +19,24 @@ import type {
   AudioEngineConfig,
   BeatFxConfig,
   CanvasFxConfig,
-  IntroOutroConfig
+  IntroOutroConfig,
+  OverlayLayerConfig
 } from '@shared/layout'
+import type { SelectableId } from './SceneLayers'
 
 export type SideTab = 'assets' | 'text' | 'visualizer' | 'fx'
 
 export interface SidePanelProps {
+  // 附加图层（0.8.0）
+  overlayLayers: OverlayLayerConfig[]
+  overlayImageUrls: Record<string, string | null>
+  selectedId: SelectableId
+  onOverlaySelect: (id: SelectableId) => void
+  onOverlayAdd: () => string
+  onOverlayPickImage: (id: string, file: File | null) => void
+  onOverlayUpdate: (id: string, patch: Partial<OverlayLayerConfig>) => void
+  onOverlayRemove: (id: string) => void
+  onOverlayMove: (id: string, dir: -1 | 1) => void
   // 输入
   songTitle: string
   artist: string
@@ -145,6 +158,17 @@ export function SidePanel(props: SidePanelProps): React.JSX.Element {
               onAudioFile={props.onAudioFile}
             />
             <MainImagePanel mainImage={props.mainImage} onChange={props.onMainImageChange} />
+            <OverlayPanel
+              layers={props.overlayLayers}
+              imageUrls={props.overlayImageUrls}
+              selectedId={props.selectedId}
+              onSelect={props.onOverlaySelect}
+              onAdd={props.onOverlayAdd}
+              onPickImage={props.onOverlayPickImage}
+              onUpdate={props.onOverlayUpdate}
+              onRemove={props.onOverlayRemove}
+              onMove={props.onOverlayMove}
+            />
             <BackgroundPanel
               background={props.background}
               bgUrl={props.bgUrl}

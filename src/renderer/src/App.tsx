@@ -1122,6 +1122,13 @@ function App(): React.JSX.Element {
     }
     return m
   }, [project.assets.overlayImages])
+  const overlayUrls = useMemo(() => {
+    const m: Record<string, string | null> = {}
+    for (const [id, a] of Object.entries(project.assets.overlayImages ?? {})) {
+      m[id] = a.url
+    }
+    return m
+  }, [project.assets.overlayImages])
   const pb = useAudioPlayback(
     project.assets.audioFile,
     project.layout.visualizer,
@@ -1636,6 +1643,15 @@ function App(): React.JSX.Element {
       )}
       <div className="app-body">
         <SidePanel
+          overlayLayers={project.layout.overlayLayers}
+          overlayImageUrls={overlayUrls}
+          selectedId={selectedId}
+          onOverlaySelect={setSelectedId}
+          onOverlayAdd={project.addOverlayLayer}
+          onOverlayPickImage={project.setOverlayFile}
+          onOverlayUpdate={project.updateOverlayLayer}
+          onOverlayRemove={project.removeOverlayLayer}
+          onOverlayMove={project.moveOverlayLayer}
           songTitle={project.layout.texts.songTitle.text}
           artist={project.layout.texts.artist.text}
           coverUrl={project.assets.coverUrl}
