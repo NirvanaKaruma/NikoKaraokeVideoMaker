@@ -140,7 +140,7 @@ export interface VisualizerConfig {
   bpm: number | null
   /** 节拍响应：周期秒（自由输入，>0 且有限；null=不使用周期）——"每 N 秒一次"语义 */
   beatIntervalSec: number | null
-  /** 可视化-音频偏移（ms，仅可视化时间轴，默认 0） */
+  /** 可视化-音频偏移（ms，仅可视化时间轴，默认 0；±500 由 UI 滑块约束，负值=可视化滞后于音频） */
   offsetMs: number
   /** flow（流动光带）波动强度 0–1：0=纯频谱轮廓，1=±75% 强波动（默认 0.7） */
   flowWave: number

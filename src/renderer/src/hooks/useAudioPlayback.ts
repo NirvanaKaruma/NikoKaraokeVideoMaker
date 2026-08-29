@@ -202,7 +202,7 @@ export function useAudioPlayback(
     if (!an) return
     const cfg = configRef.current
     // 可视化-音频偏移校准：仅可视化时间轴偏移 ms，音频播放不动
-    const tVis = t + (cfg.offsetMs > 0 ? cfg.offsetMs / 1000 : 0)
+    const tVis = t + cfg.offsetMs / 1000
     const target = spectrumAt(an, tVis, cfg.barCount, null, cfg.sensitivity)
     const smoothed = smoothBarsFx(smoothFxRef.current, target, cfg.attack, cfg.decay, cfg.peakFall)
     lastBarsRef.current = smoothed

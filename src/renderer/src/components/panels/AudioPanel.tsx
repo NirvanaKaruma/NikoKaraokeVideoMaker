@@ -1,5 +1,6 @@
 import { useLocale } from '../../hooks/useLocale'
 import type { AudioStatus } from '../../hooks/useAudioPlayback'
+import { DeferredSlider } from '../DeferredSlider'
 
 function formatTime(t: number): string {
   const m = Math.floor(t / 60)
@@ -17,6 +18,9 @@ interface AudioPanelProps {
   onPlay: () => void
   onPause: () => void
   onSeek: (t: number) => void
+  /** 可视化-音频偏移（0.7.0 T4）：仅可视化时间轴，±500ms，预览/导出同偏移 */
+  offsetMs: number
+  onOffsetChange: (v: number) => void
 }
 
 /** 预览播放面板（T14）：播放/暂停、进度、seek；播完停止不循环 */
@@ -52,6 +56,16 @@ export function AudioPanel(props: AudioPanelProps): React.JSX.Element {
           />
         </>
       )}
+      <DeferredSlider
+        label={(v) => t('audio.offset', { v: Math.round(v) })}
+        value={props.offsetMs}
+        min={-500}
+        max={500}
+        step={10}
+        disabled={status !== 'ready'}
+        onCommit={props.onOffsetChange}
+      />
+      <p className="panel-note">{t('audio.offsetNote')}</p>
     </section>
   )
 }

@@ -64,7 +64,10 @@ export const en = {
     decoding: 'Decoding audio…',
     loadFailed: 'Failed to load audio',
     play: '▶ Play',
-    pause: '⏸ Pause'
+    pause: '⏸ Pause',
+    offset: 'Visualizer offset: {v}ms',
+    offsetNote:
+      'Positive = visualizer ahead of audio; negative = lags. ±500ms. Same in preview and export (WYSIWYG).'
   },
   background: {
     title: 'Background',

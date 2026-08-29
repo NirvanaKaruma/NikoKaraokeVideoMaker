@@ -207,7 +207,7 @@ function BackgroundLayer({
     if (!layerFxSlotRef) return
     layerFxSlotRef.current = (t: number, audioT: number): void => {
       const g = bgRef.current
-      const offsetVis = layout.visualizer.offsetMs > 0 ? layout.visualizer.offsetMs / 1000 : 0
+      const offsetVis = layout.visualizer.offsetMs / 1000
       const sample = (tt: number): BandEnergies =>
         bandEnergiesAt(
           analyzer!,

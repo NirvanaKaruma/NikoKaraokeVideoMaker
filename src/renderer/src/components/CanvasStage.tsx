@@ -57,7 +57,7 @@ function CanvasFxOverlay({
     const draw = (): void => {
       raf = requestAnimationFrame(draw)
       // 空闲跳过：暂停/未加载且信号未变时整帧跳过（省全画布 clear+重绘）
-      const offset = visualizer.offsetMs > 0 ? visualizer.offsetMs / 1000 : 0
+      const offset = visualizer.offsetMs / 1000
       const t = (playTimeRef?.current ?? 0) + offset
       const sig = [
         t,

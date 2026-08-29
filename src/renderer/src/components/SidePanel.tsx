@@ -108,6 +108,8 @@ export function SidePanel(props: SidePanelProps): React.JSX.Element {
         onPlay={props.onPlay}
         onPause={props.onPause}
         onSeek={props.onSeek}
+        offsetMs={props.visualizer.offsetMs}
+        onOffsetChange={(v) => props.onVisualizerChange({ offsetMs: v })}
       />
       <div className="tab-bar">
         {TABS.map((item) => (

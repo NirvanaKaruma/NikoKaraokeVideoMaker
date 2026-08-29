@@ -271,7 +271,7 @@ export async function encodeVideo(opts: EncodeVideoOptions): Promise<ArrayBuffer
     cfxCfg.lightLeak > 0
   const cfxEnergy = (tt: number): ReturnType<typeof bandEnergiesAt> =>
     bandEnergiesAt(analyzer!, tt, vizCfg.barCount, vizCfg.sensitivity)
-  const tOffset = vizCfg.offsetMs > 0 ? vizCfg.offsetMs / 1000 : 0
+  const tOffset = vizCfg.offsetMs / 1000
   // 频率范围以布局快照为准（分析器字段为共享可变对象：防止导出中途改滑块导致前后帧不一致）
   if (analyzer) {
     const half = Math.max(analyzer.sampleRate / 2, 1000)

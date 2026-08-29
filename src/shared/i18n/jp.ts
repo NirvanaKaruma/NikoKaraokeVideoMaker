@@ -64,7 +64,9 @@ export const jp = {
     decoding: '音声をデコード中…',
     loadFailed: '音声の読み込みに失敗しました',
     play: '▶ 再生',
-    pause: '⏸ 一時停止'
+    pause: '⏸ 一時停止',
+    offset: 'ビジュアライザー偏移：{v}ms',
+    offsetNote: '正値=音声より先行、負値=遅延；±500ms。プレビュー/書き出しで同じ偏移（WYSIWYG）。'
   },
   background: {
     title: '背景',

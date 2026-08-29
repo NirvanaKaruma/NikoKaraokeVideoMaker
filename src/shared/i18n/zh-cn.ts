@@ -64,7 +64,10 @@ export const zhCn = {
     decoding: '音频解码中…',
     loadFailed: '音频加载失败',
     play: '▶ 播放',
-    pause: '⏸ 暂停'
+    pause: '⏸ 暂停',
+    offset: '可视化偏移：{v}ms',
+    offsetNote:
+      '正值 = 可视化超前音频（看未来），负值 = 滞后；±500ms。预览/导出同偏移（所见即所得）。'
   },
   background: {
     title: '背景',
