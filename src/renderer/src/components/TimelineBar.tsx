@@ -131,9 +131,11 @@ export function TimelineBar(props: TimelineBarProps): React.JSX.Element {
               (props.overlaps?.includes(s.id) ? ' overlap' : '')
             }
             style={{
-              // 段间 2px 视觉缝隙：相邻片段不再"叠在一起"（用户反馈图二）
+              // 段间 2px 视觉缝隙；极窄段最小显示宽 0.2%（≈2-3px 竖条）——
+              // 修复：旧 Math.max(0.2,…)=20% 会把靠前分割出的窄段撑到 20% 与相邻块视觉交叠
               left: 'calc(' + ratio(s.startSec) * 100 + '% + 1px)',
-              width: 'calc(' + Math.max(0.2, ratio(s.endSec) - ratio(s.startSec)) * 100 + '% - 2px)'
+              width:
+                'calc(' + Math.max(0.002, ratio(s.endSec) - ratio(s.startSec)) * 100 + '% - 2px)'
             }}
             onPointerDown={(e) => {
               e.stopPropagation()
