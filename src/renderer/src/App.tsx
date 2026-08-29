@@ -6,6 +6,7 @@ import { useProject, type CanvasImageElement } from './hooks/useProject'
 import { useAudioPlayback, type PlaybackApi } from './hooks/useAudioPlayback'
 import { useCustomFont } from './hooks/useCustomFont'
 import { themeFromSamples } from '@shared/theme'
+import { customFontFamily } from './hooks/useCustomFont'
 import { useFfmpegDownload, useFfmpegStatus } from './hooks/useFfmpeg'
 import { useExporter } from './hooks/useExporter'
 import { benchmarkEncoder } from './export/exportVideo'
@@ -407,6 +408,36 @@ async function runAudioSmoke(
     }
   } else {
     fail('主题色一键应用', '封面未就绪（coverElement=null）')
+  }
+
+  // ── 0.8.0 附加层渲染（预览）：左上叠加前后区域像素差异（同一舞台、同代码，与导出同源）──
+  const ovTLBefore = captureRegion(stage, 0.02 * 1920, 0.02 * 1080, 0.22 * 1920, 0.17 * 1080)
+  const ovId = project.addOverlayLayer()
+  const ovF = await makeSyntheticCoverFile()
+  if (ovF) project.setOverlayFile(ovId, ovF)
+  project.updateOverlayLayer(ovId, {
+    opacity: 1,
+    rect: { x: 0.02, y: 0.02, w: 0.2, h: 0.15 },
+    entry: { type: 'none', durationSec: 1.2, delaySec: 0 }
+  })
+  // 等图像解码 + 层提交
+  const ovWait = Date.now()
+  while (
+    (projectRefArg.current.assets.overlayImages?.[ovId]?.element == null ||
+      projectRefArg.current.layout.overlayLayers.length < 1) &&
+    Date.now() - ovWait < 5000
+  ) {
+    await sleep(150)
+  }
+  await sleep(300)
+  const ovTLAfter = captureRegion(stage, 0.02 * 1920, 0.02 * 1080, 0.22 * 1920, 0.17 * 1080)
+  const ovDiff = countDiffPixels(ovTLBefore, ovTLAfter)
+  project.removeOverlayLayer(ovId)
+  await sleep(200)
+  if (ovDiff > 300) {
+    pass('附加层渲染', '左上区域叠加前后差异像素 ' + ovDiff)
+  } else {
+    fail('附加层渲染', '区域差异 ' + ovDiff + '（>300 预期）')
   }
 
   const vizX0 = 0.49 * 1920
@@ -1401,11 +1432,46 @@ function App(): React.JSX.Element {
       project.updateIntroOutro({ introFade: 1, introTitleCard: 2, outroFade: 1 })
       project.updateVisualizer({ bpm: 120 })
       project.updateBeatFx({ pulse: 0.8, burst: 1, particlePreset: 'snow', particleDensity: 0.6 })
+      // 0.8.0：附加层 + 自定义字体加入动态路径导出（全层逐帧渲染同源）
+      const fxOvId = project.addOverlayLayer()
+      const fxOvF = await makeSyntheticCoverFile()
+      if (fxOvF) project.setOverlayFile(fxOvId, fxOvF)
+      project.updateOverlayLayer(fxOvId, {
+        opacity: 0.9,
+        rect: { x: 0.02, y: 0.02, w: 0.2, h: 0.15 },
+        fx: {
+          breathe: 0.2,
+          breathePeriod: 4,
+          rotateDeg: 2,
+          glowPulse: 0,
+          mask: 'circle',
+          border: 0.004,
+          borderColor: '#ffffff'
+        },
+        entry: { type: 'fade', durationSec: 1.0, delaySec: 0 }
+      })
+      const fxFontPath = 'C:\\Windows\\Fonts\\arial.ttf'
+      const fxFontRes = await window.api.project.readFile(fxFontPath)
+      if (fxFontRes.ok && fxFontRes.buffer) {
+        const f = new File([fxFontRes.buffer], 'arial.ttf', { type: 'font/ttf' })
+        project.setFontFile(f)
+        await sleep(300)
+        project.updateText('songTitle', { text: 'smoke-fx' })
+        project.updateText('songTitle', {
+          style: {
+            ...projectRef.current.layout.texts.songTitle.style,
+            fontFamily: customFontFamily('arial.ttf')
+          }
+        })
+      } else {
+        project.updateText('songTitle', { text: 'smoke-fx' })
+      }
       project.updateExport({ resolutionId: '1080p', fps: 30 })
-      project.updateText('songTitle', { text: 'smoke-fx' })
       await sleep(400)
       const fxDone = await runExportOnce()
       results.push({ ...fxDone, resolution: '1080p+fx' })
+      project.removeOverlayLayer(fxOvId)
+      project.setFontFile(null)
       // 0.7.0 音频工程端到端：lead 2s + fade 0.5s（视频总长 = 音频 + 2s；黑场/标题卡填充）
       project.updateAudioEngine({ leadMs: 2000, fadeInSec: 0.5, fadeOutSec: 0.5 })
       project.updateIntroOutro({ introFade: 0.5, introTitleCard: 1.5, outroFade: 0.5 })
