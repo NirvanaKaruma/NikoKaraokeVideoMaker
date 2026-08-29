@@ -11,6 +11,7 @@ import {
   detectFfmpegStatus,
   getFFmpegPath,
   installManagedFfmpeg,
+  invalidateFfmpegStatus,
   runFfmpeg,
   validateFfmpeg
 } from './ffmpeg'
@@ -27,12 +28,16 @@ interface MergeInvoke extends MergeRequest {
 /** 合并任务句柄（按 mergeId 取消） */
 const mergeHandles = new Map<string, { kill: () => void }>()
 
-let audioDecodeProc: import('child_process').ChildProcess | null = null
+/** 解码会话：token → 子进程（按 token 取消；新请求 kill 旧请求） */
+const audioDecodeSessions = new Map<string, { proc: import('child_process').ChildProcess }>()
 /** 单块 PCM 字节数：4MB 分块 → 渲染进程每次只 ~20ms 反序列化，块间让出事件循环（UI 有响应窗口） */
 const PCM_CHUNK_BYTES = 4 * 1024 * 1024
 
-/** 流式音频解码（预览用）：ffmpeg 子进程解码 → main 按 4MB 分块推送给渲染进程。
- * 渲染进程零解码 CPU、零长阻塞；新请求 kill 旧请求（重复导入不叠加内存）。 */
+/**
+ * 流式音频解码（预览用）：ffmpeg 子进程解码 stdout 边收边按 4MB 分块推送。
+ * 不再全量 concat 驻留（省 main 侧 2×PCM 内存）；渲染进程零解码 CPU；
+ * 新请求 kill 旧请求（重复导入不叠加内存）。
+ */
 async function streamAudioDecode(
   sender: Electron.WebContents,
   token: string,
@@ -43,56 +48,87 @@ async function streamAudioDecode(
     sender.send('audio:pcm', { token, type: 'error', error: 'no-ffmpeg' })
     return
   }
-  audioDecodeProc?.kill()
-  const chunks: Buffer[] = []
-  let errTail = ''
-  const ok = await new Promise<boolean>((resolve) => {
-    const p = spawn(
-      ff,
-      [
-        '-hide_banner',
-        '-nostdin',
-        '-i',
-        path,
-        '-vn',
-        '-f',
-        'f32le',
-        '-acodec',
-        'pcm_f32le',
-        '-ar',
-        '44100',
-        '-ac',
-        '2',
-        'pipe:1'
-      ],
-      { windowsHide: true }
-    )
-    audioDecodeProc = p
-    p.stdout.on('data', (d: Buffer) => chunks.push(d))
-    p.stderr.on('data', (d: Buffer) => {
-      errTail = String(d).slice(-500)
-    })
-    p.on('error', () => resolve(false))
-    p.on('close', (code) => resolve(code === 0))
-  })
-  if (audioDecodeProc) audioDecodeProc = null
-  if (!ok || chunks.length === 0) {
-    sender.send('audio:pcm', { token, type: 'error', error: errTail || 'decode-failed' })
-    return
+  // 新请求 kill 旧请求
+  for (const [tok, s] of audioDecodeSessions) {
+    s.proc.kill()
+    audioDecodeSessions.delete(tok)
   }
-  const buf = Buffer.concat(chunks)
-  for (let off = 0; off < buf.length; off += PCM_CHUNK_BYTES) {
-    const end = Math.min(off + PCM_CHUNK_BYTES, buf.length)
-    const part = buf.subarray(off, end)
+  const proc = spawn(
+    ff,
+    [
+      '-hide_banner',
+      '-nostdin',
+      '-i',
+      path,
+      '-vn',
+      '-f',
+      'f32le',
+      '-acodec',
+      'pcm_f32le',
+      '-ar',
+      '44100',
+      '-ac',
+      '2',
+      'pipe:1'
+    ],
+    { windowsHide: true }
+  )
+  audioDecodeSessions.set(token, { proc })
+  const sendChunk = (part: Buffer): void => {
+    if (sender.isDestroyed()) return
     sender.send('audio:pcm', {
       token,
       type: 'chunk',
       data: part.buffer.slice(part.byteOffset, part.byteOffset + part.byteLength)
     })
-    // 块间让出事件循环：渲染进程可在反序列化间隙响应 UI（有窗口，不冻结）
-    await new Promise((r) => setImmediate(r))
   }
-  sender.send('audio:pcm', { token, type: 'end', sampleRate: 44100, channels: 2 })
+  let errTail = ''
+  let pending: Buffer = Buffer.alloc(0)
+  let totalBytes = 0
+  let exitCode: number | null = null
+  let draining = false
+  let finished = false
+  /** 累积到 4MB 就推一块；进程结束后收尾（尾块 + end/error）。块间 setImmediate 让出 */
+  const drain = async (): Promise<void> => {
+    if (draining || finished) return
+    draining = true
+    while (pending.length >= PCM_CHUNK_BYTES) {
+      const part = pending.subarray(0, PCM_CHUNK_BYTES)
+      pending = pending.subarray(PCM_CHUNK_BYTES)
+      totalBytes += part.byteLength
+      sendChunk(part)
+      await new Promise((r) => setImmediate(r))
+    }
+    draining = false
+    if (exitCode === null) return
+    finished = true
+    audioDecodeSessions.delete(token)
+    if (pending.length > 0) {
+      totalBytes += pending.length
+      sendChunk(pending)
+      pending = Buffer.alloc(0)
+    }
+    if (exitCode === 0 && totalBytes > 0) {
+      sender.send('audio:pcm', { token, type: 'end', sampleRate: 44100, channels: 2 })
+    } else {
+      sender.send('audio:pcm', { token, type: 'error', error: errTail || 'decode-failed' })
+    }
+  }
+  proc.stdout.on('data', (d: Buffer) => {
+    pending = pending.length > 0 ? Buffer.concat([pending, d]) : d
+    void drain()
+  })
+  proc.stderr.on('data', (d: Buffer) => {
+    errTail = String(d).slice(-500)
+  })
+  proc.on('error', () => {
+    exitCode = 1
+    void drain()
+  })
+  proc.on('close', (code) => {
+    exitCode = code ?? 1
+    void drain()
+  })
 }
 
 /** 流式解码开始（invoke）：返回 token；结果经 'audio:pcm' 事件推给该 sender */
@@ -107,12 +143,14 @@ async function startAudioDecodeStream(
 
 /** 注册 ffmpeg 三源管理 + 导出合并的全部 IPC（规格 §3.4/§3.3） */
 export function registerFfmpegIpc(): void {
-  ipcMain.handle(IPC.ffmpegDetect, () => detectFfmpegStatus())
+  // 手动检测 = 强制重检（绕过缓存）
+  ipcMain.handle(IPC.ffmpegDetect, () => detectFfmpegStatus(true))
 
   ipcMain.handle(IPC.ffmpegConfigGet, async () => (await getConfig()).ffmpeg)
 
   ipcMain.handle(IPC.ffmpegConfigSet, async (_e, patch: Partial<FfmpegConfig>) => {
     const cfg = await setConfig({ ffmpeg: patch })
+    invalidateFfmpegStatus()
     return cfg.ffmpeg
   })
 
@@ -139,6 +177,7 @@ export function registerFfmpegIpc(): void {
           if (!sender.isDestroyed()) sender.send(IPC.ffmpegDownloadProgress, p)
         }
       })
+      invalidateFfmpegStatus()
       return { ok: true, info }
     } catch (err) {
       return { ok: false, error: err instanceof Error ? err.message : String(err) }
@@ -153,6 +192,16 @@ export function registerFfmpegIpc(): void {
   ipcMain.handle('audio:decode-start', async (e, path: string) => {
     if (typeof path !== 'string' || !path) return 'bad-path'
     return startAudioDecodeStream(e, path)
+  })
+
+  ipcMain.handle('audio:decode-cancel', (_e, token: string) => {
+    const tok = String(token)
+    const s = audioDecodeSessions.get(tok)
+    if (s) {
+      s.proc.kill()
+      audioDecodeSessions.delete(tok)
+    }
+    return true
   })
 
   ipcMain.handle(IPC.exportPickOutput, async (e, defaultName: string) => {

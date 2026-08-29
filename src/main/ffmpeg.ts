@@ -137,8 +137,23 @@ export async function detectCustomFfmpeg(customPath: string): Promise<FfmpegDete
   return validateFfmpeg(customPath)
 }
 
+/** 检测缓存：每次导入/导出都会调 getFFmpegPath()（三源全检 = 7–10 次 spawn ≈ 400–600ms），
+ * 结果在 TTL 内直接复用；设置变更/托管安装完成时显式失效。 */
+let cachedStatus: FfmpegStatusReport | null = null
+let cachedStatusAt = 0
+const STATUS_CACHE_MS = 30_000
+
+/** 使检测缓存失效（ffmpeg 来源配置变化 / 托管安装完成后调用） */
+export function invalidateFfmpegStatus(): void {
+  cachedStatus = null
+  cachedStatusAt = 0
+}
+
 /** 三源状态汇总 + 当前生效来源（按用户选择，选中的不可用则回退到其他可用源） */
-export async function detectFfmpegStatus(): Promise<FfmpegStatusReport> {
+export async function detectFfmpegStatus(force = false): Promise<FfmpegStatusReport> {
+  if (!force && cachedStatus && Date.now() - cachedStatusAt < STATUS_CACHE_MS) {
+    return cachedStatus
+  }
   const config = await getConfig()
   const system = await detectSystemFfmpeg()
   const managed = await detectManagedFfmpeg()
@@ -167,7 +182,10 @@ export async function detectFfmpegStatus(): Promise<FfmpegStatusReport> {
       }
     : { available: false, source: null, path: null, info: null }
 
-  return { system, managed, custom, effective, config: config.ffmpeg }
+  const report: FfmpegStatusReport = { system, managed, custom, effective, config: config.ffmpeg }
+  cachedStatus = report
+  cachedStatusAt = Date.now()
+  return report
 }
 
 /** 生效的 ffmpeg 路径（导出等使用） */

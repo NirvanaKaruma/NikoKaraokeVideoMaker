@@ -60,72 +60,93 @@ const api = {
     readFile: (path: string): Promise<{ ok: boolean; buffer?: ArrayBuffer; error?: string }> =>
       ipcRenderer.invoke(IPC.projectReadFile, path),
     readBytes: (path: string): Promise<Uint8Array> => ipcRenderer.invoke('fs:read-bytes', path),
+    /**
+     * 流式音频解码：main 的 4MB PCM 分块原样直通 onChunk（preload 不再全量组装复制，
+     * 渲染进程块间可响应 UI）；result 在流结束/失败时 resolve（声道数与采样率）。
+     * cancel：中止本次解码（渲染端换文件/新建项目时调用，杀掉 main 侧 ffmpeg 子进程）。
+     */
     audioDecode: (
-      path: string
-    ): Promise<{
-      ok: boolean
-      samples: ArrayBuffer | null
-      sampleRate: number
-      channels: number
-      error: string | null
-    }> => {
-      // 流式解码：main 按 4MB 分块推送 → preload 组装（块间渲染进程可响应 UI，不冻结）
-      return new Promise((resolve) => {
-        const fail = (error: string): void =>
-          resolve({ ok: false, samples: null, sampleRate: 0, channels: 0, error })
-        void ipcRenderer
-          .invoke('audio:decode-start', path)
-          .then((token: unknown) => {
-            const tok = String(token)
-            let total = 0
-            let meta: { sampleRate: number; channels: number } | null = null
-            const parts: ArrayBuffer[] = []
-            const onPcm = (
-              _e: IpcRendererEvent,
-              m: {
-                token?: string
-                type?: string
-                data?: unknown
-                error?: string
-                sampleRate?: number
-                channels?: number
-              }
-            ): void => {
-              if (m.token !== tok) return
-              if (m.type === 'chunk') {
-                const d = m.data as ArrayBuffer
-                parts.push(d)
-                total += d.byteLength
-              } else if (m.type === 'end') {
-                if (m.sampleRate && m.channels) {
-                  meta = { sampleRate: m.sampleRate, channels: m.channels }
-                }
-              } else if (m.type === 'error') {
-                ipcRenderer.removeListener('audio:pcm', onPcm)
-                fail(m.error ?? 'decode-failed')
-              }
-              if (meta && total > 0) {
-                ipcRenderer.removeListener('audio:pcm', onPcm)
-                const out = new ArrayBuffer(total)
-                const u8 = new Uint8Array(out)
-                let off = 0
-                for (const p of parts) {
-                  u8.set(new Uint8Array(p), off)
-                  off += p.byteLength
-                }
-                resolve({
-                  ok: true,
-                  samples: out,
-                  sampleRate: meta.sampleRate,
-                  channels: meta.channels,
-                  error: null
-                })
-              }
-            }
-            ipcRenderer.on('audio:pcm', onPcm)
-          })
-          .catch(() => fail('start-failed'))
+      path: string,
+      onChunk: (data: ArrayBuffer) => void
+    ): {
+      result: Promise<{
+        ok: boolean
+        sampleRate: number
+        channels: number
+        error: string | null
+      }>
+      cancel: () => void
+    } => {
+      let settled = false
+      let token = ''
+      let resolveFn:
+        | ((r: { ok: boolean; sampleRate: number; channels: number; error: string | null }) => void)
+        | null = null
+      let onPcm: ((_e: IpcRendererEvent, m: Record<string, unknown>) => void) | null = null
+      const cleanup = (): void => {
+        if (onPcm) {
+          ipcRenderer.removeListener('audio:pcm', onPcm)
+          onPcm = null
+        }
+      }
+      const finish = (r: {
+        ok: boolean
+        sampleRate: number
+        channels: number
+        error: string | null
+      }): void => {
+        if (settled) return
+        settled = true
+        cleanup()
+        resolveFn?.(r)
+      }
+      const result = new Promise<{
+        ok: boolean
+        sampleRate: number
+        channels: number
+        error: string | null
+      }>((resolve) => {
+        resolveFn = resolve
       })
+      void ipcRenderer
+        .invoke('audio:decode-start', path)
+        .then((tok: unknown) => {
+          if (settled) return
+          token = String(tok)
+          onPcm = (_e, m) => {
+            if (m.token !== token) return
+            if (m.type === 'chunk') {
+              try {
+                onChunk(m.data as ArrayBuffer)
+              } catch {
+                finish({ ok: false, sampleRate: 0, channels: 0, error: 'chunk-forward-failed' })
+              }
+            } else if (m.type === 'end') {
+              finish({
+                ok: true,
+                sampleRate: (m.sampleRate as number) ?? 0,
+                channels: (m.channels as number) ?? 0,
+                error: null
+              })
+            } else if (m.type === 'error') {
+              finish({
+                ok: false,
+                sampleRate: 0,
+                channels: 0,
+                error: (m.error as string) ?? 'decode-failed'
+              })
+            }
+          }
+          ipcRenderer.on('audio:pcm', onPcm)
+        })
+        .catch(() => finish({ ok: false, sampleRate: 0, channels: 0, error: 'start-failed' }))
+      return {
+        result,
+        cancel: () => {
+          finish({ ok: false, sampleRate: 0, channels: 0, error: 'cancelled' })
+          if (token) void ipcRenderer.invoke('audio:decode-cancel', token)
+        }
+      }
     }
   },
 

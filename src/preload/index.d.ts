@@ -45,13 +45,19 @@ declare global {
         }>
         readFile: (path: string) => Promise<{ ok: boolean; buffer?: ArrayBuffer; error?: string }>
         readBytes: (path: string) => Promise<Uint8Array>
-        audioDecode: (path: string) => Promise<{
-          ok: boolean
-          samples: ArrayBuffer | null
-          sampleRate: number
-          channels: number
-          error: string | null
-        }>
+        /** 流式音频解码：PCM 分块直通 onChunk；result 在流结束/失败时 resolve */
+        audioDecode: (
+          path: string,
+          onChunk: (data: ArrayBuffer) => void
+        ) => {
+          result: Promise<{
+            ok: boolean
+            sampleRate: number
+            channels: number
+            error: string | null
+          }>
+          cancel: () => void
+        }
       }
       exportApi: {
         pickOutput: (defaultName: string) => Promise<string | null>

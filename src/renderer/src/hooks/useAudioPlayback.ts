@@ -12,78 +12,92 @@ import { t } from '@shared/i18n'
 
 export type AudioStatus = 'empty' | 'loading' | 'ready' | 'error'
 
-/** Worker 解码结果：多声道原始数据（Transferable 回传） */
-interface WorkerDecodeResult {
+/** Worker 解码结果：多声道（播放）+ 单声道混音（频谱分析），全部纯 typed array transfer 回传 */
+export interface WorkerDecodeResult {
   channels: Float32Array[]
+  mono: Float32Array
   sampleRate: number
 }
 
 let decodeWorkerInst: Worker | null = null
 
-/** 用 Worker + OfflineAudioContext 解码（不阻塞主线程）；失败/不可用 → null（回退主线程） */
-function decodeAudioViaWorker(ab: ArrayBuffer): Promise<WorkerDecodeResult | null> {
-  return new Promise((resolve) => {
-    try {
-      decodeWorkerInst?.terminate()
-      const w = new Worker(new URL('../workers/audioDecode.worker.ts', import.meta.url), {
-        type: 'module'
-      })
-      decodeWorkerInst = w
-      const done = (r: WorkerDecodeResult | null): void => {
-        w.terminate()
-        if (decodeWorkerInst === w) decodeWorkerInst = null
-        resolve(r)
-      }
-      w.onmessage = (e: MessageEvent): void => {
-        const r = e.data as { ok?: boolean; channels?: Float32Array[]; sampleRate?: number }
-        if (r.ok && r.channels && r.channels.length > 0 && (r.sampleRate ?? 0) > 0) {
-          done({ channels: r.channels, sampleRate: r.sampleRate ?? 0 })
-        } else {
-          done(null)
-        }
-      }
-      w.onerror = (): void => done(null)
-      // 不 transfer：失败回退主线程解码时还要用原字节（12MB 拷贝仅数 ms）
-      w.postMessage(ab)
-    } catch {
-      resolve(null)
-    }
-  })
+/** Worker 消息统一解析：{ok, channels, mono, sampleRate} 经 transfer 回传 */
+function parseWorkerResult(e: MessageEvent): WorkerDecodeResult | null {
+  const r = e.data as {
+    ok?: boolean
+    channels?: Float32Array[]
+    mono?: Float32Array
+    sampleRate?: number
+  }
+  if (r.ok && r.channels && r.channels.length > 0 && r.mono && (r.sampleRate ?? 0) > 0) {
+    return { channels: r.channels, mono: r.mono, sampleRate: r.sampleRate ?? 0 }
+  }
+  return null
 }
 
-/** ffmpeg 输出的交错 f32 → Worker 内拆声道（零拷贝回传；主线程只剩 createBuffer+copy） */
-function pcmToChannelsViaWorker(
-  data: ArrayBuffer,
-  chN: number,
-  sampleRate: number
-): Promise<WorkerDecodeResult | null> {
-  return new Promise((resolve) => {
-    try {
-      decodeWorkerInst?.terminate()
-      const w = new Worker(new URL('../workers/audioDecode.worker.ts', import.meta.url), {
-        type: 'module'
-      })
-      decodeWorkerInst = w
-      const done = (r: WorkerDecodeResult | null): void => {
-        w.terminate()
-        if (decodeWorkerInst === w) decodeWorkerInst = null
-        resolve(r)
+/**
+ * 路径①：ffmpeg 子进程流式解码（main）→ PCM 4MB 块 transfer 直通 Worker，
+ * 拼接/拆声道/混单声道全部在 Worker 内完成（纯数据操作，零 WebAudio——实测本环境
+ * Worker 无 AudioBuffer/OfflineAudioContext）。主线程只剩 createBuffer+copyToChannel
+ * （实测 0–11ms），消除了「preload 全量组装 + contextBridge 大块克隆 + 主线程混音」
+ * 的 GC 卡顿源。cancel：终止 Worker + 取消 main 侧 ffmpeg 子进程。
+ */
+function startPcmStreamDecode(decodePath: string): {
+  promise: Promise<WorkerDecodeResult | null>
+  cancel: () => void
+} {
+  let settleFn: ((r: WorkerDecodeResult | null) => void) | null = null
+  const promise = new Promise<WorkerDecodeResult | null>((resolve) => {
+    settleFn = resolve
+  })
+  let w: Worker | null = null
+  let settled = false
+  const done = (r: WorkerDecodeResult | null): void => {
+    if (settled) return
+    settled = true
+    w?.terminate()
+    if (decodeWorkerInst === w) decodeWorkerInst = null
+    settleFn?.(r)
+  }
+  try {
+    decodeWorkerInst?.terminate()
+    w = new Worker(new URL('../workers/audioDecode.worker.ts', import.meta.url), {
+      type: 'module'
+    })
+    decodeWorkerInst = w
+    w.onmessage = (e: MessageEvent): void => done(parseWorkerResult(e))
+    w.onerror = (): void => done(null)
+    const session = window.api.project.audioDecode(decodePath, (chunk: ArrayBuffer) => {
+      // 块 transfer 进 Worker（零拷贝）；Worker 已终止则忽略
+      try {
+        w?.postMessage({ type: 'chunk', data: chunk }, [chunk])
+      } catch {
+        done(null)
       }
-      w.onmessage = (e: MessageEvent): void => {
-        const r = e.data as { ok?: boolean; channels?: Float32Array[]; sampleRate?: number }
-        if (r.ok && r.channels && r.channels.length > 0 && (r.sampleRate ?? 0) > 0) {
-          done({ channels: r.channels, sampleRate: r.sampleRate ?? 0 })
-        } else {
+    })
+    void session.result.then((res) => {
+      if (settled) return
+      if (res.ok && res.channels > 0 && res.sampleRate > 0) {
+        try {
+          w?.postMessage({ type: 'finalize', channels: res.channels, sampleRate: res.sampleRate })
+        } catch {
           done(null)
         }
+      } else {
+        done(null)
       }
-      w.onerror = (): void => done(null)
-      // data 可安全 transfer（ffmpeg 结果只喂这一处）
-      w.postMessage({ type: 'pcm', data, channels: chN, sampleRate }, [data])
-    } catch {
-      resolve(null)
+    })
+    return {
+      promise,
+      cancel: (): void => {
+        done(null)
+        session.cancel()
+      }
     }
-  })
+  } catch {
+    done(null)
+    return { promise, cancel: (): void => undefined }
+  }
 }
 
 export interface PlaybackApi {
@@ -227,10 +241,11 @@ export function useAudioPlayback(
   }, [])
 
   // 解码（音频文件变化时）：统一走异步路径，cancelled 守护竞态。
-  // 0.6.0 性能修复：先用 Worker + OfflineAudioContext 解码（不阻塞主线程——长 MP3 曾卡 1–3s），
-  // 失败时回退主线程 decodeAudioData。
+  // 路径①：ffmpeg 子进程流式解码（首选）→ Worker 纯数据拆声道/混音 → 主线程 createBuffer；
+  // 路径②（无 ffmpeg / ①失败时）：主线程 decodeAudioData（解码在 Chromium 内部异步完成）。
   useEffect(() => {
     let cancelled = false
+    let cancelDecode: (() => void) | null = null
     void (async () => {
       if (!audioFile) {
         bufferRef.current = null
@@ -252,9 +267,9 @@ export function useAudioPlayback(
         const ab = await audioFile.arrayBuffer()
         const ctx = ensureCtx()
         if (!ctx) throw new Error(t('playback.noWebAudio'))
-        let decoded: AudioBuffer | null = null
-        // 路径①：ffmpeg 子进程解码（渲染进程零解码 CPU，UI 永不卡；内存恒定 44.1kHz PCM）。
-        // 拖放文件走磁盘路径；无路径来源（内存生成/粘贴）先写临时文件再交给 ffmpeg。
+        let result: WorkerDecodeResult | null = null
+        // 路径①：ffmpeg 子进程解码。拖放文件走磁盘路径；
+        // 无路径来源（内存生成/粘贴）先写临时文件再交给 ffmpeg。
         let decodePath = window.api.getFilePath(audioFile)
         if (!decodePath) {
           try {
@@ -268,57 +283,50 @@ export function useAudioPlayback(
         }
         if (decodePath) {
           try {
-            const ffr = await window.api.project.audioDecode(decodePath)
-            if (!cancelled && ffr.ok && ffr.samples && ffr.channels > 0 && ffr.sampleRate > 0) {
-              // 拆声道挪进 Worker（主线程只剩 createBuffer+copy，消掉 ~400ms 阻塞与 GC 尖刺）
-              const pc = await pcmToChannelsViaWorker(ffr.samples, ffr.channels, ffr.sampleRate)
-              if (!cancelled && pc) {
-                decoded = ctx.createBuffer(pc.channels.length, pc.channels[0].length, pc.sampleRate)
-                for (let c = 0; c < pc.channels.length; c++) {
-                  decoded.copyToChannel(pc.channels[c] as Float32Array<ArrayBuffer>, c)
-                }
-              }
-            }
+            const s = startPcmStreamDecode(decodePath)
+            cancelDecode = s.cancel
+            result = await s.promise
           } catch {
-            decoded = null
+            result = null
           }
+          cancelDecode = null
+          // 等待期间被取消（换文件/新建项目）→ 直接退出，不再跑回退路径
+          if (cancelled) return
         }
-        // 路径②：Worker + OfflineAudioContext（无 ffmpeg / ffmpeg 失败时）
-        if (!decoded) {
-          try {
-            const res = await decodeAudioViaWorker(ab)
-            if (!cancelled && res) {
-              decoded = ctx.createBuffer(
-                res.channels.length,
-                res.channels[0].length,
-                res.sampleRate
-              )
-              for (let c = 0; c < res.channels.length; c++) {
-                decoded.copyToChannel(res.channels[c] as Float32Array<ArrayBuffer>, c)
-              }
-            }
-          } catch {
-            decoded = null
+        let decoded: AudioBuffer
+        let mono: Float32Array
+        let sampleRate: number
+        if (result) {
+          // Worker 已拆好声道 + 混好单声道；主线程只 createBuffer+copy（实测 0–11ms）
+          decoded = ctx.createBuffer(
+            result.channels.length,
+            result.channels[0].length,
+            result.sampleRate
+          )
+          for (let c = 0; c < result.channels.length; c++) {
+            decoded.copyToChannel(result.channels[c] as Float32Array<ArrayBuffer>, c)
           }
-        }
-        // 路径③：最后兜底——主线程 WebAudio 解码（仅在无可用的 ffmpeg 且 Worker 失败时）
-        if (!decoded) {
+          mono = result.mono
+          sampleRate = result.sampleRate
+        } else {
+          // 路径②：最后兜底——decodeAudioData（仅无 ffmpeg / 流式失败时；异步解码不阻塞 UI）
           decoded = await ctx.decodeAudioData(ab)
+          const channels: Float32Array[] = []
+          for (let c = 0; c < decoded.numberOfChannels; c++) {
+            channels.push(decoded.getChannelData(c))
+          }
+          mono = mixToMono(channels, decoded.length)
+          sampleRate = decoded.sampleRate
         }
         if (cancelled) return
-        const channels: Float32Array[] = []
-        for (let c = 0; c < decoded.numberOfChannels; c++) {
-          channels.push(decoded.getChannelData(c))
-        }
-        const mono = mixToMono(channels, decoded.length)
         bufferRef.current = decoded
         // 频率范围取自布局配置（预览与导出共用同一分析器 → 所见即所得）
         const range = normalizeFreqRange(
           configRef.current.freqMin,
           configRef.current.freqMax,
-          decoded.sampleRate
+          sampleRate
         )
-        const an = createSpectrumAnalyzer(mono, decoded.sampleRate, {
+        const an = createSpectrumAnalyzer(mono, sampleRate, {
           freqMin: range.freqMin,
           freqMax: range.freqMax
         })
@@ -340,6 +348,9 @@ export function useAudioPlayback(
     })()
     return () => {
       cancelled = true
+      // 取消在途解码：终止 Worker + 杀掉 main 侧 ffmpeg 子进程
+      //（换文件 / 新建项目时不再有空转的解码流与内存驻留）
+      cancelDecode?.()
     }
   }, [audioFile, computeBars, normalizeFreqRange])
 
