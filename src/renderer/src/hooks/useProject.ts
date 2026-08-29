@@ -5,14 +5,17 @@ import {
   BeatFxConfig,
   CanvasFxConfig,
   DEFAULT_LAYOUT,
+  EditorConfig,
   ExportConfig,
   IntroOutroConfig,
+  LayerItem,
   MainImageConfig,
   NormRect,
   OverlayLayerConfig,
   ProjectLayout,
   TextLayerConfig,
-  VisualizerConfig
+  VisualizerConfig,
+  defaultLayerOrder
 } from '@shared/layout'
 import type { ProjectFile } from '@shared/project'
 import { t } from '@shared/i18n'
@@ -130,6 +133,12 @@ export function useProject(): {
   removeOverlayLayer: (id: string) => void
   /** 附加层：z 序上移/下移（-1=上，1=下） */
   moveOverlayLayer: (id: string, dir: -1 | 1) => void
+  /** 图层（0.9.0）：隐藏/锁定切换（None-null 时物化默认序） */
+  updateLayerState: (id: string, patch: Partial<Pick<LayerItem, 'hidden' | 'locked'>>) => void
+  /** 图层（0.9.0）：z 序上移/下移 */
+  moveLayerState: (id: string, dir: -1 | 1) => void
+  /** 编辑器选项（0.9.0）：吸附开关等 */
+  updateEditor: (patch: Partial<EditorConfig>) => void
   setAudioFile: (file: File | null) => void
   setBgFile: (file: File | null) => void
   clearBgImage: () => void
@@ -436,15 +445,36 @@ export function useProject(): {
     }
   }, [])
 
+  /** 图层清单物化（0.9.0）：layers=null 时按默认序展开；已有清单则补入缺失项（如新附加层） */
+  const materializeLayers = useCallback((cur: ProjectLayout): LayerItem[] => {
+    const def = defaultLayerOrder((cur.overlayLayers ?? []).map((o) => 'overlay:' + o.id))
+    if (!cur.layers) return def.map((id) => ({ id, hidden: false, locked: false }))
+    const ids = new Set(cur.layers.map((x) => x.id))
+    const missing = def.filter((id) => !ids.has(id))
+    if (missing.length === 0) return cur.layers
+    const out = [...cur.layers]
+    const mi = out.findIndex((x) => x.id === 'main')
+    out.splice(
+      mi < 0 ? out.length : mi + 1,
+      0,
+      ...missing.map((id) => ({ id, hidden: false, locked: false }))
+    )
+    return out
+  }, [])
+
   const addOverlayLayer = useCallback((): string => {
     const layer = overlayDefaults()
     pushHistory()
+    const cur = layoutRef.current
     applyLayout({
-      ...layoutRef.current,
-      overlayLayers: [...layoutRef.current.overlayLayers, layer]
+      ...cur,
+      overlayLayers: [...cur.overlayLayers, layer],
+      layers: cur.layers
+        ? materializeLayers({ ...cur, overlayLayers: [...cur.overlayLayers, layer] })
+        : null
     })
     return layer.id
-  }, [applyLayout, overlayDefaults, pushHistory])
+  }, [applyLayout, materializeLayers, overlayDefaults, pushHistory])
 
   const updateOverlayLayer = useCallback(
     (id: string, patch: Partial<OverlayLayerConfig>) => {
@@ -462,9 +492,11 @@ export function useProject(): {
   const removeOverlayLayer = useCallback(
     (id: string) => {
       pushHistory()
+      const cur = layoutRef.current
       applyLayout({
-        ...layoutRef.current,
-        overlayLayers: layoutRef.current.overlayLayers.filter((o) => o.id !== id)
+        ...cur,
+        overlayLayers: cur.overlayLayers.filter((o) => o.id !== id),
+        layers: cur.layers ? cur.layers.filter((x) => x.id !== 'overlay:' + id) : null
       })
       setAssets((prev) => {
         const old = prev.overlayImages?.[id]
@@ -480,14 +512,71 @@ export function useProject(): {
   const moveOverlayLayer = useCallback(
     (id: string, dir: -1 | 1) => {
       pushHistory()
-      const arr = [...layoutRef.current.overlayLayers]
+      const cur = layoutRef.current
+      const arr = [...cur.overlayLayers]
       const i = arr.findIndex((o) => o.id === id)
       const j = i + dir
       if (i < 0 || j < 0 || j >= arr.length) return
       const tmp = arr[i]
       arr[i] = arr[j]
       arr[j] = tmp
-      applyLayout({ ...layoutRef.current, overlayLayers: arr })
+      // 已物化图层清单：同步交换两个附加层条目（保持与 overlayLayers 数组序一致）
+      let layers = cur.layers
+      if (layers) {
+        const la = layers.findIndex((x) => x.id === 'overlay:' + arr[i].id)
+        const lb = layers.findIndex((x) => x.id === 'overlay:' + arr[j].id)
+        if (la >= 0 && lb >= 0) {
+          const out = [...layers]
+          const t = out[la]
+          out[la] = out[lb]
+          out[lb] = t
+          layers = out
+        }
+      }
+      applyLayout({ ...cur, overlayLayers: arr, layers })
+    },
+    [applyLayout, pushHistory]
+  )
+
+  /** 0.9.0：图层隐藏/锁定（首次编辑物化清单） */
+  const updateLayerState = useCallback(
+    (id: string, patch: Partial<Pick<LayerItem, 'hidden' | 'locked'>>) => {
+      pushHistory()
+      const cur = layoutRef.current
+      const next = materializeLayers(cur)
+      const hit = next.find((x) => x.id === id)
+      if (hit) {
+        Object.assign(hit, patch)
+      } else {
+        next.push({ id, hidden: patch.hidden ?? false, locked: patch.locked ?? false })
+      }
+      applyLayout({ ...cur, layers: next })
+    },
+    [applyLayout, materializeLayers, pushHistory]
+  )
+
+  /** 0.9.0：图层 z 序上移/下移 */
+  const moveLayerState = useCallback(
+    (id: string, dir: -1 | 1) => {
+      pushHistory()
+      const cur = layoutRef.current
+      const arr = materializeLayers(cur)
+      const i = arr.findIndex((x) => x.id === id)
+      const j = i + dir
+      if (i < 0 || j < 0 || j >= arr.length) return
+      const tmp = arr[i]
+      arr[i] = arr[j]
+      arr[j] = tmp
+      applyLayout({ ...cur, layers: arr })
+    },
+    [applyLayout, materializeLayers, pushHistory]
+  )
+
+  /** 0.9.0：编辑器选项（吸附开关等） */
+  const updateEditor = useCallback(
+    (patch: Partial<EditorConfig>) => {
+      pushHistory()
+      applyLayout({ ...layoutRef.current, editor: { ...layoutRef.current.editor, ...patch } })
     },
     [applyLayout, pushHistory]
   )
@@ -860,6 +949,9 @@ export function useProject(): {
     updateOverlayLayer,
     removeOverlayLayer,
     moveOverlayLayer,
+    updateLayerState,
+    moveLayerState,
+    updateEditor,
     saveProject,
     loadProject,
     resetProject,

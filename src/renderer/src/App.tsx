@@ -179,7 +179,8 @@ function runVisualChecks(stage: Konva.Stage): VisualCheckReport {
         x: Math.round(0.7 * 1920 * scale + offX),
         y: Math.round(0.18 * 1080 * scale + offY)
       })
-      return !!hp && hp.getLayer()?.name() === 'text'
+      // 0.9.0：文本拆为 songTitle/artist 两个图层（z 序自由），命中校验两个名字都接受
+      return !!hp && ['songTitle', 'artist'].includes(hp.getLayer()?.name() ?? '')
     } catch {
       return false
     }

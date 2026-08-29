@@ -103,6 +103,22 @@ export interface OverlayLayerConfig {
   fillMode: 'contain'
 }
 
+/** 0.9.0 图层项（图层面板）：参与排序/显隐/锁定的场景元素；fx 特效层（片头片尾黑幕/标题卡）不参与（永远置顶） */
+export interface LayerItem {
+  /** 'background' | 'main' | 'songTitle' | 'artist' | 'visualizer' | 'overlay:<layerId>' */
+  id: string
+  /** 隐藏：不渲染（预览/导出同源——同一渲染代码） */
+  hidden: boolean
+  /** 画布锁定：不可选中/拖动/缩放；参数面板仍可调 */
+  locked: boolean
+}
+
+/** 0.9.0 编辑器选项 */
+export interface EditorConfig {
+  /** 吸附对齐线（默认开） */
+  snapEnabled: boolean
+}
+
 /** 主图动效（0.5.0） */
 export interface ImageFxConfig {
   /** 呼吸缩放 0–1（0=关；幅度 = 强度×4% 缩放） */
@@ -275,6 +291,10 @@ export interface ProjectLayout {
   audio: AudioEngineConfig
   /** 附加图像层（0.8.0，默认空） */
   overlayLayers: OverlayLayerConfig[]
+  /** 0.9.0 图层清单（z 序=数组序）；null = 默认顺序（背景→主图→附加层→歌名→作者→可视化） */
+  layers: LayerItem[] | null
+  /** 0.9.0 编辑器选项 */
+  editor: EditorConfig
   export: ExportConfig
 }
 
@@ -377,13 +397,31 @@ export const DEFAULT_LAYOUT: ProjectLayout = {
   beat: { pulse: 0, burst: 0, particlePreset: 'snow', particleDensity: 0 },
   audio: { leadMs: 0, fadeInSec: 0, fadeOutSec: 0 },
   overlayLayers: [],
+  layers: null,
+  editor: { snapEnabled: true },
   export: {
     resolutionId: '1080p',
     fps: 30
   }
 }
 
-/** 0.5.0 动效快照：是否存在随时间变化的特效（无 → 导出走静态缓存快速路径，输出与 0.4.0 一致） */
+/** 默认层序（0.9.0）：背景 → 主图 → 附加层（数组序）→ 歌名 → 作者 → 可视化 */
+export function defaultLayerOrder(overlayIds: string[]): string[] {
+  return ['background', 'main', ...overlayIds, 'songTitle', 'artist', 'visualizer']
+}
+
+/** 0.9.0：图层顺序是否异于默认（异于 → 导出走全层逐帧路径，保证任意 z 序所见即所得） */
+export function hasCustomLayerOrder(layout: ProjectLayout): boolean {
+  if (!layout.layers) return false
+  const def = defaultLayerOrder((layout.overlayLayers ?? []).map((o) => 'overlay:' + o.id))
+  if (layout.layers.length !== def.length) return true
+  for (let i = 0; i < def.length; i++) {
+    if (layout.layers[i]?.id !== def[i]) return true
+  }
+  return false
+}
+
+/** 0.9.0 动效快照：是否存在随时间变化的特效（无 → 导出走静态缓存快速路径，输出与 0.4.0 一致） */
 export function hasDynamicFx(layout: ProjectLayout): boolean {
   const b = layout.background.fx
   if (b.kenBurns > 0 || b.bassBrightness > 0 || b.bassHue > 0) return true

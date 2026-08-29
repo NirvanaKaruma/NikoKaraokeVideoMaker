@@ -5,6 +5,8 @@ import {
   LOGICAL_WIDTH,
   RESOLUTIONS,
   clampNormRect,
+  defaultLayerOrder,
+  hasCustomLayerOrder,
   hasDynamicFx,
   normToPixel,
   pixelToNorm,
@@ -95,6 +97,9 @@ describe('归一化布局模型', () => {
     expect(DEFAULT_LAYOUT.audio.fadeOutSec).toBe(0)
     // 0.8.0 附加层：默认空（多层自由增删，z 序=数组序）
     expect(DEFAULT_LAYOUT.overlayLayers).toEqual([])
+    // 0.9.0 图层：默认 null（= 默认顺序）；吸附默认开
+    expect(DEFAULT_LAYOUT.layers).toBeNull()
+    expect(DEFAULT_LAYOUT.editor.snapEnabled).toBe(true)
   })
 
   it('主图默认高≈90%、宽≈40%，左侧垂直居中（上移后 y=3%）', () => {
@@ -198,6 +203,80 @@ describe('归一化布局模型', () => {
         ]
       })
     ).toBe(false)
+  })
+
+  it('defaultLayerOrder / hasCustomLayerOrder：默认序 false；任一换位/增删 true；overlay 数组序跟随', () => {
+    const base = structuredClone(DEFAULT_LAYOUT)
+    expect(defaultLayerOrder([])).toEqual([
+      'background',
+      'main',
+      'songTitle',
+      'artist',
+      'visualizer'
+    ])
+    expect(hasCustomLayerOrder(base)).toBe(false)
+    // overlay 默认序（随 overlayLayers 数组序）
+    const withOv = structuredClone(base)
+    withOv.overlayLayers = [
+      {
+        id: 'a',
+        rect: { x: 0, y: 0, w: 0.1, h: 0.1 },
+        opacity: 1,
+        fx: {
+          breathe: 0,
+          breathePeriod: 4,
+          rotateDeg: 0,
+          glowPulse: 0,
+          mask: 'none',
+          border: 0,
+          borderColor: '#fff'
+        },
+        entry: { type: 'none', durationSec: 1.2, delaySec: 0 },
+        fillMode: 'contain'
+      } as OverlayLayerConfig,
+      {
+        id: 'b',
+        rect: { x: 0, y: 0, w: 0.1, h: 0.1 },
+        opacity: 1,
+        fx: {
+          breathe: 0,
+          breathePeriod: 4,
+          rotateDeg: 0,
+          glowPulse: 0,
+          mask: 'none',
+          border: 0,
+          borderColor: '#fff'
+        },
+        entry: { type: 'none', durationSec: 1.2, delaySec: 0 },
+        fillMode: 'contain'
+      } as OverlayLayerConfig
+    ]
+    expect(defaultLayerOrder(['overlay:a', 'overlay:b'])).toEqual([
+      'background',
+      'main',
+      'overlay:a',
+      'overlay:b',
+      'songTitle',
+      'artist',
+      'visualizer'
+    ])
+    // 未定制 layers → false（即使有 overlay 也未定制 z）
+    expect(hasCustomLayerOrder(withOv)).toBe(false)
+    // 定制：可视化提前到主图上方 → true
+    const custom = structuredClone(withOv)
+    custom.layers = [
+      { id: 'background', hidden: false, locked: false },
+      { id: 'visualizer', hidden: false, locked: false },
+      { id: 'main', hidden: false, locked: false }
+    ]
+    expect(hasCustomLayerOrder(custom)).toBe(true)
+    // 缺项 → true
+    const short = structuredClone(withOv)
+    short.layers = [
+      { id: 'background', hidden: false, locked: false },
+      { id: 'main', hidden: false, locked: false }
+    ]
+    expect(hasCustomLayerOrder(short)).toBe(true)
   })
 
   it('normToPixel / pixelToNorm 往返一致', () => {

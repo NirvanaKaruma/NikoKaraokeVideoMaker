@@ -1,5 +1,10 @@
 import { ArrayBufferTarget, Muxer } from 'mp4-muxer'
-import { hasDynamicFx, type ProjectLayout, type ResolutionOption } from '@shared/layout'
+import {
+  hasCustomLayerOrder,
+  hasDynamicFx,
+  type ProjectLayout,
+  type ResolutionOption
+} from '@shared/layout'
 import { bandEnergiesAt, spectrumAt, type SpectrumAnalyzer } from '@shared/spectrum'
 import { beatEnvelope, beatPeriod, smoothBarsFx, type SmoothFxState } from '@shared/fx'
 import { drawCanvasFx } from '@shared/canvasfx'
@@ -258,7 +263,7 @@ export async function encodeVideo(opts: EncodeVideoOptions): Promise<ArrayBuffer
 
   // 0.5.0 动效：存在随时间变化的特效 → 逐帧全层渲染（同一批节点）；
   // 否则走静态缓存快速路径（与 0.4.0 输出一致）。
-  const dynamic = hasDynamicFx(layout)
+  const dynamic = hasDynamicFx(layout) || hasCustomLayerOrder(layout)
   const staticCanvas = dynamic ? null : stage.renderStatic()
   const fxState: SmoothFxState = { prev: null, peak: null }
   const vizCfg = layout.visualizer

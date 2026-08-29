@@ -126,7 +126,7 @@ export function ExportStageHost(props: ExportStageHostProps): React.JSX.Element 
           bars={[]}
           analyzer={analyzer}
           canvasSize={{ width, height }}
-          layers={['background', 'main', 'overlay', 'text']}
+          layers={['background', 'main', 'overlay', 'songTitle', 'artist']}
           layerFxRef={fxStaticHandleRef}
           audioLeadSec={leadSec}
           mediaDurationSec={mediaDurationSec}

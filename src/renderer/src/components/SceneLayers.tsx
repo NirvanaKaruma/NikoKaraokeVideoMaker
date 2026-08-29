@@ -29,6 +29,7 @@ import {
   type OverlayLayerConfig,
   type PixelRect
 } from '@shared/layout'
+import { defaultLayerOrder } from '@shared/layout'
 import { colorAt } from '@shared/color'
 import {
   bandEnergySmoothed,
@@ -55,7 +56,8 @@ const SEED_BG_FX = 987654321
 export type SelectableId =
   'mainImage' | 'songTitle' | 'artist' | 'visualizer' | `overlay:${string}` | null
 
-export type SceneLayerName = 'background' | 'main' | 'overlay' | 'text' | 'visualizer' | 'fx'
+export type SceneLayerName =
+  'background' | 'main' | 'overlay' | 'songTitle' | 'artist' | 'visualizer' | 'fx'
 
 /** 图像源尺寸（Image 用 naturalWidth，Canvas 用 width） */
 function imgW(el: CanvasImageElement): number {
@@ -438,6 +440,7 @@ function TextNode({
   cfg,
   canvas,
   selected,
+  locked,
   onSelect,
   onRectChange,
   textFxSlotRef
@@ -446,6 +449,8 @@ function TextNode({
   cfg: TextLayerConfig
   canvas: CanvasSize
   selected: boolean
+  /** 0.9.0 画布锁定 */
+  locked?: boolean
   onSelect: (id: SelectableId) => void
   onRectChange: (rect: NormRect) => void
   /** 每帧入场动画更新槽（SceneLayers 分发 frame(t)） */
@@ -460,11 +465,11 @@ function TextNode({
   useEffect(() => {
     const tr = trRef.current
     const node = groupRef.current
-    if (tr && node && selected) {
+    if (tr && node && selected && !locked) {
       tr.nodes([node])
       tr.getLayer()?.batchDraw()
     }
-  }, [selected, cfg.rect])
+  }, [selected, locked, cfg.rect])
 
   // 入场动画逐帧应用：进度→按类型变换；完成后复位到最终态（防止残留半透明/位移/字符截断）
   useEffect(() => {
@@ -525,10 +530,16 @@ function TextNode({
         y={px.y}
         width={px.w}
         height={px.h}
-        draggable
-        onClick={() => onSelect(kind)}
-        onTap={() => onSelect(kind)}
-        onDragStart={() => onSelect(kind)}
+        draggable={!locked}
+        onClick={() => {
+          if (!locked) onSelect(kind)
+        }}
+        onTap={() => {
+          if (!locked) onSelect(kind)
+        }}
+        onDragStart={() => {
+          if (!locked) onSelect(kind)
+        }}
         onDragEnd={(e: KonvaEventObject<DragEvent>) => commit(e.target as Konva.Group)}
         onTransform={() => {
           // 文本框缩放：字号保持不变，宽度实时重排文字
@@ -582,7 +593,7 @@ function TextNode({
           listening={false}
         />
       </Group>
-      {selected && (
+      {selected && !locked && (
         <Transformer
           ref={trRef}
           rotateEnabled={false}
@@ -807,6 +818,7 @@ function SharedImageLayer({
   beatPeriodSec,
   entry,
   selected,
+  locked,
   onSelect,
   onRectChange,
   canvas,
@@ -823,6 +835,8 @@ function SharedImageLayer({
   /** 入场动画（附加层专用；主图不传 = 无） */
   entry?: OverlayEntryConfig | null
   selected: boolean
+  /** 0.9.0 画布锁定：不可选中/拖动/缩放（参数面板仍可调） */
+  locked?: boolean
   onSelect: () => void
   onRectChange: (rect: NormRect) => void
   canvas: CanvasSize
@@ -839,11 +853,11 @@ function SharedImageLayer({
   useEffect(() => {
     const tr = trRef.current
     const node = groupRef.current
-    if (tr && node && selected) {
+    if (tr && node && selected && !locked) {
       tr.nodes([node])
       tr.getLayer()?.batchDraw()
     }
-  }, [selected, imageElement, fillMode])
+  }, [selected, locked, imageElement, fillMode])
 
   const commitFromGroup = (node: Konva.Group): void => {
     const r = {
@@ -863,10 +877,16 @@ function SharedImageLayer({
         y={px.y}
         width={px.w}
         height={px.h}
-        draggable
-        onClick={onSelect}
-        onTap={onSelect}
-        onDragStart={onSelect}
+        draggable={!locked}
+        onClick={() => {
+          if (!locked) onSelect()
+        }}
+        onTap={() => {
+          if (!locked) onSelect()
+        }}
+        onDragStart={() => {
+          if (!locked) onSelect()
+        }}
         onDragEnd={(e: KonvaEventObject<DragEvent>) => commitFromGroup(e.target as Konva.Group)}
         onTransformEnd={(e: KonvaEventObject<Event>) => {
           const node = e.target as Konva.Group
@@ -926,7 +946,7 @@ function SharedImageLayer({
           </>
         )}
       </Group>
-      {selected && imageElement && (
+      {selected && !locked && imageElement && (
         <Transformer
           ref={trRef}
           keepRatio
@@ -968,12 +988,15 @@ function MainImageLayer({
   coverElement,
   canvas,
   selectedId,
+  locked,
   onSelect,
   onMainRectChange,
   layerFxSlotRef
 }: MainImageLayerProps & {
   /** 每帧动效更新槽（SceneLayers 分发 frame(t, audioT)） */
   layerFxSlotRef?: { current: ((t: number, audioT: number) => void) | null }
+  /** 0.9.0 画布锁定 */
+  locked?: boolean
 }): React.JSX.Element {
   return (
     <SharedImageLayer
@@ -985,6 +1008,7 @@ function MainImageLayer({
       beatPulse={layout.beat.pulse}
       beatPeriodSec={beatPeriod(layout.visualizer.bpm, layout.visualizer.beatIntervalSec)}
       selected={selectedId === 'mainImage'}
+      locked={locked}
       onSelect={() => onSelect('mainImage')}
       onRectChange={onMainRectChange}
       canvas={canvas}
@@ -1000,6 +1024,7 @@ function OverlayLayer({
   imageElement,
   canvas,
   selected,
+  locked,
   onSelect,
   onRectChange,
   slotRegistryRef,
@@ -1010,6 +1035,8 @@ function OverlayLayer({
   imageElement: CanvasImageElement | null
   canvas: CanvasSize
   selected: boolean
+  /** 0.9.0 画布锁定 */
+  locked?: boolean
   onSelect: (id: SelectableId) => void
   onRectChange: (rect: NormRect) => void
   /** 动效槽注册表（SceneLayers 持有）；本层自持 ref，经 effect 注册/注销 */
@@ -1038,6 +1065,7 @@ function OverlayLayer({
       beatPeriodSec={beatPeriodSec}
       entry={cfg.entry}
       selected={selected}
+      locked={locked}
       onSelect={() => onSelect(`overlay:${cfg.id}`)}
       onRectChange={onRectChange}
       canvas={canvas}
@@ -1053,6 +1081,8 @@ interface VisualizerLayerProps {
   bars: number[]
   canvas: CanvasSize
   selected: boolean
+  /** 0.9.0 画布锁定 */
+  locked?: boolean
   onSelect: (id: SelectableId) => void
   onRectChange: (rect: NormRect) => void
   barsHandleRef?: { current: ((bars: number[]) => void) | null }
@@ -1081,11 +1111,13 @@ function VisualizerLayer({
   bars,
   canvas,
   selected,
+  locked,
   onSelect,
   onRectChange,
   barsHandleRef,
   frameTRef
 }: VisualizerLayerProps): React.JSX.Element {
+  const configLocked = locked === true
   const groupRef = useRef<Konva.Group>(null)
   const trRef = useRef<Konva.Transformer>(null)
   const barNodes = useRef<(Konva.Rect | null)[]>([])
@@ -1405,10 +1437,16 @@ function VisualizerLayer({
         y={px.y}
         width={px.w}
         height={px.h}
-        draggable
-        onClick={() => onSelect('visualizer')}
-        onTap={() => onSelect('visualizer')}
-        onDragStart={() => onSelect('visualizer')}
+        draggable={!configLocked}
+        onClick={() => {
+          if (!configLocked) onSelect('visualizer')
+        }}
+        onTap={() => {
+          if (!configLocked) onSelect('visualizer')
+        }}
+        onDragStart={() => {
+          if (!configLocked) onSelect('visualizer')
+        }}
         onDragEnd={(e: KonvaEventObject<DragEvent>) => {
           const node = e.target as Konva.Group
           const w = Math.max(40, node.width())
@@ -1425,7 +1463,7 @@ function VisualizerLayer({
         <Rect width={px.w} height={px.h} fill="rgba(0,0,0,0.01)" />
         {renderShape()}
       </Group>
-      {selected && (
+      {selected && !configLocked && (
         <Transformer
           ref={trRef}
           rotateEnabled={false}
@@ -1515,91 +1553,113 @@ export function SceneLayers(props: SceneLayersProps): React.JSX.Element {
     }
   }, [layerFxRef])
 
+  // 0.9.0：按图层顺序渲染（layers 数组序；null = 默认序：背景→主图→附加层→歌名→作者→可视化）；
+  // hidden 不渲染、locked 画布禁选禁拖（预览/导出同一渲染代码 → 同源）；fx 特效层永远最后（置顶）
+  const layerItems: { id: string; hidden: boolean; locked: boolean }[] =
+    layout.layers ??
+    defaultLayerOrder((layout.overlayLayers ?? []).map((o) => 'overlay:' + o.id)).map((id) => ({
+      id,
+      hidden: false,
+      locked: false
+    }))
+  const elemName = (id: string): SceneLayerName =>
+    id.startsWith('overlay:') ? 'overlay' : (id as SceneLayerName)
   return (
     <>
-      {show('background') && (
-        <Layer name="background" listening={false}>
-          <BackgroundLayer
-            layout={layout}
-            coverElement={coverElement}
-            bgElement={bgElement}
-            analyzer={analyzer}
-            canvas={canvas}
-            layerFxSlotRef={bgFxSlot}
-          />
-        </Layer>
-      )}
-      {show('main') && (
-        <Layer name="main">
-          <MainImageLayer
-            layout={layout}
-            coverElement={coverElement}
-            canvas={canvas}
-            selectedId={selectedId}
-            onSelect={onSelect}
-            onMainRectChange={onMainRectChange}
-            layerFxSlotRef={imgFxSlot}
-          />
-        </Layer>
-      )}
-      {show('overlay') && (layout.overlayLayers ?? []).length > 0 && (
-        <Layer name="overlay">
-          {layout.overlayLayers.map((o) => {
+      {layerItems.map((item) => {
+        if (item.hidden) return null
+        if (!show(elemName(item.id))) return null
+        switch (item.id) {
+          case 'background':
             return (
-              <OverlayLayer
-                key={o.id}
-                cfg={o}
-                imageElement={overlayElements?.[o.id] ?? null}
-                canvas={canvas}
-                selected={selectedId === 'overlay:' + o.id}
-                onSelect={onSelect}
-                onRectChange={(rect) => onOverlayRectChange?.(o.id, rect)}
-                slotRegistryRef={overlaySlotsRef}
-                beatPulse={layout.beat.pulse}
-                beatPeriodSec={beatPeriod(layout.visualizer.bpm, layout.visualizer.beatIntervalSec)}
-              />
+              <Layer key={item.id} name="background" listening={false}>
+                <BackgroundLayer
+                  layout={layout}
+                  coverElement={coverElement}
+                  bgElement={bgElement}
+                  analyzer={analyzer}
+                  canvas={canvas}
+                  layerFxSlotRef={bgFxSlot}
+                />
+              </Layer>
             )
-          })}
-        </Layer>
-      )}
-      {show('text') && (
-        <Layer name="text">
-          <TextNode
-            kind="songTitle"
-            cfg={layout.texts.songTitle}
-            canvas={canvas}
-            selected={selectedId === 'songTitle'}
-            onSelect={onSelect}
-            onRectChange={(rect) => onTextRectChange('songTitle', rect)}
-            textFxSlotRef={titleFxSlot}
-          />
-          <TextNode
-            kind="artist"
-            cfg={layout.texts.artist}
-            canvas={canvas}
-            selected={selectedId === 'artist'}
-            onSelect={onSelect}
-            onRectChange={(rect) => onTextRectChange('artist', rect)}
-            textFxSlotRef={artistFxSlot}
-          />
-        </Layer>
-      )}
-      {show('visualizer') && (
-        <Layer name="visualizer">
-          <VisualizerLayer
-            config={layout.visualizer}
-            bars={bars}
-            canvas={canvas}
-            selected={selectedId === 'visualizer'}
-            onSelect={onSelect}
-            onRectChange={onVisualizerRectChange}
-            barsHandleRef={barsHandleRef}
-            frameTRef={frameTRef}
-          />
-        </Layer>
-      )}
+          case 'main':
+            return (
+              <Layer key={item.id} name="main">
+                <MainImageLayer
+                  layout={layout}
+                  coverElement={coverElement}
+                  canvas={canvas}
+                  selectedId={selectedId}
+                  locked={item.locked}
+                  onSelect={onSelect}
+                  onMainRectChange={onMainRectChange}
+                  layerFxSlotRef={imgFxSlot}
+                />
+              </Layer>
+            )
+          case 'songTitle':
+          case 'artist': {
+            const kind = item.id
+            return (
+              <Layer key={item.id} name={kind}>
+                <TextNode
+                  kind={kind}
+                  cfg={kind === 'songTitle' ? layout.texts.songTitle : layout.texts.artist}
+                  canvas={canvas}
+                  selected={selectedId === kind}
+                  locked={item.locked}
+                  onSelect={onSelect}
+                  onRectChange={(rect) => onTextRectChange(kind, rect)}
+                  textFxSlotRef={kind === 'songTitle' ? titleFxSlot : artistFxSlot}
+                />
+              </Layer>
+            )
+          }
+          case 'visualizer':
+            return (
+              <Layer key={item.id} name="visualizer">
+                <VisualizerLayer
+                  config={layout.visualizer}
+                  bars={bars}
+                  canvas={canvas}
+                  selected={selectedId === 'visualizer'}
+                  locked={item.locked}
+                  onSelect={onSelect}
+                  onRectChange={onVisualizerRectChange}
+                  barsHandleRef={barsHandleRef}
+                  frameTRef={frameTRef}
+                />
+              </Layer>
+            )
+          default: {
+            if (!item.id.startsWith('overlay:')) return null
+            const o = (layout.overlayLayers ?? []).find((x) => 'overlay:' + x.id === item.id)
+            if (!o) return null
+            return (
+              <Layer key={item.id} name="overlay">
+                <OverlayLayer
+                  cfg={o}
+                  imageElement={overlayElements?.[o.id] ?? null}
+                  canvas={canvas}
+                  selected={selectedId === 'overlay:' + o.id}
+                  locked={item.locked}
+                  onSelect={onSelect}
+                  onRectChange={(rect) => onOverlayRectChange?.(o.id, rect)}
+                  slotRegistryRef={overlaySlotsRef}
+                  beatPulse={layout.beat.pulse}
+                  beatPeriodSec={beatPeriod(
+                    layout.visualizer.bpm,
+                    layout.visualizer.beatIntervalSec
+                  )}
+                />
+              </Layer>
+            )
+          }
+        }
+      })}
       {show('fx') && (
-        <Layer name="fx" listening={false}>
+        <Layer key="fx" name="fx" listening={false}>
           <IntroOutroLayer
             layout={layout}
             canvas={canvas}
