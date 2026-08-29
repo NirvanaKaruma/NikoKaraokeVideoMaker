@@ -389,6 +389,13 @@ export const zhCn = {
       presetStar: '星空',
       presetBubble: '气泡',
       particleDensity: '粒子密度：{v}%'
+    },
+    audioTitle: '音频工程',
+    audio: {
+      leadMs: '前导留白：{v}ms',
+      fadeInSec: '音频淡入：{v}s',
+      fadeOutSec: '音频淡出：{v}s',
+      note: '前导仅作用导出（视频开头以黑场/标题卡填充，预览保持原音轨）；淡入淡出作用导出音频。'
     }
   },
   closeGuard: {

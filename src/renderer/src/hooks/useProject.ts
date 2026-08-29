@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
+  AudioEngineConfig,
   BackgroundConfig,
   BeatFxConfig,
   CanvasFxConfig,
@@ -95,6 +96,7 @@ export function useProject(): {
   updateCanvasFx: (patch: Partial<CanvasFxConfig>) => void
   updateIntroOutro: (patch: Partial<IntroOutroConfig>) => void
   updateBeatFx: (patch: Partial<BeatFxConfig>) => void
+  updateAudioEngine: (patch: Partial<AudioEngineConfig>) => void
   updateExport: (patch: Partial<ExportConfig>) => void
   setCoverFile: (file: File | null) => void
   setCoverFromUrl: (url: string) => void
@@ -273,6 +275,14 @@ export function useProject(): {
     (patch: Partial<BeatFxConfig>) => {
       pushHistory()
       applyLayout({ ...layoutRef.current, beat: { ...layoutRef.current.beat, ...patch } })
+    },
+    [pushHistory, applyLayout]
+  )
+
+  const updateAudioEngine = useCallback(
+    (patch: Partial<AudioEngineConfig>) => {
+      pushHistory()
+      applyLayout({ ...layoutRef.current, audio: { ...layoutRef.current.audio, ...patch } })
     },
     [pushHistory, applyLayout]
   )
@@ -626,6 +636,7 @@ export function useProject(): {
     updateCanvasFx,
     updateIntroOutro,
     updateBeatFx,
+    updateAudioEngine,
     updateExport,
     setCoverFile,
     setCoverFromUrl,

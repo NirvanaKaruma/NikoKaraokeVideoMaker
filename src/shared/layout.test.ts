@@ -89,6 +89,9 @@ describe('归一化布局模型', () => {
     expect(DEFAULT_LAYOUT.beat.particleDensity).toBe(0)
     expect(DEFAULT_LAYOUT.visualizer.bpm).toBeNull()
     expect(DEFAULT_LAYOUT.visualizer.beatIntervalSec).toBeNull()
+    expect(DEFAULT_LAYOUT.audio.leadMs).toBe(0)
+    expect(DEFAULT_LAYOUT.audio.fadeInSec).toBe(0)
+    expect(DEFAULT_LAYOUT.audio.fadeOutSec).toBe(0)
   })
 
   it('主图默认高≈90%、宽≈40%，左侧垂直居中（上移后 y=3%）', () => {

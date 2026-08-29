@@ -414,6 +414,13 @@ export const jp = {
       presetStar: '星空',
       presetBubble: '泡',
       particleDensity: 'パーティクル密度：{v}%'
+    },
+    audioTitle: 'オーディオ（KTV）',
+    audio: {
+      leadMs: '前リード（無音）：{v}ms',
+      fadeInSec: 'オーディオフェードイン：{v}s',
+      fadeOutSec: 'オーディオフェードアウト：{v}s',
+      note: '前リードは書き出しのみ（冒頭は黒/タイトルカードで埋め、プレビューは元タイムライン維持）；フェードは書き出し音声に適用。'
     }
   },
   closeGuard: {

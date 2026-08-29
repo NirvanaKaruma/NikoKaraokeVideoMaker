@@ -171,6 +171,18 @@ export interface CanvasFxConfig {
 /** 粒子预设（0.6.0） */
 export type ParticlePreset = 'snow' | 'sakura' | 'star' | 'bubble'
 
+/** 音频工程（0.7.0，默认全 0 = 与 0.6.5 输出一致）：
+ * leadMs 仅作用导出侧（视频帧 +前导、黑场/标题卡填充；预览编辑态保持原音轨），
+ * 淡入淡出作用导出音频（afade）；偏移校准见 visualizer.offsetMs（预览/导出同偏移）。 */
+export interface AudioEngineConfig {
+  /** 前导留白毫秒（KTV 前奏；0=关；1ms 精度，存储取整） */
+  leadMs: number
+  /** 导出音频淡入秒（0=关；0–10） */
+  fadeInSec: number
+  /** 导出音频淡出秒（0=关；0–10；从音频末尾计） */
+  fadeOutSec: number
+}
+
 /** 音乐响应（0.6.0，默认全关；节拍源 = visualizer.bpm / visualizer.beatIntervalSec 手动输入） */
 export interface BeatFxConfig {
   /** 全局踩点脉冲 0–1（0=关）：beat 起点背景亮度短闪 + 主图 Kick 缩放 */
@@ -231,6 +243,8 @@ export interface ProjectLayout {
   introOutro: IntroOutroConfig
   /** 音乐响应（0.6.0） */
   beat: BeatFxConfig
+  /** 音频工程（0.7.0） */
+  audio: AudioEngineConfig
   export: ExportConfig
 }
 
@@ -331,6 +345,7 @@ export const DEFAULT_LAYOUT: ProjectLayout = {
   canvasFx: { vignette: 0, grain: 0, scanline: 0, beatFlash: 0, lightLeak: 0 },
   introOutro: { introFade: 0, introTitleCard: 0, outroFade: 0 },
   beat: { pulse: 0, burst: 0, particlePreset: 'snow', particleDensity: 0 },
+  audio: { leadMs: 0, fadeInSec: 0, fadeOutSec: 0 },
   export: {
     resolutionId: '1080p',
     fps: 30

@@ -409,6 +409,13 @@ export const en = {
       presetStar: 'Stars',
       presetBubble: 'Bubbles',
       particleDensity: 'Particle density: {v}%'
+    },
+    audioTitle: 'Audio (KTV)',
+    audio: {
+      leadMs: 'Lead silence: {v}ms',
+      fadeInSec: 'Audio fade-in: {v}s',
+      fadeOutSec: 'Audio fade-out: {v}s',
+      note: 'Lead applies to the export only (black/title-card fill at the head; preview keeps the original timeline); fades apply to the exported audio.'
     }
   },
   closeGuard: {
