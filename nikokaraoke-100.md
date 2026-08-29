@@ -25,4 +25,10 @@
 
 ## 执行记录
 
-（待填写）
+- T1（648f280）：timeline.ts 纯引擎 + 6 单测；layout.timeline 默认 `{segments:[]}`。
+- T2（d5a2304）：useProject 段级 API（CoW updateSegmentLayout/分割/边界/应用到全部），undo 入栈。
+- T3（ded7af9）：TimelineBar（播放头 seek/片段块/分割/删除/边界拖拽，props 纯配置）；app-body 主行 + 侧栏 400px；i18n 三语。
+- T4（8f3ebb1）：编辑上下文化——useProject 编辑目标 + commit 路由（写时复制）；useEditableLayout 视图/标签；四面板「当前编辑对象」条；画布按播放头 resolveLayoutAt 预览；i18n。
+- T5（cbc231a）：关键帧编辑器——keyframeCatalog（24 条 v1 属性，DEFAULT_LAYOUT 校验单测）；KeyframePanel（轨道清单/点拖拽/缓动/删除/「在此添加关键帧」捕获面板值）；新「关键帧」tab；i18n 三语同构。
+- 冒烟：smoke-visual 结构全绿（折线像素阈值 97/100 与频谱前导项受机器级原生服务停顿影响偶发，重跑通过——记录待 T10 收紧阈值）。
+- 状态：T1–T5 完成，T6（预览 patch 应用器）待开始。
