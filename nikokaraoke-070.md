@@ -14,7 +14,7 @@
 - [x] T5: 健康项·超长音频护栏——解码通道内存随时长线性（60min≈1.27GB）：>40min 警告提示；>60min 拒绝导入并明示原因；layout/资产侧限制 + UI 提示 + 单测
 - [x] T6: 导出端到端——smoke-export 扩展：lead 2s + fade 0.5s 导出 → ffprobe 时长=音频+2s ✓、抽帧 t≈0.5s 为黑场/标题卡 ✓、淡出段首帧差异 ✓；30/60fps 序列一致不受影响
 - [x] T7: 全量回归——typecheck/lint/测试（新增 ffmpeg 参数构造与护栏单测）/build/smoke-visual/smoke-export（含 lead+fade）/smoke-project
-- [ ] T8: 文档与交付——ROADMAP 0.7.0 勾选+验收记录、DECISIONS §22（0.7.0 决策：lead 仅导出侧、护栏阈值、afade 参数）、README 简述；版本 0.6.5→0.7.0；提交推送 + 汇报等用户验收
+- [x] T8: 文档与交付——ROADMAP 0.7.0 勾选+验收记录、DECISIONS §22（0.7.0 决策：lead 仅导出侧、护栏阈值、afade 参数）、README 简述；版本 0.6.5→0.7.0；提交推送 + 汇报等用户验收
 
 ## 执行记录
 
@@ -24,3 +24,4 @@
 - T5：超长音频护栏——shared/audioGuard.ts 纯函数（40min 警告 / 60min 拒绝策略 + Worker 流式字节上限 48kHz×2ch×4B）+ 4 项单测；main 新增 audio:probe-duration（ffmpeg -i 解析容器头 Duration，不解码 ~百毫秒，probeMediaDurationSec）；preload project.audioProbeDuration（IPC 常量 + d.ts）；useAudioPlayback 导入前探测（file.arrayBuffer() 之前）→ reject 明示音频超限并清态、warn 显示 ⚠ 提示；Worker too-long 硬中止（清已收块，防探测失败的兜底 OOM），流式结果改判别式 outcome（too-long 不落 decodeAudioData 兜底）；AudioPanel 警告样（field-warn）+ i18n 三语 audio.longWarn/audio.tooLong。typecheck/lint/64 测试/build 全绿。
 - T6：导出端到端——smoke-export 增加「720p+af」用例（lead 2000ms + fade 0.5s + introOutro 0.5/1.5/0.5）；修复多用例共用输出名（按歌名命名 → 各用例独立歌名 smoke-*/smoke-fx/smoke-af）；main 新增 verifyAudioEngineExport（时长 = 音频+2s ±1.2；signalstats 亮度：lead 均匀纯黑（有限范围 Y≈16）✓、标题卡文字（title 带状 YMAX）✓、中段可见 ✓、淡出段帧间 dAVG>1.5 ✓、片尾 <0.35×fadeA ✓）；af 视频流 10.00s / 音频流 9.98s（adelay+apad+-shortest 生效）。实测全绿（exit 0）。
 - T7：全量回归——typecheck ✓ / eslint 0 ✓ / 64 tests ✓ / build ✓ / smoke-export（720p + 1080p+fx + 720p+af，含时长+抽帧+亮度 5 项校验）✓ / smoke-visual（像素+音频频谱）✓ / smoke-project（11 项）✓。
+- T8：文档与交付——ROADMAP 0.7.0 勾选（含前导/淡入淡出/偏移/护栏四行 + 验收记录、偏差标注）；DECISIONS §22（lead 仅导出侧、双时间轴、护栏阈值 40/60、afade 参数顺序、offsetMs 负值修复、已知小口径偏差记账）；README 增「音频工程（0.7.0）」节；版本 0.6.5→0.7.0（package.json + package-lock）。
