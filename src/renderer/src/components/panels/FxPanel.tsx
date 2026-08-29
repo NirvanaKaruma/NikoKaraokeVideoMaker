@@ -365,7 +365,6 @@ export function FxPanel(props: FxPanelProps): React.JSX.Element {
         step={0.1}
         onCommit={(v) => props.onAudioChange({ fadeOutSec: v })}
       />
-      <p className="panel-note">{t('fx.audio.note')}</p>
 
       <h2>{t('fx.beatTitle')}</h2>
       <FreeNumberField

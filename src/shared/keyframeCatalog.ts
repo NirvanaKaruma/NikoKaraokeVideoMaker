@@ -7,7 +7,7 @@ import { DEFAULT_LAYOUT, type ProjectLayout } from './layout'
 import { getByPath } from './timeline'
 
 export interface KeyframeCatalogEntry {
-  /** 点路径，如 'texts.songTitle.style.fontSize' */
+  /** 点路径，如 'texts.songTitle.style.fontSize'（overlay 动态条目：'overlayLayers.<i>.rect.x'） */
   path: string
   /** i18n label key（zh-cn 先行；en/jp 回退） */
   labelKey: string
@@ -18,6 +18,9 @@ export interface KeyframeCatalogEntry {
   step: number
   /** 显示缩放：UI 显示值 = 实际值 × displayScale（如 fontSize 0.095 → 9.5） */
   displayScale?: number
+  /** 动态条目（附加图层按索引生成）：标签 = 「图层 {idx+1} · 字段」 */
+  dynamic?: boolean
+  idx?: number
 }
 
 const N = (

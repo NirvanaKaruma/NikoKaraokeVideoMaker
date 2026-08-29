@@ -85,7 +85,6 @@ export function SettingsDialog(props: SettingsDialogProps): React.JSX.Element | 
                 {t('settings.themeLight')}
               </button>
             </div>
-            <p className="panel-note">{t('settings.themeNote')}</p>
           </section>
 
           <section className="panel-section">

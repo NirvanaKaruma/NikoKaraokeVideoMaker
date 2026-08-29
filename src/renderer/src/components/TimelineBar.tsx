@@ -131,8 +131,9 @@ export function TimelineBar(props: TimelineBarProps): React.JSX.Element {
               (props.overlaps?.includes(s.id) ? ' overlap' : '')
             }
             style={{
-              left: ratio(s.startSec) * 100 + '%',
-              width: Math.max(0.2, ratio(s.endSec) - ratio(s.startSec)) * 100 + '%'
+              // 段间 2px 视觉缝隙：相邻片段不再"叠在一起"（用户反馈图二）
+              left: 'calc(' + ratio(s.startSec) * 100 + '% + 1px)',
+              width: 'calc(' + Math.max(0.2, ratio(s.endSec) - ratio(s.startSec)) * 100 + '% - 2px)'
             }}
             onPointerDown={(e) => {
               e.stopPropagation()

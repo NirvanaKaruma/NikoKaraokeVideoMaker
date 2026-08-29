@@ -2,7 +2,6 @@ import { useRef, useState } from 'react'
 import type { ProjectLayout } from '@shared/layout'
 import {
   KEYFRAME_CATALOG,
-  catalogEntry,
   currentValueAt,
   type KeyframeCatalogEntry
 } from '@shared/keyframeCatalog'
@@ -45,19 +44,64 @@ export function KeyframePanel(props: KeyframePanelProps): React.JSX.Element {
   const stripRef = useRef<HTMLDivElement>(null)
 
   const segLen = Math.max(0.1, props.segEndSec - props.segStartSec)
-  const entry = selPath ? catalogEntry(selPath) : null
+  /**
+   * 附加图层（overlay）动态关键帧条目（用户需求：新加的图/元素也能单独打关键帧）：
+   * 路径按数组索引定位（overlayLayers.<i>.rect.x …），i18n 标签 = 图层 {i} · 字段。
+   * 已知限制：层删除/重排后旧路径失配（v1 记录，后续可改用稳定层 id 路径协议）。
+   */
+  const overlayEntries: (KeyframeCatalogEntry & { dynamic: true; idx: number })[] = (
+    props.view.overlayLayers ?? []
+  ).flatMap((_o, idx) => {
+    const b = 'overlayLayers.' + idx + '.'
+    const mk = (
+      path: string,
+      labelKey: string,
+      kind: 'number' | 'color',
+      min: number,
+      max: number,
+      step: number,
+      displayScale?: number
+    ): KeyframeCatalogEntry & { dynamic: true; idx: number } => ({
+      path,
+      labelKey,
+      kind,
+      min,
+      max,
+      step,
+      displayScale,
+      dynamic: true,
+      idx
+    })
+    return [
+      mk(b + 'rect.x', 'kf.ovX', 'number', 0, 1, 0.001, 100),
+      mk(b + 'rect.y', 'kf.ovY', 'number', 0, 1, 0.001, 100),
+      mk(b + 'rect.w', 'kf.ovW', 'number', 0.01, 1, 0.001, 100),
+      mk(b + 'rect.h', 'kf.ovH', 'number', 0.01, 1, 0.001, 100),
+      mk(b + 'opacity', 'kf.ovOpacity', 'number', 0, 1, 0.01, 100),
+      mk(b + 'fx.breathe', 'kf.ovBreathe', 'number', 0, 1, 0.01, 100),
+      mk(b + 'fx.rotateDeg', 'kf.ovRotate', 'number', -45, 45, 0.5),
+      mk(b + 'fx.glowPulse', 'kf.ovGlow', 'number', 0, 1, 0.01, 100)
+    ]
+  })
+  const allEntries: KeyframeCatalogEntry[] = [...KEYFRAME_CATALOG, ...overlayEntries]
+  const entry = selPath ? (allEntries.find((c) => c.path === selPath) ?? null) : null
   const track = selPath ? (props.tracks.find((x) => x.path === selPath) ?? null) : null
   const frames = track?.frames ?? []
 
   /** 相对播放头（裁剪到片段内） */
   const relT = Math.min(segLen, Math.max(0, props.currentT - props.segStartSec))
 
+  /** 写帧（轨道不存在时自动创建——修复「添加关键帧」静默失效） */
   const setFrames = (next: Keyframe[]): void => {
-    if (!selPath || !track) return
+    if (!selPath) return
     const sorted = [...next].sort((a, b) => a.t - b.t)
-    props.onTracksChange(
-      props.tracks.map((x) => (x.path === selPath ? { ...x, frames: sorted } : x))
-    )
+    if (track) {
+      props.onTracksChange(
+        props.tracks.map((x) => (x.path === selPath ? { ...x, frames: sorted } : x))
+      )
+    } else {
+      props.onTracksChange([...props.tracks, { path: selPath, frames: sorted }])
+    }
   }
 
   const addFrame = (): void => {
@@ -110,8 +154,12 @@ export function KeyframePanel(props: KeyframePanelProps): React.JSX.Element {
           <div className="panel-note">{t('kf.hint')}</div>
           {/* 轨道清单 */}
           <div className="kf-track-list">
-            {KEYFRAME_CATALOG.map((c) => {
+            {allEntries.map((c) => {
               const has = props.tracks.some((x) => x.path === c.path && x.frames.length > 0)
+              const dyn = c as KeyframeCatalogEntry & { dynamic?: boolean; idx?: number }
+              const label = dyn.dynamic
+                ? t('overlay.layerI', { i: (dyn.idx ?? 0) + 1 }) + ' · ' + t(c.labelKey)
+                : t(c.labelKey)
               return (
                 <button
                   key={c.path}
@@ -122,7 +170,7 @@ export function KeyframePanel(props: KeyframePanelProps): React.JSX.Element {
                     setSelPoint(Math.max(0, framesOf(props.tracks, c.path).length - 1))
                   }}
                 >
-                  <span>{t(c.labelKey)}</span>
+                  <span>{label}</span>
                   {has && <span className="kf-dot">◆</span>}
                 </button>
               )

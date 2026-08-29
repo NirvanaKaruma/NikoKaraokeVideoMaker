@@ -70,7 +70,7 @@ export const jp = {
     play: '▶ 再生',
     pause: '⏸ 一時停止',
     offset: 'ビジュアライザー偏移：{v}ms',
-    offsetNote: '正値=音声より先行、負値=遅延；±500ms。プレビュー/書き出しで同じ偏移（WYSIWYG）。',
+    offsetNote: '正値=映像が前へ、負値=映像が後ろへ偏移。',
     longWarn: '⚠ 音声が長い（約 {mins} 分）：デコード/書き出しのメモリ使用量が高くなります。',
     tooLong:
       '{mins} 分を超える音声（メモリ安全上限）のため、インポートを拒否しました。分割して再試行してください。'
@@ -96,7 +96,7 @@ export const jp = {
     systemFonts: 'システムフォント',
     customFontGroup: 'カスタムフォント（ttf/otf）',
     customFontLoaded: '読み込み済み：{name}（他のマシンで欠けたらデフォルトにフォールバック）',
-    customFontHint: 'フォントファイルを選択（パス参照のみ、プロジェクトに埋め込みません）',
+    customFontHint: 'フォントファイルを選択',
     rescan: 'システムフォントを再読み込み',
     scanning: 'スキャン中…',
     loaded: '{n} 個のシステムフォントを読み込みました',
@@ -186,7 +186,7 @@ export const jp = {
     theme: '外観テーマ',
     themeDark: 'ダークモード',
     themeLight: 'ライトモード',
-    themeNote: 'ダークがデフォルト。ライトは明るい環境向け。即時反映・永続化。',
+
     language: '言語（Language）',
     uiLanguage: '表示言語',
     languageZh: '简体中文',
@@ -277,7 +277,7 @@ export const jp = {
     faqTransparentBody:
       '背景レイヤーはまず背景色と合成されてからぼかされます。メイン画像の透明部分には背景が表示されます。',
     faq4kLabel: '4K は遅いですか？',
-    faq4kBody: '4K はエンコード負荷が高いため、最初は 1080p での書き出しを推奨します。'
+    faq4kBody: '4K 設定は推奨しません。'
   },
   project: {
     saved: 'プロジェクトを保存しました：{path}',
@@ -313,10 +313,10 @@ export const jp = {
     editTarget: '編集中の対象',
     editGlobal: 'グローバル基線',
     editSegment: 'セグ {i}',
-    overlap: '⚠ セグメント重複——重複区間は先の並びが優先（v1 ハードカット）'
+    overlap: '⚠ セグメント重複——重複区間は先の並びが優先'
   },
   kf: {
-    hint: 'トラックを選択：再生ヘッドを動かして「ここにキーフレーム追加」；キーフレームをクリックでドラッグ/値/イージング変更',
+    hint: 'プロパティを選択：再生ヘッドを目的位置へ、次に「ここにキーフレーム追加」。',
     hintNoSegment: 'タイムラインでセグメントを選択するとキーフレームを編集できます',
     currentValue: '取得値',
     addAt: 'ここにキーフレーム追加',
@@ -351,7 +351,15 @@ export const jp = {
     bgKenBurns: 'Ken Burns',
     vizY: 'ビジュ Y',
     vizH: 'ビジュ 高さ',
-    vizHeightRatio: 'バー高さ比'
+    vizHeightRatio: 'バー高さ比',
+    ovX: 'X',
+    ovY: 'Y',
+    ovW: '幅',
+    ovH: '高さ',
+    ovOpacity: '不透明度',
+    ovBreathe: 'ブレス',
+    ovRotate: '回転',
+    ovGlow: 'グローパルス'
   },
   layers: {
     tab: 'レイヤー',
@@ -368,14 +376,13 @@ export const jp = {
     moveUp: '上へ',
     moveDown: '下へ',
     snap: 'スナップガイド',
-    snapEnabled: 'オン（キャンバス端/中央/要素ガイドに自動スナップ）',
-    note: '非表示 = 描画しない（プレビューと書き出しで一致）；ロック = キャンバス上で選択/ドラッグ不可（パラメータは調整可）'
+    snapEnabled: 'オン（キャンバス端/中央/要素ガイドに自動スナップ）'
   },
   overlay: {
     title: '附加レイヤー',
     add: '➕ 画像を追加',
     layerI: 'レイヤー {i}',
-    layerEmpty: 'レイヤー未追加——ロゴ／透かし／ステッカーに対応',
+    layerEmpty: 'レイヤー未追加。',
     replaceImage: '画像を差し替え',
     remove: '削除',
     moveUp: '上へ',
@@ -518,7 +525,7 @@ export const jp = {
       bpmPlaceholder: '例 120（空欄=オフ）',
       interval: '周期（秒/回）',
       intervalPlaceholder: '例 0.5（空欄=オフ）',
-      note: 'BPM と周期が両方あれば BPM 優先。どちらも正数なら自由（範囲制限なし）。',
+      note: 'BPM と周期が両方あれば、BPM 優先。',
       pulse: 'ビートパルス：{v}%',
       burst: 'パーティクルバースト：{v}%',
       particlePreset: 'パーティクルプリセット',
@@ -532,8 +539,7 @@ export const jp = {
     audio: {
       leadMs: '前リード（無音）：{v}ms',
       fadeInSec: 'オーディオフェードイン：{v}s',
-      fadeOutSec: 'オーディオフェードアウト：{v}s',
-      note: '前リード = 動画冒頭の前奏（黒画面/タイトルカードで補完）；プレビューと書き出しは同じ挙動（WYSIWYG）。フェードは書き出し音声のみに適用。'
+      fadeOutSec: 'オーディオフェードアウト：{v}s'
     }
   },
   closeGuard: {

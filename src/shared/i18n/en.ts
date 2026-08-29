@@ -101,7 +101,7 @@ export const en = {
     rescan: 'Reload system fonts',
     scanning: 'Scanning…',
     loaded: 'Loaded {n} system fonts',
-    loadFailed: 'Unable to read system font list (showing common fonts only)',
+    loadFailed: 'Unable to read the system font list; only common fonts will be shown.',
     firstScan: 'Initial automatic scan…',
     size: 'Font size: {v}%',
     bold: 'Bold',
@@ -186,8 +186,6 @@ export const en = {
     theme: 'Appearance',
     themeDark: 'Dark mode',
     themeLight: 'Light mode',
-    themeNote:
-      'Dark is the default; light suits bright environments. Applies immediately and persists.',
     language: 'Language',
     uiLanguage: 'Interface language',
     languageZh: '简体中文',
@@ -277,7 +275,7 @@ export const en = {
     faqTransparentBody:
       'The background layer is first composited with the background color and then blurred; transparent areas of the main image show the background through.',
     faq4kLabel: '4K too slow?',
-    faq4kBody: '4K encoding is heavy; 1080p is recommended for first exports.'
+    faq4kBody: '4K is not recommended.'
   },
   project: {
     saved: 'Project saved: {path}',
@@ -313,10 +311,10 @@ export const en = {
     editTarget: 'Editing',
     editGlobal: 'Global baseline',
     editSegment: 'Seg {i}',
-    overlap: '⚠ overlapping segments - the earlier one wins (v1 hard cut)'
+    overlap: '⚠ overlapping segments - the earlier listed one wins'
   },
   kf: {
-    hint: 'Select a track: move the playhead, then "Add keyframe here"; click a keyframe to drag/edit value/easing',
+    hint: 'Select a property: move the playhead, then "Add keyframe here".',
     hintNoSegment: 'Select a segment on the timeline to edit its keyframes',
     currentValue: 'Capture',
     addAt: 'Add keyframe here',
@@ -351,7 +349,15 @@ export const en = {
     bgKenBurns: 'Ken Burns',
     vizY: 'Viz Y',
     vizH: 'Viz H',
-    vizHeightRatio: 'Bar height'
+    vizHeightRatio: 'Bar height',
+    ovX: 'X',
+    ovY: 'Y',
+    ovW: 'W',
+    ovH: 'H',
+    ovOpacity: 'Opacity',
+    ovBreathe: 'Breathe',
+    ovRotate: 'Rotate',
+    ovGlow: 'Glow pulse'
   },
   layers: {
     tab: 'Layers',
@@ -368,14 +374,13 @@ export const en = {
     moveUp: 'Move up',
     moveDown: 'Move down',
     snap: 'Snap guides',
-    snapEnabled: 'On (snap to canvas edges/center and element guides while dragging)',
-    note: 'Hidden = not rendered (same in preview and export); Locked = not selectable/draggable on canvas (params still adjustable)'
+    snapEnabled: 'On (snap to canvas edges/center and element guides while dragging)'
   },
   overlay: {
     title: 'Overlay Layers',
     add: '➕ Add image',
     layerI: 'Layer {i}',
-    layerEmpty: 'No layers yet — Logo / watermark / sticker all work',
+    layerEmpty: 'No layers added yet.',
     replaceImage: 'Replace image',
     remove: 'Remove',
     moveUp: 'Move up',
@@ -516,7 +521,7 @@ export const en = {
       bpmPlaceholder: 'e.g. 120 (blank = off)',
       interval: 'Interval (sec / beat)',
       intervalPlaceholder: 'e.g. 0.5 (blank = off)',
-      note: 'BPM wins when both are set; both accept any positive number (no range limit).',
+      note: 'BPM wins when both are set.',
       pulse: 'Beat pulse: {v}%',
       burst: 'Particle burst: {v}%',
       particlePreset: 'Particle preset',
@@ -530,8 +535,7 @@ export const en = {
     audio: {
       leadMs: 'Lead silence: {v}ms',
       fadeInSec: 'Audio fade-in: {v}s',
-      fadeOutSec: 'Audio fade-out: {v}s',
-      note: 'Lead = intro silence at the video head (filled with black/title card); the preview behaves the same as export (WYSIWYG). Fades apply to the exported audio only.'
+      fadeOutSec: 'Audio fade-out: {v}s'
     }
   },
   closeGuard: {

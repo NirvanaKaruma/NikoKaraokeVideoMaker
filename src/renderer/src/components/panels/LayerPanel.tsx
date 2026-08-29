@@ -74,7 +74,6 @@ export function LayerPanel(props: LayerPanelProps): React.JSX.Element {
           </span>
         </div>
       ))}
-      <p className="panel-note">{t('layers.note')}</p>
     </section>
   )
 }

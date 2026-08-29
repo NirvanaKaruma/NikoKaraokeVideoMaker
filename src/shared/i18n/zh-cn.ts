@@ -70,8 +70,7 @@ export const zhCn = {
     play: '▶ 播放',
     pause: '⏸ 暂停',
     offset: '可视化偏移：{v}ms',
-    offsetNote:
-      '正值 = 可视化超前音频（看未来），负值 = 滞后；±500ms。预览/导出同偏移（所见即所得）。',
+    offsetNote: '正值视频向前偏移，负值视频向后偏移',
     longWarn: '⚠ 音频较长（约 {mins} 分钟）：解码/导出内存占用较高，请留意。',
     tooLong: '音频超过 {mins} 分钟（内存安全上限），已拒绝导入。请分割后再试。'
   },
@@ -96,11 +95,11 @@ export const zhCn = {
     systemFonts: '系统字体',
     customFontGroup: '自定义字体（ttf/otf）',
     customFontLoaded: '已加载：{name}（换机器缺文件时回退默认）',
-    customFontHint: '选择字体文件（仅存路径引用，不入项目文件）',
+    customFontHint: '选择字体文件',
     rescan: '重新载入系统字体',
     scanning: '扫描中…',
     loaded: '已载入 {n} 个系统字体',
-    loadFailed: '无法读取系统字体列表（仅显示常用字体）',
+    loadFailed: '无法读取系统字体列表，将仅显示常用字体。',
     firstScan: '首次自动扫描中…',
     size: '字号：{v}%',
     bold: '加粗',
@@ -184,7 +183,7 @@ export const zhCn = {
     theme: '外观主题',
     themeDark: '深色模式',
     themeLight: '浅色模式',
-    themeNote: '深色模式为默认；浅色模式针对明亮环境。设置即时生效并持久化。',
+
     language: '语言（Language）',
     uiLanguage: '界面语言',
     languageZh: '简体中文',
@@ -262,7 +261,7 @@ export const zhCn = {
     faqTransparentLabel: '透明底封面？',
     faqTransparentBody: '背景层会先与「背景色」合成再模糊，主图透明区透出背景；',
     faq4kLabel: '4K 很慢？',
-    faq4kBody: '4K 编码量大，建议先用 1080p 出片。'
+    faq4kBody: '不建议使用4K设置。'
   },
   project: {
     saved: '项目已保存：{path}',
@@ -299,24 +298,23 @@ export const zhCn = {
     moveUp: '上移',
     moveDown: '下移',
     snap: '吸附对齐线',
-    snapEnabled: '开启（拖到画布边缘/中心/元素线附近自动对齐）',
-    note: '隐藏 = 不渲染（预览与导出一致）；锁定 = 画布上不可选中/拖动（参数仍可调）'
+    snapEnabled: '开启（拖到画布边缘/中心/元素线附近自动对齐）'
   },
   timeline: {
     title: '时间轴',
     toggleTitle: '显示/隐藏时间轴',
     split: '✂ 在此分割',
     remove: '删除片段',
-    hint: '点击/拖动轨道进行试听定位；将歌曲分割成段落后可单独编辑每段',
+    hint: '点击/拖动轨道试听定位；分割出段落后可分别编辑。',
     segmentLabel: '段落 {i}',
     inherit: '继承全局',
     editTarget: '当前编辑对象',
     editGlobal: '全局基线',
     editSegment: '片段 {i}',
-    overlap: '⚠ 片段有重叠——重叠区间按排序靠前者生效（v1 硬切）'
+    overlap: '⚠ 片段有重叠——重叠区间按排序靠前者生效'
   },
   kf: {
-    hint: '选中轨道后：拖动播放头 → 「在此添加关键帧」；点关键帧可拖拽/改值/换缓动',
+    hint: '选中属性后：把播放头拖到目标位置，点「在此添加关键帧」。',
     hintNoSegment: '在时间轴上选择片段后编辑该段的关键帧',
     currentValue: '捕获值',
     addAt: '在此添加关键帧',
@@ -351,13 +349,21 @@ export const zhCn = {
     bgKenBurns: 'Ken Burns',
     vizY: '可视化 Y',
     vizH: '可视化 高',
-    vizHeightRatio: '柱高比例'
+    vizHeightRatio: '柱高比例',
+    ovX: 'X',
+    ovY: 'Y',
+    ovW: '宽',
+    ovH: '高',
+    ovOpacity: '透明度',
+    ovBreathe: '呼吸',
+    ovRotate: '旋转',
+    ovGlow: '辉光脉动'
   },
   overlay: {
     title: '附加图层',
     add: '➕ 添加图像',
     layerI: '图层 {i}',
-    layerEmpty: '尚未添加图层——Logo / 水印 / 贴纸都可以',
+    layerEmpty: '尚未添加图层。',
     replaceImage: '更换图像',
     remove: '删除',
     moveUp: '上移',
@@ -492,7 +498,7 @@ export const zhCn = {
       bpmPlaceholder: '如 120（留空=关闭）',
       interval: '周期（秒/次）',
       intervalPlaceholder: '如 0.5（留空=关闭）',
-      note: 'BPM 与周期同时填写时 BPM 优先；两者均为自由正数（不限制范围）。',
+      note: 'BPM 与周期同时填写时，BPM 优先。',
       pulse: '踩点脉冲：{v}%',
       burst: '粒子爆发：{v}%',
       particlePreset: '粒子预设',
@@ -506,8 +512,7 @@ export const zhCn = {
     audio: {
       leadMs: '前导留白：{v}ms',
       fadeInSec: '音频淡入：{v}s',
-      fadeOutSec: '音频淡出：{v}s',
-      note: '前导 = 视频开头的前奏留白（黑场/标题卡填充），预览与导出一致（所见即所得）；淡入淡出仅作用导出音频。'
+      fadeOutSec: '音频淡出：{v}s'
     }
   },
   closeGuard: {
