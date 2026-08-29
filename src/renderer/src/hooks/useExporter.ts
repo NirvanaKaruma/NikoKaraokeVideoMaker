@@ -134,7 +134,12 @@ export function useExporter(args: UseExporterArgs): {
           videoPath,
           audioPath,
           outputPath: a.outputPathRef.current ?? '',
-          durationMs: a.durationMs
+          durationMs: a.durationMs,
+          audioEngine: {
+            leadMs: layout.audio.leadMs,
+            fadeInSec: layout.audio.fadeInSec,
+            fadeOutSec: layout.audio.fadeOutSec
+          }
         })
         off()
         mergeIdRef.current = null

@@ -128,8 +128,8 @@ export function useAudioPlayback(
   barsSink?: { current: ((bars: number[]) => void) | null },
   /** 播放中同步帧时间（动效：flow 相位等） */
   frameTSink?: { current: ((t: number) => void) | null },
-  /** 播放中同步帧时间（动效：背景/主图/文本层每帧更新） */
-  layerFxSink?: { current: ((t: number) => void) | null },
+  /** 播放中同步帧时间（动效：背景/主图/文本层每帧更新）；第二参 audioT 为音频轴（预览 = t） */
+  layerFxSink?: { current: ((t: number, audioT?: number) => void) | null },
   /** 播放时间值盒（CanvasFX overlay 等 rAF 自绘组件读取最新 t） */
   timeBoxRef?: { current: number }
 ): PlaybackApi {

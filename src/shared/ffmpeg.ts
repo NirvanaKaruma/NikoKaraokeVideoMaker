@@ -55,8 +55,29 @@ export interface MergeRequest {
   videoPath: string
   audioPath: string
   outputPath: string
-  /** 音频时长 ms（用于合并进度百分比） */
+  /** 音频时长 ms（用于合并进度百分比与淡出起点） */
   durationMs: number
+  /** 音频工程（0.7.0）：缺省 = 全关 */
+  audioEngine?: { leadMs: number; fadeInSec: number; fadeOutSec: number }
+}
+
+/** 音频滤镜构造（0.7.0 纯函数）：淡入/淡出作用于歌曲本体（延迟之前）→ 前导 adelay → apad。
+ * 全部为 0 时返回 ''（不追加 -af，与 0.6.5 输出一致）。 */
+export function buildAudioFilter(
+  leadMs: number,
+  fadeInSec: number,
+  fadeOutSec: number,
+  durationSec: number
+): string {
+  const parts: string[] = []
+  if (fadeInSec > 0) parts.push(`afade=t=in:st=0:d=${fadeInSec.toFixed(3)}`)
+  if (fadeOutSec > 0) {
+    const st = Math.max(0, durationSec - fadeOutSec)
+    parts.push(`afade=t=out:st=${st.toFixed(3)}:d=${fadeOutSec.toFixed(3)}`)
+  }
+  if (leadMs > 0) parts.push(`adelay=${leadMs}:all=1`)
+  if (leadMs > 0) parts.push('apad')
+  return parts.join(',')
 }
 
 export interface MergeProgress {

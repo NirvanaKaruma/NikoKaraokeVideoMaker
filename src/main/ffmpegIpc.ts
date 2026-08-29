@@ -6,6 +6,7 @@ import { IPC } from '../shared/ipc'
 import { t } from '../shared/i18n'
 import type { FfmpegConfig, MergeProgress, MergeRequest } from '../shared/ffmpeg'
 import { getConfig, setConfig } from './config'
+import { buildAudioFilter } from '../shared/ffmpeg'
 import {
   cancelDownload,
   detectFfmpegStatus,
@@ -253,6 +254,15 @@ export function registerFfmpegIpc(): void {
     if (same(req.outputPath, req.audioPath)) {
       return { ok: false, error: t('ffmpeg.mergeFailSameFile') }
     }
+    // 0.7.0 音频工程：淡入淡出（歌曲本体）→ 前导 adelay+apad；全 0 时不追加 -af（与 0.6.5 一致）
+    const audioFilter = req.audioEngine
+      ? buildAudioFilter(
+          req.audioEngine.leadMs,
+          req.audioEngine.fadeInSec,
+          req.audioEngine.fadeOutSec,
+          req.durationMs / 1000
+        )
+      : ''
     const args = [
       '-y',
       '-i',
@@ -269,6 +279,7 @@ export function registerFfmpegIpc(): void {
       'aac',
       '-b:a',
       '192k',
+      ...(audioFilter ? ['-af', audioFilter] : []),
       '-shortest',
       '-movflags',
       '+faststart',

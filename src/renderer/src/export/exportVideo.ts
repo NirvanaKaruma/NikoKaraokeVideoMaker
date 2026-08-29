@@ -216,7 +216,10 @@ export interface EncodeVideoOptions {
 export async function encodeVideo(opts: EncodeVideoOptions): Promise<ArrayBuffer | null> {
   const { layout, analyzer, durationMs, resolution, stage, onProgress, signal } = opts
   const fps = layout.export.fps
-  const totalFrames = Math.max(1, Math.round((durationMs / 1000) * fps))
+  // 0.7.0 前导留白：视频帧数 = 音频时长 + lead；lead 段画面=黑场/标题卡（introOutro 时间函数），
+  // 频谱/踩点等音频驱动量按 audioT = t − lead 采样（lead 内全静音柱）。
+  const leadSec = layout.audio.leadMs > 0 ? layout.audio.leadMs / 1000 : 0
+  const totalFrames = Math.max(1, Math.round((durationMs / 1000 + leadSec) * fps))
 
   const picked = await pickEncoderConfig(
     resolution.width,
@@ -293,17 +296,31 @@ export async function encodeVideo(opts: EncodeVideoOptions): Promise<ArrayBuffer
         return null
       }
       const f0 = performance.now()
-      const tSec = i / fps
+      const tSec = i / fps // 画面时间轴（含 lead）
+      const audioT = tSec - leadSec // 音频时间轴（频谱/踩点/呼吸的驱动时间）
       if (analyzer) {
-        const target = spectrumAt(
-          analyzer,
-          tSec + tOffset,
-          vizCfg.barCount,
-          null,
-          vizCfg.sensitivity
-        )
-        const smoothed = smoothBarsFx(fxState, target, vizCfg.attack, vizCfg.decay, vizCfg.peakFall)
-        stage.setBars(Array.from(smoothed))
+        if (audioT < 0) {
+          // 前导段：无音频 → 静默柱（0）
+          const z = new Float32Array(vizCfg.barCount)
+          const smoothed = smoothBarsFx(fxState, z, vizCfg.attack, vizCfg.decay, vizCfg.peakFall)
+          stage.setBars(Array.from(smoothed))
+        } else {
+          const target = spectrumAt(
+            analyzer,
+            audioT + tOffset,
+            vizCfg.barCount,
+            null,
+            vizCfg.sensitivity
+          )
+          const smoothed = smoothBarsFx(
+            fxState,
+            target,
+            vizCfg.attack,
+            vizCfg.decay,
+            vizCfg.peakFall
+          )
+          stage.setBars(Array.from(smoothed))
+        }
       }
       stage.setFrame(tSec)
       if (dynamic) {
@@ -315,40 +332,43 @@ export async function encodeVideo(opts: EncodeVideoOptions): Promise<ArrayBuffer
         ctx.drawImage(staticCanvas!, 0, 0)
         ctx.drawImage(viz, 0, 0)
       }
-      // 0.6.0 音乐响应：手动节拍源（beat 包络）→ 粒子爆发 + 踩点闪光（同函数）
-      const period = beatPeriod(vizCfg.bpm, vizCfg.beatIntervalSec)
-      const env = period != null ? beatEnvelope(tSec + tOffset, period) : 0
-      const beatCfg = layout.beat
-      if (beatCfg.particleDensity > 0) {
-        drawParticles(
-          ctx,
-          particlesAt(
-            tSec + tOffset,
-            beatCfg.particlePreset,
-            beatCfg.particleDensity,
-            env * beatCfg.burst,
+      // 0.6.0 音乐响应：手动节拍源（beat 包络）→ 粒子爆发 + 踩点闪光（同函数）。
+      // 0.7.0 lead：驱动时间 = 音频轴（audioT + offset）；音乐未开始（audioT<0）→ 不叠加（纯黑前导）。
+      if (audioT >= 0) {
+        const period = beatPeriod(vizCfg.bpm, vizCfg.beatIntervalSec)
+        const env = period != null ? beatEnvelope(audioT + tOffset, period) : 0
+        const beatCfg = layout.beat
+        if (beatCfg.particleDensity > 0) {
+          drawParticles(
+            ctx,
+            particlesAt(
+              audioT + tOffset,
+              beatCfg.particlePreset,
+              beatCfg.particleDensity,
+              env * beatCfg.burst,
+              resolution.width,
+              resolution.height
+            )
+          )
+        }
+        // 全局后期（CanvasFX 管线）：预览 overlay 与导出同函数（核心约束 A）
+        if (cfxOn && analyzer) {
+          drawCanvasFx(
+            ctx,
+            {
+              t: audioT + tOffset,
+              vignette: cfxCfg.vignette,
+              grain: cfxCfg.grain,
+              scanline: cfxCfg.scanline,
+              beatFlash: cfxCfg.beatFlash,
+              lightLeak: cfxCfg.lightLeak,
+              energy: cfxEnergy,
+              beatPeriodSec: period
+            },
             resolution.width,
             resolution.height
           )
-        )
-      }
-      // 全局后期（CanvasFX 管线）：预览 overlay 与导出同函数（核心约束 A）
-      if (cfxOn && analyzer) {
-        drawCanvasFx(
-          ctx,
-          {
-            t: tSec + tOffset,
-            vignette: cfxCfg.vignette,
-            grain: cfxCfg.grain,
-            scanline: cfxCfg.scanline,
-            beatFlash: cfxCfg.beatFlash,
-            lightLeak: cfxCfg.lightLeak,
-            energy: cfxEnergy,
-            beatPeriodSec: period
-          },
-          resolution.width,
-          resolution.height
-        )
+        }
       }
       const frame = new VideoFrame(compose, {
         timestamp: Math.round((i * 1_000_000) / fps),

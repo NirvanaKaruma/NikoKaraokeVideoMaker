@@ -81,8 +81,11 @@ export interface SceneLayersProps {
   frameTRef?: { current: ((t: number) => void) | null }
   /** 共享频谱分析器（动效层按时间 t 计算分带能量；预览/导出同一数据源） */
   analyzer?: SpectrumAnalyzer | null
-  /** 非可视化动效帧分发（背景/主图/文本/片头片尾每帧更新；预览 rAF 与导出逐帧同源） */
-  layerFxRef?: { current: ((t: number) => void) | null }
+  /** 非可视化动效帧分发（背景/主图/文本/片头片尾每帧更新；预览 rAF 与导出逐帧同源）。
+   * 第二参 audioT = 音频时间轴（0.7.0 导出 lead>0 时 ≠ t；预览缺省 = t）。 */
+  layerFxRef?: { current: ((t: number, audioT?: number) => void) | null }
+  /** 前导留白秒（0.7.0，仅导出侧）：片头黑场/标题卡时间轴用；预览不传（=0，编辑态保持原音轨） */
+  audioLeadSec?: number
   /** 音频总时长秒（片尾时间轴用） */
   mediaDurationSec?: number
 }
@@ -134,8 +137,8 @@ function BackgroundLayer({
   /** 共享频谱分析器（0.5.0：bass 呼吸等按 t 采样） */
   analyzer?: SpectrumAnalyzer | null
   canvas: CanvasSize
-  /** 每帧动效更新槽（SceneLayers 分发 frame(t)）；命名以 Ref 结尾（react-hooks 规范） */
-  layerFxSlotRef?: { current: ((t: number) => void) | null }
+  /** 每帧动效更新槽（SceneLayers 分发 frame(t, audioT)）；命名以 Ref 结尾（react-hooks 规范） */
+  layerFxSlotRef?: { current: ((t: number, audioT: number) => void) | null }
 }): React.JSX.Element {
   const background = layout.background
   const bgRef = useRef<Konva.Group>(null)
@@ -202,7 +205,7 @@ function BackgroundLayer({
   // 每帧动效：Ken Burns（缓存组变换，中心锚定、无露边）+ bass 呼吸（brightness/hue 叠色 opacity）
   useEffect(() => {
     if (!layerFxSlotRef) return
-    layerFxSlotRef.current = (t: number): void => {
+    layerFxSlotRef.current = (t: number, audioT: number): void => {
       const g = bgRef.current
       const offsetVis = layout.visualizer.offsetMs > 0 ? layout.visualizer.offsetMs / 1000 : 0
       const sample = (tt: number): BandEnergies =>
@@ -212,7 +215,8 @@ function BackgroundLayer({
           layout.visualizer.barCount,
           layout.visualizer.sensitivity
         )
-      const tVis = t + offsetVis
+      const tVis = t + offsetVis // Ken Burns 等连续运镜：wall 轴（前导期间不冻结）
+      const aVis = audioT + offsetVis // bass 呼吸/踩点脉冲：音频驱动 → 音频轴 + 偏移
       // Ken Burns：仅在启用时施加变换；关闭时复位（防切开关后残留）
       if (background.fx.kenBurns > 0 && g) {
         const [s, dx, dy] = kenBurns(
@@ -232,9 +236,9 @@ function BackgroundLayer({
       // bass 呼吸：0–0.4s 窗口平滑（灯光随低音起伏）+ 手动节拍脉冲（beat 起点短闪）。
       // 呼吸未启用时跳过窗口采样（省 5×FFT/帧——曾导致播放中持续卡顿/GC 尖刺）
       const wantBreath = background.fx.bassBrightness > 0 || background.fx.bassHue > 0
-      const bassV = wantBreath && analyzer ? bandEnergySmoothed(sample, tVis, 'bass', 0.4) : 0
+      const bassV = wantBreath && analyzer ? bandEnergySmoothed(sample, aVis, 'bass', 0.4) : 0
       const period = beatPeriod(layout.visualizer.bpm, layout.visualizer.beatIntervalSec)
-      const env = period != null ? beatEnvelope(tVis, period) : 0
+      const env = period != null ? beatEnvelope(aVis, period) : 0
       const bright = breatheBrightRef.current
       if (bright) {
         bright.opacity(
@@ -318,14 +322,17 @@ function IntroOutroLayer({
   layout,
   canvas,
   mediaDurationSec,
+  leadSec,
   fxSlotRef
 }: {
   layout: ProjectLayout
   canvas: CanvasSize
   /** 音频总时长秒（片尾时间轴用；无音频=0 → 片尾不生效） */
   mediaDurationSec?: number
-  /** 每帧更新槽（SceneLayers 分发 frame(t)） */
-  fxSlotRef?: { current: ((t: number) => void) | null }
+  /** 前导留白秒（0.7.0，仅导出侧）：总轴 = 音频轴 + leadSec */
+  leadSec?: number
+  /** 每帧更新槽（SceneLayers 分发 frame(t, audioT)） */
+  fxSlotRef?: { current: ((t: number, audioT: number) => void) | null }
 }): React.JSX.Element {
   const blackRef = useRef<Konva.Rect>(null)
   const tcGroupRef = useRef<Konva.Group>(null)
@@ -333,7 +340,7 @@ function IntroOutroLayer({
   useEffect(() => {
     if (!fxSlotRef) return
     fxSlotRef.current = (t: number): void => {
-      const a = introOutroAlpha(t, mediaDurationSec ?? 0, layout.introOutro)
+      const a = introOutroAlpha(t, mediaDurationSec ?? 0, layout.introOutro, leadSec ?? 0)
       const black = blackRef.current
       if (black) {
         const opacity = Math.min(1, Math.max(a.intro, a.outro))
@@ -348,7 +355,7 @@ function IntroOutroLayer({
     return () => {
       fxSlotRef.current = null
     }
-  }, [fxSlotRef, layout.introOutro, mediaDurationSec])
+  }, [fxSlotRef, layout.introOutro, mediaDurationSec, leadSec])
 
   const title = layout.texts.songTitle
   const artist = layout.texts.artist
@@ -602,8 +609,8 @@ function MainImageLayer({
   onMainRectChange,
   layerFxSlotRef
 }: MainImageLayerProps & {
-  /** 每帧动效更新槽（SceneLayers 分发 frame(t)） */
-  layerFxSlotRef?: { current: ((t: number) => void) | null }
+  /** 每帧动效更新槽（SceneLayers 分发 frame(t, audioT)） */
+  layerFxSlotRef?: { current: ((t: number, audioT: number) => void) | null }
 }): React.JSX.Element {
   const { t } = useLocale()
   const groupRef = useRef<Konva.Group>(null)
@@ -708,7 +715,7 @@ function MainImageLayer({
   // 每帧动效：呼吸缩放 + 微旋转 + 发光脉冲（shadowBlur 动画；默认全部关闭时复位）
   useEffect(() => {
     if (!layerFxSlotRef) return
-    layerFxSlotRef.current = (tt: number): void => {
+    layerFxSlotRef.current = (tt: number, audioT: number): void => {
       const fg = fxGroupRef.current
       if (!fg) return
       const twoPi = Math.PI * 2
@@ -720,9 +727,9 @@ function MainImageLayer({
           : 1
       // 微旋转：±rotateDeg° 慢速往复（16s 周期）
       const rotDeg = fx.rotateDeg > 0 ? fx.rotateDeg * Math.sin((twoPi * tt) / 16) : 0
-      // 手动节拍 Kick 缩放（beat 起点微弹）
+      // 手动节拍 Kick 缩放（beat 起点微弹）——音频驱动 → 音频时间轴（前导期间无 kick）
       const period = beatPeriod(layout.visualizer.bpm, layout.visualizer.beatIntervalSec)
-      const env = period != null ? beatEnvelope(tt, period) : 0
+      const env = period != null ? beatEnvelope(audioT, period) : 0
       const kick = env * layout.beat.pulse * 0.04
       fg.scale({ x: breatheS + kick, y: breatheS + kick })
       fg.rotation(rotDeg)
@@ -1279,25 +1286,28 @@ export function SceneLayers(props: SceneLayersProps): React.JSX.Element {
     frameTRef,
     analyzer,
     layerFxRef,
+    audioLeadSec,
     mediaDurationSec
   } = props
   const canvas = canvasSize ?? { width: LOGICAL_WIDTH, height: LOGICAL_HEIGHT }
   const show = (name: SceneLayerName): boolean => !layers || layers.includes(name)
   // 非可视化动效每帧分发：SceneLayers 统一注册外部 layerFxRef，
-  // 各子层（背景/主图/文本）写入自己的 slot（getter 惰性读取不回退重绘）。
-  const bgFxSlot = useRef<((t: number) => void) | null>(null)
-  const imgFxSlot = useRef<((t: number) => void) | null>(null)
+  // 各子层（背景/主图/文本/片头片尾）写入自己的 slot（getter 惰性读取不回退重绘）。
+  // 0.7.0：audioT = 音频时间轴（导出 lead>0 时由 setFrame 传入；预览缺省 = t）。
+  const bgFxSlot = useRef<((t: number, audioT: number) => void) | null>(null)
+  const imgFxSlot = useRef<((t: number, audioT: number) => void) | null>(null)
   const titleFxSlot = useRef<((t: number) => void) | null>(null)
   const artistFxSlot = useRef<((t: number) => void) | null>(null)
-  const introFxSlot = useRef<((t: number) => void) | null>(null)
+  const introFxSlot = useRef<((t: number, audioT: number) => void) | null>(null)
   useEffect(() => {
     if (!layerFxRef) return
-    layerFxRef.current = (t: number) => {
-      bgFxSlot.current?.(t)
-      imgFxSlot.current?.(t)
+    layerFxRef.current = (t: number, audioT?: number) => {
+      const at = audioT ?? t
+      bgFxSlot.current?.(t, at)
+      imgFxSlot.current?.(t, at)
       titleFxSlot.current?.(t)
       artistFxSlot.current?.(t)
-      introFxSlot.current?.(t)
+      introFxSlot.current?.(t, at)
     }
     return () => {
       layerFxRef.current = null
@@ -1373,6 +1383,7 @@ export function SceneLayers(props: SceneLayersProps): React.JSX.Element {
             layout={layout}
             canvas={canvas}
             mediaDurationSec={mediaDurationSec}
+            leadSec={audioLeadSec}
             fxSlotRef={introFxSlot}
           />
         </Layer>

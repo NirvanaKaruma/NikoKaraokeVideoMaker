@@ -177,12 +177,14 @@ export function bounceIn(x: number): number {
 
 /** 片头/片尾时间函数（0.5.0）：黑场alpha 与标题卡 alpha（0–1） */
 export interface IntroOutroAlpha {
-  /** 片头黑场（1→0）：刚开播全黑，introFade 秒内淡入画面 */
+  /** 片头黑场（1→0）：刚开播全黑（含 lead 前导留白），introFade 秒内淡入画面 */
   intro: number
   /** 标题卡（0–1 边缘淡入淡出）：片头淡入后展示 introTitleCard 秒 */
   titleCard: number
   /** 片尾黑场（0→1）：结束前 outroFade 秒内淡出 */
   outro: number
+  /** 前导留白（1→0）：t < leadSec 期间为 1，否则 0 */
+  lead: number
 }
 
 export interface IntroOutroParam {
@@ -191,26 +193,34 @@ export interface IntroOutroParam {
   outroFade: number
 }
 
-/** 片头/片尾状态（纯时刻函数；30/60fps 同 t 同值） */
+/** 片头/片尾状态（纯时刻函数；30/60fps 同 t 同值）。
+ * t 为含 lead 前导的总轴（wall clock）；音频相关渐变先换算 at = t - leadSec（lead 期间恒 0）。
+ * lead=0 时行为与旧版完全一致；lead>0 时 lead 期间 intro=1（全黑淡入推迟到音频起点）。
+ */
 export function introOutroAlpha(
   t: number,
   durationSec: number,
-  cfg: IntroOutroParam
+  cfg: IntroOutroParam,
+  leadSec = 0
 ): IntroOutroAlpha {
+  const lead = Math.max(0, leadSec)
   const dur = Math.max(0, durationSec)
-  const intro = cfg.introFade > 0 ? 1 - entryProgress(t, 0, cfg.introFade) : 0
-  const tcStart = Math.max(0, cfg.introFade)
+  const at = Math.max(0, t - lead) // 音频时间轴
+  const inLead = t < lead
+  const introFade = Math.max(0, cfg.introFade)
   const tcLen = Math.max(0, cfg.introTitleCard)
   const tcFade = Math.min(0.4, tcLen / 4)
+  const intro = inLead ? 1 : introFade > 0 ? 1 - entryProgress(at, 0, introFade) : 0
   const titleCard =
-    tcLen <= 0
+    inLead || tcLen <= 0
       ? 0
       : Math.min(
-          entryProgress(t, tcStart, tcFade),
-          1 - entryProgress(t, tcStart + tcLen - tcFade, tcFade)
+          entryProgress(at, introFade, tcFade),
+          1 - entryProgress(at, introFade + tcLen - tcFade, tcFade)
         )
-  const outro = cfg.outroFade > 0 ? entryProgress(t, dur - cfg.outroFade, cfg.outroFade) : 0
-  return { intro, titleCard, outro }
+  // 片尾淡出位于音频结尾：start = dur - outroFade（总轴 = lead + dur - outroFade → 与无 lead 对齐）
+  const outro = cfg.outroFade > 0 ? entryProgress(at, dur - cfg.outroFade, cfg.outroFade) : 0
+  return { intro, titleCard, outro, lead: inLead ? 1 : 0 }
 }
 
 /** 能量阶跃（踩点闪光）：band 能量在 windowSec 内的上升量 0–1；纯时刻函数、与帧率无关 */

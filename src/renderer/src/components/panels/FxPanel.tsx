@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type {
+  AudioEngineConfig,
   BackgroundConfig,
   BeatFxConfig,
   CanvasFxConfig,
@@ -22,12 +23,15 @@ export interface FxPanelProps {
   introOutro: IntroOutroConfig
   beat: BeatFxConfig
   visualizer: VisualizerConfig
+  /** 音频工程（0.7.0）：前导留白 / 淡入淡出（仅作用导出） */
+  audio: AudioEngineConfig
   onBgFxChange: (p: Partial<BackgroundConfig['fx']>) => void
   onImageFxChange: (p: Partial<MainImageConfig['fx']>) => void
   onSongTitleEntryChange: (p: Partial<TextLayerConfig['entry']>) => void
   onArtistEntryChange: (p: Partial<TextLayerConfig['entry']>) => void
   onCanvasFxChange: (p: Partial<CanvasFxConfig>) => void
   onIntroOutroChange: (p: Partial<IntroOutroConfig>) => void
+  onAudioChange: (p: Partial<AudioEngineConfig>) => void
   onBeatFxChange: (p: Partial<BeatFxConfig>) => void
   onVisualizerChange: (p: Partial<VisualizerConfig>) => void
 }
@@ -141,7 +145,7 @@ function EntryBlock({
 /** 动效面板（0.5.0）：背景 / 主图 / 文本入场 / 全局后期 / 片头片尾（全部默认关闭） */
 export function FxPanel(props: FxPanelProps): React.JSX.Element {
   const { t } = useLocale()
-  const { backgroundFx, imageFx, canvasFx, introOutro, beat, visualizer } = props
+  const { backgroundFx, imageFx, canvasFx, introOutro, beat, visualizer, audio } = props
   return (
     <section className="panel-section">
       <h2>{t('fx.bgTitle')}</h2>
@@ -324,6 +328,33 @@ export function FxPanel(props: FxPanelProps): React.JSX.Element {
         onCommit={(v) => props.onIntroOutroChange({ outroFade: v })}
       />
       <p className="panel-note">{t('fx.introOutro.note')}</p>
+
+      <h2>{t('fx.audioTitle')}</h2>
+      <DeferredSlider
+        label={(v) => t('fx.audio.leadMs', { v: Math.round(v) })}
+        value={audio.leadMs}
+        min={0}
+        max={10000}
+        step={100}
+        onCommit={(v) => props.onAudioChange({ leadMs: Math.round(v) })}
+      />
+      <DeferredSlider
+        label={(v) => t('fx.audio.fadeInSec', { v: Math.round(v * 10) / 10 })}
+        value={audio.fadeInSec}
+        min={0}
+        max={10}
+        step={0.1}
+        onCommit={(v) => props.onAudioChange({ fadeInSec: v })}
+      />
+      <DeferredSlider
+        label={(v) => t('fx.audio.fadeOutSec', { v: Math.round(v * 10) / 10 })}
+        value={audio.fadeOutSec}
+        min={0}
+        max={10}
+        step={0.1}
+        onCommit={(v) => props.onAudioChange({ fadeOutSec: v })}
+      />
+      <p className="panel-note">{t('fx.audio.note')}</p>
 
       <h2>{t('fx.beatTitle')}</h2>
       <FreeNumberField

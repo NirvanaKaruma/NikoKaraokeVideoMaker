@@ -228,8 +228,35 @@ describe('fx 时间函数库', () => {
     expect(off.intro).toBe(0)
     expect(off.titleCard).toBe(0)
     expect(off.outro).toBe(0)
+    expect(off.lead).toBe(0)
     // 确定性
     expect(introOutroAlpha(1.234, 10, cfg)).toEqual(introOutroAlpha(1.234, 10, cfg))
+  })
+
+  it('introOutroAlpha leadSec：lead 期间全黑，音频轴渐变与无 lead 结果逐点对齐（0.7.0）', () => {
+    const cfg = { introFade: 1, introTitleCard: 2, outroFade: 1 }
+    const lead = 2
+    // lead 期间：lead=1、intro=1（全黑）、无标题卡
+    expect(introOutroAlpha(0, 10, cfg, lead).lead).toBeCloseTo(1, 6)
+    expect(introOutroAlpha(1.999, 10, cfg, lead).lead).toBeCloseTo(1, 6)
+    expect(introOutroAlpha(1, 10, cfg, lead).intro).toBeCloseTo(1, 6)
+    expect(introOutroAlpha(1, 10, cfg, lead).titleCard).toBe(0)
+    // 默认 lead=0 → lead 字段恒 0（旧行为完全不变）
+    expect(introOutroAlpha(1, 10, cfg).lead).toBe(0)
+    // 音频轴对齐：总轴 t = lead + at 的渐变（intro/titleCard/outro）= 无 lead 时 t = at
+    for (const at of [0, 1, 2, 3, 4, 8.5, 9, 10, 11]) {
+      const withLead = introOutroAlpha(lead + at, 10, cfg, lead)
+      const plain = introOutroAlpha(at, 10, cfg)
+      expect(withLead.intro).toBeCloseTo(plain.intro, 6)
+      expect(withLead.titleCard).toBeCloseTo(plain.titleCard, 6)
+      expect(withLead.outro).toBeCloseTo(plain.outro, 6)
+    }
+    // 片尾黑场推迟到音频结尾之后的总轴时刻：总轴 11（= lead+9）尚未淡出，12（= lead+10）全黑
+    expect(introOutroAlpha(lead + 8.5, 10, cfg, lead).outro).toBe(0)
+    expect(introOutroAlpha(lead + 10, 10, cfg, lead).outro).toBeCloseTo(1, 6)
+    // lead 结束瞬间（t == lead）：不再是 lead 黑场，但 intro 从 1 开始淡入
+    expect(introOutroAlpha(lead, 10, cfg, lead).lead).toBe(0)
+    expect(introOutroAlpha(lead, 10, cfg, lead).intro).toBeCloseTo(1, 6)
   })
 
   it('手动节拍源：beatPeriod/beatPhase/beatEnvelope——BPM 优先、自由值、确定性、包络衰减', () => {

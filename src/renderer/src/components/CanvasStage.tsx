@@ -17,8 +17,8 @@ import { drawParticles, particlesAt } from '@shared/particles'
 import { SceneLayers, SelectableId } from './SceneLayers'
 import type { CanvasImageElement } from '../hooks/useProject'
 
-/** 非可视化动效帧分发（背景/主图/文本每帧更新） */
-export type LayerFxRef = { current: ((t: number) => void) | null }
+/** 非可视化动效帧分发（背景/主图/文本每帧更新）；第二参 audioT 为音频轴（预览缺省 = t） */
+export type LayerFxRef = { current: ((t: number, audioT?: number) => void) | null }
 
 /** 全局后期叠加（0.5.0）：独立 2D canvas 置于 Konva 舞台之上，rAF 自绘（有动效才跑）；
  * 与导出 compose 共用 drawCanvasFx（核心约束 A）。 */

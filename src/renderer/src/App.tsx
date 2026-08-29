@@ -1040,7 +1040,7 @@ function App(): React.JSX.Element {
   }, [project])
   const barsHandleRef = useRef<((bars: number[]) => void) | null>(null)
   const frameTRef = useRef<((t: number) => void) | null>(null)
-  const layerFxRef = useRef<((t: number) => void) | null>(null)
+  const layerFxRef = useRef<((t: number, audioT?: number) => void) | null>(null)
   const playTimeRef = useRef(0)
   const pb = useAudioPlayback(
     project.assets.audioFile,
@@ -1587,6 +1587,8 @@ function App(): React.JSX.Element {
           onArtistEntryChange={(x) => project.updateTextEntry('artist', x)}
           onCanvasFxChange={project.updateCanvasFx}
           onIntroOutroChange={project.updateIntroOutro}
+          audio={project.layout.audio}
+          onAudioChange={project.updateAudioEngine}
           beat={project.layout.beat}
           visualizerForBeat={project.layout.visualizer}
           onBeatFxChange={project.updateBeatFx}
@@ -1651,6 +1653,7 @@ function App(): React.JSX.Element {
           bgElement={project.assets.bgElement}
           analyzer={pb.analyzer}
           mediaDurationSec={pb.duration}
+          audioLeadSec={project.layout.audio.leadMs / 1000}
           width={exporter.stageRequest.width}
           height={exporter.stageRequest.height}
           onReady={exporter.onStageReady}

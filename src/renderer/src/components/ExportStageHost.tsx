@@ -27,31 +27,43 @@ interface ExportStageHostProps {
   analyzer?: SpectrumAnalyzer | null
   /** 音频总时长秒（片尾时间轴用） */
   mediaDurationSec?: number
+  /** 前导留白秒（0.7.0）：setFrame 内部把音频驱动量换算到音频轴（audioT = max(0, t − lead)） */
+  audioLeadSec?: number
   width: number
   height: number
   onReady: (handle: ExportStageHandle) => void
 }
 
-/** 导出场景内部动效分发（setFrame 驱动；与预览的 layerFxRef 相互独立） */
-export type LayerFxRef = { current: ((t: number) => void) | null }
+/** 导出场景内部动效分发（setFrame(t, audioT) 驱动；与预览的 layerFxRef 相互独立） */
+export type LayerFxRef = { current: ((t: number, audioT?: number) => void) | null }
 
 /**
  * 导出用隐藏舞台（离屏）：静态层与可视化层拆成两个 Stage，
  * 每帧 = 静态画布 + setBars 后的可视化画布。复用 SceneLayers（核心约束 A）。
  */
 export function ExportStageHost(props: ExportStageHostProps): React.JSX.Element {
-  const { layout, coverElement, bgElement, analyzer, mediaDurationSec, width, height, onReady } =
-    props
+  const {
+    layout,
+    coverElement,
+    bgElement,
+    analyzer,
+    mediaDurationSec,
+    audioLeadSec,
+    width,
+    height,
+    onReady
+  } = props
+  const leadSec = Math.max(0, audioLeadSec ?? 0)
   const staticRef = useRef<Konva.Stage>(null)
   const vizRef = useRef<Konva.Stage>(null)
   const fullRef = useRef<Konva.Stage>(null)
   const barsHandleRef = useRef<((bars: number[]) => void) | null>(null)
   const frameTHandleRef = useRef<((t: number) => void) | null>(null)
-  const fxStaticHandleRef = useRef<((t: number) => void) | null>(null)
-  const fxVizHandleRef = useRef<((t: number) => void) | null>(null)
+  const fxStaticHandleRef = useRef<((t: number, audioT?: number) => void) | null>(null)
+  const fxVizHandleRef = useRef<((t: number, audioT?: number) => void) | null>(null)
   const fullBarsHandleRef = useRef<((bars: number[]) => void) | null>(null)
   const fullFrameTHandleRef = useRef<((t: number) => void) | null>(null)
-  const fullFxHandleRef = useRef<((t: number) => void) | null>(null)
+  const fullFxHandleRef = useRef<((t: number, audioT?: number) => void) | null>(null)
 
   useEffect(() => {
     // 等 Konva 挂载 + 背景模糊缓存完成后交付句柄
@@ -68,11 +80,14 @@ export function ExportStageHost(props: ExportStageHostProps): React.JSX.Element 
             fullBarsHandleRef.current?.(bars)
           },
           setFrame: (tt) => {
-            fxStaticHandleRef.current?.(tt)
-            fxVizHandleRef.current?.(tt)
-            frameTHandleRef.current?.(tt)
-            fullFxHandleRef.current?.(tt)
-            fullFrameTHandleRef.current?.(tt)
+            // 0.7.0：tt 为总轴（含 lead）；音频驱动量（频谱/踩点/呼吸）按 audioT 分发，
+            // 连续运镜/文本入场仍走 wall 轴 tt（前导期间不冻结）。preview 侧 audioT = t（无 lead）。
+            const at = Math.max(0, tt - leadSec)
+            fxStaticHandleRef.current?.(tt, at)
+            fxVizHandleRef.current?.(tt, at)
+            frameTHandleRef.current?.(at)
+            fullFxHandleRef.current?.(tt, at)
+            fullFrameTHandleRef.current?.(at)
           },
           renderViz: () => v.toCanvas({ pixelRatio: 1 }),
           renderFull: () => f.toCanvas({ pixelRatio: 1 })
@@ -80,7 +95,7 @@ export function ExportStageHost(props: ExportStageHostProps): React.JSX.Element 
       }
     }, 500)
     return () => clearTimeout(t)
-  }, [layout, coverElement, width, height, onReady])
+  }, [layout, coverElement, width, height, onReady, leadSec])
 
   const noop = (): void => undefined
 
@@ -110,6 +125,7 @@ export function ExportStageHost(props: ExportStageHostProps): React.JSX.Element 
           canvasSize={{ width, height }}
           layers={['background', 'main', 'text']}
           layerFxRef={fxStaticHandleRef}
+          audioLeadSec={leadSec}
           mediaDurationSec={mediaDurationSec}
         />
       </Stage>
@@ -130,6 +146,7 @@ export function ExportStageHost(props: ExportStageHostProps): React.JSX.Element 
           barsHandleRef={barsHandleRef}
           frameTRef={frameTHandleRef}
           layerFxRef={fxVizHandleRef}
+          audioLeadSec={leadSec}
           mediaDurationSec={mediaDurationSec}
         />
       </Stage>
@@ -149,6 +166,7 @@ export function ExportStageHost(props: ExportStageHostProps): React.JSX.Element 
           barsHandleRef={fullBarsHandleRef}
           frameTRef={fullFrameTHandleRef}
           layerFxRef={fullFxHandleRef}
+          audioLeadSec={leadSec}
           mediaDurationSec={mediaDurationSec}
         />
       </Stage>
