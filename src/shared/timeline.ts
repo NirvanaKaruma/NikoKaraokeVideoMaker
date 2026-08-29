@@ -143,6 +143,8 @@ export function resolveLayoutAt(layout: ProjectLayout, tSec: number): ProjectLay
   const doc = layout.timeline ?? { segments: [] }
   const seg = segmentAt(doc, tSec)
   if (!seg) return layout
+  // 无关键帧：段视图即为最终布局（直接返回同一对象——预览逐帧调用零拷贝）
+  if ((seg.keyframes ?? []).length === 0) return seg.layout ?? layout
   const base = structuredClone(seg.layout ?? layout)
   for (const track of seg.keyframes ?? []) {
     const v = trackValueAt(track, tSec - seg.startSec)

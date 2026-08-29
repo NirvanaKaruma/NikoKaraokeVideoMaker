@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type Konva from 'konva'
-import { SUBTITLE_ZONE_Y, defaultLayerOrder } from '@shared/layout'
+import { SUBTITLE_ZONE_Y, defaultLayerOrder, type ProjectLayout } from '@shared/layout'
 import { resolveLayoutAt } from '@shared/timeline'
+import { resolvedSnapshotKey } from '@shared/tlDiff'
 import { useLocale } from './hooks/useLocale'
 import { useEditableLayout } from './hooks/useEditableLayout'
 import { useProject, type CanvasImageElement } from './hooks/useProject'
@@ -20,6 +21,9 @@ import { SettingsDialog } from './components/SettingsDialog'
 import type { SelectableId } from './components/SceneLayers'
 import { HelpDialog } from './components/HelpDialog'
 import { TimelineBar } from './components/TimelineBar'
+
+/** 1.0.0 T6：时间轴解析缓存（键 = 可动画叶值+片段结构；参见 tlDiff） */
+const TL_RESOLVE_CACHE = new WeakMap<ProjectLayout, { key: string; value: ProjectLayout }>()
 
 const IS_VISUAL_SMOKE = new URLSearchParams(window.location.search).has('smokeVisual')
 const IS_SMOKE_EXPORT = new URLSearchParams(window.location.search).has('smokeExport')
@@ -1252,6 +1256,22 @@ function App(): React.JSX.Element {
     project.layout.audio.leadMs
   )
   const pbRef = useRef<PlaybackApi>(pb)
+  /**
+   * 1.0.0 T6 差异门控：逐帧 resolve 后用「可动画叶值+片段结构」键缓存。
+   * 布局对象身份与键均未变 → 复用同一对象（React 整树跳过）；只有关键帧动画/片段切换/编辑才重渲。
+   * 第一层失效条件 = 布局对象身份（任何编辑/存档必然换对象）——与 tlDiff 键语义互补。
+   * 缓存用模块级 WeakMap（以布局对象为键，GC 安全；渲染期读写合法，无 ref）。
+   */
+  const canvasLayout = (() => {
+    const cur = project.layout
+    const resolved = resolveLayoutAt(cur, pb.currentTime)
+    if (resolved === cur) return cur
+    const key = resolvedSnapshotKey(resolved)
+    const hit = TL_RESOLVE_CACHE.get(cur)
+    if (hit && hit.key === key) return hit.value
+    TL_RESOLVE_CACHE.set(cur, { key, value: resolved })
+    return resolved
+  })()
   // 自定义字体（0.8.0）：项目 assets.fontFile → FontFace 注册（预览/导出同进程同字形）
   const customFont = useCustomFont(project.assets.fontFile ?? null)
 
@@ -2027,7 +2047,7 @@ function App(): React.JSX.Element {
           />
           <main className="canvas-wrap">
             <CanvasStage
-              layout={resolveLayoutAt(project.layout, pb.currentTime)}
+              layout={canvasLayout}
               coverElement={project.assets.coverElement}
               bgElement={project.assets.bgElement}
               selectedId={selectedId}
