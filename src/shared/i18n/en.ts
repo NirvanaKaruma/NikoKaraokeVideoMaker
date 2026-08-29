@@ -20,6 +20,7 @@ export const en = {
     export: '📤 Export',
     help: '❓ Help',
     settings: '⚙ Settings',
+    timeline: '📃 Timeline',
     undoTitle: 'Undo (Ctrl+Z)',
     redoTitle: 'Redo (Ctrl+Y / Ctrl+Shift+Z)',
     newProjectConfirm: 'Creating a new project will clear the current content. Continue?'
@@ -182,6 +183,11 @@ export const en = {
   },
   settings: {
     title: 'Settings',
+    theme: 'Appearance',
+    themeDark: 'Dark mode',
+    themeLight: 'Light mode',
+    themeNote:
+      'Dark is the default; light suits bright environments. Applies immediately and persists.',
     language: 'Language',
     uiLanguage: 'Interface language',
     languageZh: '简体中文',
@@ -298,6 +304,7 @@ export const en = {
   },
   timeline: {
     title: 'Timeline',
+    toggleTitle: 'Show/Hide timeline',
     split: '✂ Split here',
     remove: 'Remove segment',
     hint: 'Click/drag the track to position; split the song into segments and edit each one separately',

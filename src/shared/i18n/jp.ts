@@ -20,6 +20,7 @@ export const jp = {
     export: '📤 書き出し',
     help: '❓ ヘルプ',
     settings: '⚙ 設定',
+    timeline: '📃 タイムライン',
     undoTitle: '元に戻す（Ctrl+Z）',
     redoTitle: 'やり直し（Ctrl+Y / Ctrl+Shift+Z）',
     newProjectConfirm: '新規プロジェクトを作成すると、現在の内容が消去されます。続行しますか？'
@@ -182,6 +183,10 @@ export const jp = {
   },
   settings: {
     title: '設定',
+    theme: '外観テーマ',
+    themeDark: 'ダークモード',
+    themeLight: 'ライトモード',
+    themeNote: 'ダークがデフォルト。ライトは明るい環境向け。即時反映・永続化。',
     language: '言語（Language）',
     uiLanguage: '表示言語',
     languageZh: '简体中文',
@@ -299,6 +304,7 @@ export const jp = {
   },
   timeline: {
     title: 'タイムライン',
+    toggleTitle: 'タイムライン表示/非表示',
     split: '✂ ここで分割',
     remove: 'セグメント削除',
     hint: 'トラックをクリック/ドラッグで位置決め；曲をセグメントに分割して個別編集できます',

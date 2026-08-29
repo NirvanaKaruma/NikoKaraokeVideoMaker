@@ -1,5 +1,35 @@
 @import './base.css';
 
+/* ===== 主题系统（用户要求：统一按钮为深色「深色模式」；新增可切换「浅色模式」） ===== */
+/* 深色模式（默认）：所有按钮统一为深灰底/浅字/圆角 8（参照「重新载入系统字体」按钮） */
+:root {
+  --btn-bg: #2d2d35;
+  --btn-bg-hover: #3a3a44;
+  --btn-bg-active: #b0417a;
+  --btn-border: #41414b;
+  --btn-text: #d8d8e0;
+  --btn-danger-text: #ff9b9b;
+}
+
+/* 浅色模式：仅覆盖上表 + electron-toolkit 基座变量，其余组件自动跟随 */
+:root[data-theme='light'] {
+  --btn-bg: #e9e9ef;
+  --btn-bg-hover: #f8f8fc;
+  --btn-bg-active: #ff5f9e;
+  --btn-border: #c9c9d4;
+  --btn-text: #2a2a33;
+  --btn-danger-text: #b33030;
+  --ev-c-black: #f4f4f8;
+  --ev-c-black-soft: #ececf2;
+  --ev-c-black-mute: #ffffff;
+  --ev-c-gray-1: #e4e4ec;
+  --ev-c-gray-2: #d5d5de;
+  --ev-c-gray-3: #c3c3cd;
+  --ev-c-text-1: #1c1c24;
+  --ev-c-text-2: #4a4a56;
+  --ev-c-text-3: #86868f;
+}
+
 body {
   display: flex;
   overflow: hidden;
@@ -420,8 +450,21 @@ body {
 
 .btn-sm {
   font-size: 12px;
-  padding: 3px 8px;
+  padding: 4px 10px;
   cursor: pointer;
+  background: var(--btn-bg);
+  color: var(--btn-text);
+  border: 1px solid var(--btn-border);
+  border-radius: 8px;
+}
+
+.btn-sm:hover {
+  background: var(--btn-bg-hover);
+}
+
+.btn-sm.danger {
+  color: var(--btn-danger-text);
+  background: transparent;
 }
 
 .panel-note {
@@ -506,22 +549,31 @@ body {
 }
 
 .mini-btn {
-  background: var(--ev-c-gray-3);
-  color: var(--ev-c-text-1);
-  border: 1px solid var(--ev-c-gray-2);
-  border-radius: 6px;
-  padding: 5px 10px;
+  background: var(--btn-bg);
+  color: var(--btn-text);
+  border: 1px solid var(--btn-border);
+  border-radius: 8px;
+  padding: 5px 11px;
   font-size: 12px;
   cursor: pointer;
+  transition: background 120ms;
 }
 
 .mini-btn:hover {
+  background: var(--btn-bg-hover);
+  border-color: #ff5f9e;
+}
+
+.mini-btn.mini-btn-active {
+  background: var(--btn-bg-active);
+  color: #fff;
   border-color: #ff5f9e;
 }
 
 .mini-btn.danger {
-  color: #ff9b9b;
+  color: var(--btn-danger-text);
   border-color: #7a3a3a;
+  background: transparent;
 }
 
 .canvas-wrap {
@@ -558,18 +610,18 @@ body {
 }
 
 .banner-btn {
-  background: #c2416e;
-  color: #fff;
-  border: none;
-  border-radius: 6px;
-  padding: 5px 14px;
+  background: var(--btn-bg);
+  color: var(--btn-text);
+  border: 1px solid var(--btn-border);
+  border-radius: 8px;
+  padding: 5px 12px;
   font-size: 12px;
-  font-weight: 600;
   cursor: pointer;
 }
 
 .banner-btn:hover {
-  background: #d14d7d;
+  background: var(--btn-bg-hover);
+  border-color: #ff5f9e;
 }
 
 .ffmpeg-info {

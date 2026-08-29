@@ -1191,6 +1191,22 @@ function App(): React.JSX.Element {
   const [exportOpen, setExportOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [timelineOpen, setTimelineOpen] = useState(true)
+  /** 主题（深色=默认；浅色可选；localStorage niko.theme 持久化） */
+  const [theme, setTheme] = useState<'dark' | 'light'>(() => {
+    try {
+      return localStorage.getItem('niko.theme') === 'light' ? 'light' : 'dark'
+    } catch {
+      return 'dark'
+    }
+  })
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme
+    try {
+      localStorage.setItem('niko.theme', theme)
+    } catch {
+      /* 忽略 */
+    }
+  }, [theme])
   const stageRef = useRef<Konva.Stage | null>(null)
   const projectRef = useRef(project)
 
@@ -2116,6 +2132,14 @@ function App(): React.JSX.Element {
           <button type="button" className="mini-btn" onClick={() => setSettingsOpen(true)}>
             {t('header.settings')}
           </button>
+          <button
+            type="button"
+            className={'mini-btn' + (timelineOpen ? ' mini-btn-active' : '')}
+            title={t('timeline.toggleTitle')}
+            onClick={() => setTimelineOpen((v) => !v)}
+          >
+            {t('header.timeline')}
+          </button>
         </div>
       </header>
       {!ffmpeg.loading && ffmpeg.report && !ffmpeg.report.effective.available && (
@@ -2288,7 +2312,7 @@ function App(): React.JSX.Element {
             selectedSegmentId={edit.segId}
             onSeek={pb.seek}
             onSelectSegment={project.setEditSegment}
-            onSplitAt={(t) => project.splitSegment(t)}
+            onSplitAt={(t) => project.splitSegment(t, pb.duration)}
             onRemoveSegment={(id) => {
               project.removeSegment(id)
               if (project.editSegId === id) project.setEditSegment(null)
@@ -2326,6 +2350,8 @@ function App(): React.JSX.Element {
         status={ffmpeg.report}
         loading={ffmpeg.loading}
         onRefresh={() => void ffmpeg.refresh()}
+        theme={theme}
+        onThemeChange={setTheme}
       />
       {exporter.stageRequest && (
         <ExportStageHost

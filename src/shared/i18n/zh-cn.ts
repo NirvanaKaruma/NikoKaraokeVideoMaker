@@ -20,6 +20,7 @@ export const zhCn = {
     export: '📤 导出',
     help: '❓ 帮助',
     settings: '⚙ 设置',
+    timeline: '📃 时间轴',
     undoTitle: '撤销（Ctrl+Z）',
     redoTitle: '重做（Ctrl+Y / Ctrl+Shift+Z）',
     newProjectConfirm: '新建项目将清空当前内容，确定继续？'
@@ -180,6 +181,10 @@ export const zhCn = {
   },
   settings: {
     title: '设置',
+    theme: '外观主题',
+    themeDark: '深色模式',
+    themeLight: '浅色模式',
+    themeNote: '深色模式为默认；浅色模式针对明亮环境。设置即时生效并持久化。',
     language: '语言（Language）',
     uiLanguage: '界面语言',
     languageZh: '简体中文',
@@ -299,6 +304,7 @@ export const zhCn = {
   },
   timeline: {
     title: '时间轴',
+    toggleTitle: '显示/隐藏时间轴',
     split: '✂ 在此分割',
     remove: '删除片段',
     hint: '点击/拖动轨道进行试听定位；将歌曲分割成段落后可单独编辑每段',

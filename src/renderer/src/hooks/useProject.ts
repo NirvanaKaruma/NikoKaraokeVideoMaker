@@ -148,7 +148,7 @@ export function useProject(): {
   updateSegmentLayout: (segId: string, patch: Partial<ProjectLayout>) => void
   addSegment: (startSec: number, endSec: number) => string
   removeSegment: (segId: string) => void
-  splitSegment: (atSec: number) => void
+  splitSegment: (atSec: number, durationSec?: number) => void
   updateSegmentBounds: (segId: string, startSec: number, endSec: number) => void
   /** 段关键帧整体替换（T5；t 相对片段起点） */
   updateSegmentTracks: (segId: string, tracks: PropertyTrack[]) => void
@@ -669,13 +669,39 @@ export function useProject(): {
     [applyLayout, pushHistory]
   )
 
-  /** 分割：atSec（绝对）把所在段切成两段（布局继承/克隆；关键帧按相对时间拆轨平移） */
+  /**
+   * 分割：atSec（绝对）把所在段切成两段（布局继承/克隆；关键帧按相对时间拆轨平移）。
+   * 1.0.0 UX 修复：**无任何片段时** = 整首是全局基线——此时分割 = 把整首切成两段
+   * （[0,at) / [at,dur)，均 layout:null 继承全局，视觉不变但可分别编辑（主歌/副歌场景）。
+   */
   const splitSegment = useCallback(
-    (atSec: number) => {
+    (atSec: number, durationSec?: number) => {
       const cur = layoutRef.current
-      const idx = (cur.timeline?.segments ?? []).findIndex(
-        (s) => atSec > s.startSec && atSec < s.endSec
-      )
+      const segs = cur.timeline?.segments ?? []
+      const idx = segs.findIndex((s) => atSec > s.startSec && atSec < s.endSec)
+      if (idx < 0 && segs.length === 0) {
+        // 无片段：创建两段（dur 从音频时长取；未知则静默）
+        if (durationSec == null || durationSec <= 0 || atSec <= 0 || atSec >= durationSec - 0.05) {
+          return
+        }
+        pushHistory()
+        applyLayout({
+          ...cur,
+          timeline: {
+            segments: [
+              { id: crypto.randomUUID(), startSec: 0, endSec: atSec, layout: null, keyframes: [] },
+              {
+                id: crypto.randomUUID(),
+                startSec: atSec,
+                endSec: durationSec,
+                layout: null,
+                keyframes: []
+              }
+            ]
+          }
+        })
+        return
+      }
       if (idx < 0) return
       pushHistory()
       const seg = (cur.timeline?.segments ?? [])[idx]

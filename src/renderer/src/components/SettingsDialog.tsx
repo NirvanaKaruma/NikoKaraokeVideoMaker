@@ -17,6 +17,9 @@ interface SettingsDialogProps {
   status: FfmpegStatusReport | null
   loading: boolean
   onRefresh: () => void
+  /** 主题（深色/浅色）：组件只负责展示与回传 */
+  theme: 'dark' | 'light'
+  onThemeChange: (t: 'dark' | 'light') => void
 }
 
 const MODE_LABEL_KEY: Record<EncodeModePref, string> = {
@@ -28,7 +31,7 @@ const MODE_LABEL_KEY: Record<EncodeModePref, string> = {
 /** 系统级设置弹窗（M5 UI 重构）：ffmpeg 三源 + 语言预留 + 编码加速（GPU 检测与显式模式） */
 export function SettingsDialog(props: SettingsDialogProps): React.JSX.Element | null {
   const { t, locale, setLocale } = useLocale()
-  const { open, onClose, status, loading, onRefresh } = props
+  const { open, onClose, status, loading, onRefresh, theme, onThemeChange } = props
   const [mode, setMode] = useState<EncodeModePref>(() => getEncodeModePref())
   const [diag, setDiag] = useState<EncodeBenchmark | null>(null)
   const [diagRunning, setDiagRunning] = useState(false)
@@ -63,6 +66,27 @@ export function SettingsDialog(props: SettingsDialogProps): React.JSX.Element | 
         </div>
         <div className="modal-body">
           <SettingsPanel status={status} loading={loading} onRefresh={onRefresh} />
+
+          <section className="panel-section">
+            <h2>{t('settings.theme')}</h2>
+            <div className="audio-row">
+              <button
+                type="button"
+                className={'mini-btn' + (theme === 'dark' ? ' mini-btn-active' : '')}
+                onClick={() => onThemeChange('dark')}
+              >
+                {t('settings.themeDark')}
+              </button>
+              <button
+                type="button"
+                className={'mini-btn' + (theme === 'light' ? ' mini-btn-active' : '')}
+                onClick={() => onThemeChange('light')}
+              >
+                {t('settings.themeLight')}
+              </button>
+            </div>
+            <p className="panel-note">{t('settings.themeNote')}</p>
+          </section>
 
           <section className="panel-section">
             <h2>{t('settings.language')}</h2>
