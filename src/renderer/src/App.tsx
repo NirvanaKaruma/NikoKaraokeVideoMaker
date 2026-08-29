@@ -1449,11 +1449,16 @@ function App(): React.JSX.Element {
         await exporterRef.current.start()
         const pollStart = Date.now()
         let phase = exporterStateRef.current.phase
+        // 每变体等待上限（默认 15min；内存验收长跑可用 NIKO_SMOKE_EXPORT_TIMEOUT_MS 放宽）
+        const variantCap = Number(
+          (window as unknown as { NIKO_SMOKE_EXPORT_TIMEOUT_MS?: string }).NIKO_SMOKE_EXPORT_TIMEOUT_MS ??
+            900000
+        )
         while (
           phase !== 'done' &&
           phase !== 'error' &&
           phase !== 'cancelled' &&
-          Date.now() - pollStart < 900000
+          Date.now() - pollStart < variantCap
         ) {
           await sleep(500)
           phase = exporterStateRef.current.phase
