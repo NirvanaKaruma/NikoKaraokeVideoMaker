@@ -49,6 +49,9 @@ export const jp = {
     coverDrop: 'クリックまたはドラッグ＆ドロップでカバー画像を追加',
     coverHint: '＋ カバー画像',
     audio: '音声 / 動画（mp3 / wav / flac / m4a / mp4 / mov / webm）',
+    applyTheme: '🎨 テーマカラーを適用',
+    themeNote:
+      'カバーから主色を抽出 → 背景ベース＋ビジュアライザーのグラデーション（文字色は不変；一度で取り消し可）',
     audioDrop: 'クリックまたはドラッグ＆ドロップで音声/動画を追加',
     audioHint: '♪ 音声'
   },

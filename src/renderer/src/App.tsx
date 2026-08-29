@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type Konva from 'konva'
 import { SUBTITLE_ZONE_Y } from '@shared/layout'
 import { useLocale } from './hooks/useLocale'
 import { useProject, type CanvasImageElement } from './hooks/useProject'
 import { useAudioPlayback, type PlaybackApi } from './hooks/useAudioPlayback'
 import { useCustomFont } from './hooks/useCustomFont'
+import { themeFromSamples } from '@shared/theme'
 import { useFfmpegDownload, useFfmpegStatus } from './hooks/useFfmpeg'
 import { useExporter } from './hooks/useExporter'
 import { benchmarkEncoder } from './export/exportVideo'
@@ -352,6 +353,61 @@ async function runAudioSmoke(
     return { ok: false, checks }
   }
   pass('音频解码', 'WAV 解码成功，时长 ' + pbRef.current.duration.toFixed(2) + 's')
+
+  // ── 0.8.0 主题色：封面降采样 → 纯函数 → 背景+可视化变化；一次撤销恢复（确定性，纯状态校验）──
+  const covEl = projectRefArg.current.assets.coverElement
+  if (covEl) {
+    const tc = document.createElement('canvas')
+    tc.width = 32
+    tc.height = 32
+    const tctx = tc.getContext('2d')
+    if (tctx) {
+      tctx.drawImage(covEl, 0, 0, 32, 32)
+      const tdata = tctx.getImageData(0, 0, 32, 32).data
+      const tsamples: number[] = []
+      for (let i = 0; i < tdata.length; i += 4) tsamples.push(tdata[i], tdata[i + 1], tdata[i + 2])
+      const theme = themeFromSamples(tsamples, 32 * 32)
+      const beforeBg = projectRefArg.current.layout.background.color
+      const beforeViz = projectRefArg.current.layout.visualizer.colors.join(',')
+      project.applyTheme(theme)
+      await sleep(200)
+      const afterBg = projectRefArg.current.layout.background.color
+      const afterViz = projectRefArg.current.layout.visualizer.colors.join(',')
+      project.undo()
+      await sleep(200)
+      const restoredBg = projectRefArg.current.layout.background.color
+      if (afterBg !== beforeBg && afterViz !== beforeViz && restoredBg === beforeBg) {
+        pass(
+          '主题色一键应用',
+          'bg ' +
+            beforeBg +
+            '→' +
+            afterBg +
+            '，可视化 ' +
+            afterViz +
+            '（撤销恢复 ' +
+            restoredBg +
+            '）'
+        )
+      } else {
+        fail(
+          '主题色一键应用',
+          'bg ' +
+            beforeBg +
+            '→' +
+            afterBg +
+            ' viz ' +
+            beforeViz +
+            '→' +
+            afterViz +
+            ' restored=' +
+            restoredBg
+        )
+      }
+    }
+  } else {
+    fail('主题色一键应用', '封面未就绪（coverElement=null）')
+  }
 
   const vizX0 = 0.49 * 1920
   const vizY0 = 0.38 * 1080
@@ -1142,6 +1198,21 @@ function App(): React.JSX.Element {
   const pbRef = useRef<PlaybackApi>(pb)
   // 自定义字体（0.8.0）：项目 assets.fontFile → FontFace 注册（预览/导出同进程同字形）
   const customFont = useCustomFont(project.assets.fontFile ?? null)
+  // 一键主题色（0.8.0）：封面 32×32 降采样 → 纯函数提取 → 背景+可视化（一次撤销）
+  const handleApplyTheme = useCallback(() => {
+    const el = projectRef.current.assets.coverElement
+    if (!el) return
+    const c = document.createElement('canvas')
+    c.width = 32
+    c.height = 32
+    const ctx = c.getContext('2d')
+    if (!ctx) return
+    ctx.drawImage(el, 0, 0, 32, 32)
+    const data = ctx.getImageData(0, 0, 32, 32).data
+    const samples: number[] = []
+    for (let i = 0; i < data.length; i += 4) samples.push(data[i], data[i + 1], data[i + 2])
+    projectRef.current.applyTheme(themeFromSamples(samples, 32 * 32))
+  }, [])
 
   const ffmpeg = useFfmpegStatus()
   const ffmpegDl = useFfmpegDownload(() => void ffmpeg.refresh())
@@ -1751,6 +1822,8 @@ function App(): React.JSX.Element {
           customFontFamily={project.assets.fontFile ? customFont.family : null}
           customFontName={customFont.name}
           onPickFont={project.setFontFile}
+          themeBusy={!project.assets.coverElement}
+          onApplyTheme={handleApplyTheme}
           overlayLayers={project.layout.overlayLayers}
           overlayImageUrls={overlayUrls}
           selectedId={selectedId}

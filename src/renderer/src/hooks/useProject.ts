@@ -122,6 +122,8 @@ export function useProject(): {
   setOverlayFromUrl: (id: string, url: string) => void
   /** 自定义字体文件（0.8.0）：null = 清除 */
   setFontFile: (file: File | null) => void
+  /** 一键主题色（0.8.0）：背景基色 + 可视化渐变（一次撤销；文字颜色不动） */
+  applyTheme: (theme: { bg: string; vizColors: string[] }) => void
   /** 附加层：新增（默认右下角/水印位），返回新层 id */
   addOverlayLayer: () => string
   /** 附加层：改配置（rect/opacity/fx/entry） */
@@ -492,6 +494,18 @@ export function useProject(): {
     [applyLayout, pushHistory]
   )
 
+  const applyTheme = useCallback(
+    (theme: { bg: string; vizColors: string[] }) => {
+      pushHistory()
+      applyLayout({
+        ...layoutRef.current,
+        background: { ...layoutRef.current.background, color: theme.bg },
+        visualizer: { ...layoutRef.current.visualizer, colors: theme.vizColors }
+      })
+    },
+    [applyLayout, pushHistory]
+  )
+
   const setAudioFile = useCallback((file: File | null) => {
     if (!file) return
     const ext = (file.name.split('.').pop() ?? '').toLowerCase()
@@ -856,6 +870,7 @@ export function useProject(): {
     setOverlayFile,
     setOverlayFromUrl,
     setFontFile,
+    applyTheme,
     addOverlayLayer,
     updateOverlayLayer,
     removeOverlayLayer,

@@ -49,6 +49,8 @@ export const zhCn = {
     coverDrop: '点击或拖入封面图',
     coverHint: '＋ 封面图',
     audio: '音频 / 视频（mp3 / wav / flac / m4a / mp4 / mov / webm）',
+    applyTheme: '🎨 一键应用主题色',
+    themeNote: '从封面提取主色 → 背景基色 + 可视化渐变色（文字颜色不变；可一次撤销）',
     audioDrop: '点击或拖入音频或视频',
     audioHint: '♪ 音频'
   },
