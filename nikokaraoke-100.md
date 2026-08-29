@@ -35,4 +35,5 @@
 - T7a（cc1bff8）：导出接入——逐帧 resolveLayoutAt（静态段零拷贝）→ ExportStageHost.setLayout（flushSync 同步应用）；dynamic 判定并入 hasTimeline；beat/canvasFx 仍按基线配置采样（v1 目录仅渲染类属性可动画）；smoke-export 720p@8 全绿。
 - T7b（本提交）：流式写盘——mp4-muxer StreamTarget(chunked 4MiB, fastStart:false=moov 尾置)；IPC invoke 分块 muxer:start/write/finish/cancel；主进程按 position 定位写（fs FileHandle.write(fd,buf,0,len,pos)——muxer 乱序 onData 也正确落盘）；三级背压：① encoder.encodeQueueSize≤2（dequeue 事件等待）② 输出天然小 ③ ACK=fs.write 回调、renderer 在途 1 块 + 每帧 throttle(8MB)；错误协议：写失败 → invoke reject → UI 可读提示 + main 删临时文件；取消 → cancel 关 fd+删文件。实测发现 MessagePort（MessageChannelMain+contextBridge）在本构建不可达（发送未达 main），降级为 invoke 分块（每块一次 fs.write，拷贝 4MB约1ms），已注释于 ipc.ts。smoke-export 三路全 done（合并 ffmpeg -movflags +faststart 校验通过）。
 - T7 收尾：折线更新检查阈值 100提到70（机器级停顿实测打到 95，保留卡死检测）；smoke-visual 重跑全绿。
-- 状态：T1–T7 完成；T8（主题化/数字框）、T9（片段语义边界）、T10（端到端+内存验收）、T11（文档交付）待做。
+- T8（589255b）：主题化——全局滚动条（圆角/配色/hover）、range 轨道+圆拇指（替代 accent-color 兜底）、数字框 appearance:none 去箭头+居中（DeferredSlider.slider-num 与 kf-num 同步）；**DeferredSlider 即计划中的统一 SliderField**（label+滑条+数字框，全面板 56 处复用——抽取/迁移步骤在 0.9.0 已实质完成，T8 记录此事实）；窗口保持 1280×800；侧栏 400 已在 T3。
+- 状态：T1–T8 完成（8/11）；**T9（片段语义边界：硬切/重叠缝隙校验/音频变化修正）、T10（time-smoke/慢盘探针/60min·4K 内存验收/4GB VM）、T11（文档+版本 1.0.0+交付）** 待做。
