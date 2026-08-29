@@ -158,6 +158,10 @@ export interface CanvasStageProps {
   layerFxRef?: LayerFxRef
   /** 音频总时长秒（片尾时间轴用） */
   mediaDurationSec?: number
+  /** 附加层图像元素（0.8.0）：layerId → 解码后元素 */
+  overlayElements?: Record<string, CanvasImageElement | null>
+  /** 附加层矩形变化（拖动/缩放提交） */
+  onOverlayRectChange?: (id: string, rect: NormRect) => void
   /** 播放时间值盒（CanvasFX overlay 等 rAF 自绘组件读取最新 t） */
   playTimeRef?: { current: number }
   onStageReady?: (stage: Konva.Stage | null) => void
@@ -180,6 +184,8 @@ export function CanvasStage(props: CanvasStageProps): React.JSX.Element {
     analyzer,
     layerFxRef,
     mediaDurationSec,
+    overlayElements,
+    onOverlayRectChange,
     playTimeRef,
     onStageReady
   } = props
@@ -260,6 +266,8 @@ export function CanvasStage(props: CanvasStageProps): React.JSX.Element {
           layerFxRef={layerFxRef}
           audioLeadSec={layout.audio.leadMs / 1000}
           mediaDurationSec={mediaDurationSec}
+          overlayElements={overlayElements}
+          onOverlayRectChange={onOverlayRectChange}
         />
       </Stage>
     </div>

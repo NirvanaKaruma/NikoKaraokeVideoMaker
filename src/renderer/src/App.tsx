@@ -1,8 +1,8 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type Konva from 'konva'
 import { SUBTITLE_ZONE_Y } from '@shared/layout'
 import { useLocale } from './hooks/useLocale'
-import { useProject } from './hooks/useProject'
+import { useProject, type CanvasImageElement } from './hooks/useProject'
 import { useAudioPlayback, type PlaybackApi } from './hooks/useAudioPlayback'
 import { useFfmpegDownload, useFfmpegStatus } from './hooks/useFfmpeg'
 import { useExporter } from './hooks/useExporter'
@@ -1114,6 +1114,14 @@ function App(): React.JSX.Element {
   const frameTRef = useRef<((t: number) => void) | null>(null)
   const layerFxRef = useRef<((t: number, audioT?: number) => void) | null>(null)
   const playTimeRef = useRef(0)
+  // 附加层图像元素（0.8.0）：id → 解码后元素（隔帧由 useMemo 派生；对象 URL 变动不引发重画）
+  const overlayElements = useMemo(() => {
+    const m: Record<string, CanvasImageElement | null> = {}
+    for (const [id, a] of Object.entries(project.assets.overlayImages ?? {})) {
+      m[id] = a.element
+    }
+    return m
+  }, [project.assets.overlayImages])
   const pb = useAudioPlayback(
     project.assets.audioFile,
     project.layout.visualizer,
@@ -1692,6 +1700,8 @@ function App(): React.JSX.Element {
             onMainRectChange={project.updateMainRect}
             onTextRectChange={(kind, rect) => project.updateText(kind, { rect })}
             onVisualizerRectChange={(rect) => project.updateVisualizer({ rect })}
+            overlayElements={overlayElements}
+            onOverlayRectChange={(id, rect) => project.updateOverlayLayer(id, { rect })}
             bars={pb.bars}
             barsHandleRef={barsHandleRef}
             frameTRef={frameTRef}
@@ -1742,6 +1752,7 @@ function App(): React.JSX.Element {
           analyzer={pb.analyzer}
           mediaDurationSec={pb.duration}
           audioLeadSec={project.layout.audio.leadMs / 1000}
+          overlayElements={overlayElements}
           width={exporter.stageRequest.width}
           height={exporter.stageRequest.height}
           onReady={exporter.onStageReady}

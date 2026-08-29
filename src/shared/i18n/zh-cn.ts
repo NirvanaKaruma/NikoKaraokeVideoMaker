@@ -32,7 +32,8 @@ export const zhCn = {
   },
   canvas: {
     subtitleZoneWarn: '⚠ 主图已进入下半区（预留给字幕的区域）。',
-    dropCoverPlaceholder: '拖入封面图'
+    dropCoverPlaceholder: '拖入封面图',
+    overlayPlaceholder: '添加图像'
   },
   tabs: {
     assets: '素材与画面',

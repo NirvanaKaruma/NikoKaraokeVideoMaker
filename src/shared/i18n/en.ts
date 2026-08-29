@@ -32,7 +32,8 @@ export const en = {
   },
   canvas: {
     subtitleZoneWarn: '⚠ The main image has entered the bottom half (reserved subtitle area).',
-    dropCoverPlaceholder: 'Drop cover image'
+    dropCoverPlaceholder: 'Drop cover image',
+    overlayPlaceholder: 'Add image'
   },
   tabs: {
     assets: 'Assets & Layout',

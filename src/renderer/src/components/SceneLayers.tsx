@@ -25,6 +25,8 @@ import {
   type CanvasSize,
   type ImageFxConfig,
   type MainImageConfig,
+  type OverlayEntryConfig,
+  type OverlayLayerConfig,
   type PixelRect
 } from '@shared/layout'
 import { colorAt } from '@shared/color'
@@ -49,10 +51,11 @@ import type { CanvasImageElement } from '../hooks/useProject'
 /** 背景动效种子（确定性；Ken Burns 随时间推进） */
 const SEED_BG_FX = 987654321
 
-/** 可选中元素：主图 / 歌名 / 作者 / 可视化 */
-export type SelectableId = 'mainImage' | 'songTitle' | 'artist' | 'visualizer' | null
+/** 可选中元素：主图 / 歌名 / 作者 / 可视化 / 附加层（overlay:<id>） */
+export type SelectableId =
+  'mainImage' | 'songTitle' | 'artist' | 'visualizer' | `overlay:${string}` | null
 
-export type SceneLayerName = 'background' | 'main' | 'text' | 'visualizer' | 'fx'
+export type SceneLayerName = 'background' | 'main' | 'overlay' | 'text' | 'visualizer' | 'fx'
 
 /** 图像源尺寸（Image 用 naturalWidth，Canvas 用 width） */
 function imgW(el: CanvasImageElement): number {
@@ -87,10 +90,14 @@ export interface SceneLayersProps {
   /** 非可视化动效帧分发（背景/主图/文本/片头片尾每帧更新；预览 rAF 与导出逐帧同源）。
    * 第二参 audioT = 音频时间轴（0.7.0 导出 lead>0 时 ≠ t；预览缺省 = t）。 */
   layerFxRef?: { current: ((t: number, audioT?: number) => void) | null }
-  /** 前导留白秒（0.7.0，仅导出侧）：片头黑场/标题卡时间轴用；预览不传（=0，编辑态保持原音轨） */
+  /** 前导留白秒（0.7.0）：片头黑场/标题卡时间轴用（预览/导出同传——所见即所得） */
   audioLeadSec?: number
   /** 音频总时长秒（片尾时间轴用） */
   mediaDurationSec?: number
+  /** 附加层图像元素（0.8.0）：layerId → 解码后元素（layout.overlayLayers 平行） */
+  overlayElements?: Record<string, CanvasImageElement | null>
+  /** 附加层矩形变化（0.8.0，拖动/缩放提交） */
+  onOverlayRectChange?: (id: string, rect: NormRect) => void
 }
 
 const SELECT_BORDER = '#ff5f9e'
@@ -605,6 +612,7 @@ function SharedImageFxLayer({
   opacity,
   beatPulse,
   beatPeriodSec,
+  entry,
   layerFxSlotRef
 }: {
   imageElement: CanvasImageElement | null
@@ -619,6 +627,8 @@ function SharedImageFxLayer({
   beatPulse: number
   /** 手动节拍周期秒（null=节拍关） */
   beatPeriodSec: number | null
+  /** 入场动画（0.8.0 附加层专用：fade/slide/bounce；主图不传 = 无） */
+  entry?: OverlayEntryConfig | null
   /** 每帧动效槽（SceneLayers 分发 frame(t, audioT)） */
   layerFxSlotRef?: { current: ((t: number, audioT: number) => void) | null }
 }): React.JSX.Element {
@@ -727,6 +737,35 @@ function SharedImageFxLayer({
         img.shadowOpacity(glow > 0 ? 0.75 : 0)
         img.shadowOffset({ x: 0, y: 0 })
       }
+      // 入场动画（0.8.0 附加层）：fade/slide/bounce——语义同文本入场（确定性时间函数）；
+      // 完成后复位最终态（opacity 基准 + 中心基准），防止残留半透明/位移
+      if (entry && entry.type !== 'none') {
+        const p = entryProgress(tt, entry.delaySec, entry.durationSec)
+        const e = easeOutCubic(p)
+        if (p >= 1) {
+          fg.opacity(opacity)
+          fg.x(px.w / 2)
+          fg.y(px.h / 2)
+        } else {
+          switch (entry.type) {
+            case 'fade':
+              fg.opacity(opacity * e)
+              break
+            case 'slide':
+              fg.opacity(opacity * Math.min(1, p * 1.5))
+              fg.x(px.w / 2 + (1 - e) * px.w * 0.6)
+              break
+            case 'bounce':
+              fg.opacity(opacity * Math.min(1, p * 2))
+              fg.y(px.h / 2 - (1 - bounceIn(p)) * px.h * 0.45 + 6 * (1 - p))
+              break
+            default:
+              break
+          }
+        }
+      } else if (fg.opacity() !== opacity) {
+        fg.opacity(opacity)
+      }
       fg.getLayer()?.batchDraw()
     }
     return () => {
@@ -742,7 +781,9 @@ function SharedImageFxLayer({
     fx.rotateDeg,
     fx.glowPulse,
     beatPulse,
-    beatPeriodSec
+    beatPeriodSec,
+    entry,
+    opacity
   ])
 
   return (
@@ -764,6 +805,7 @@ function SharedImageLayer({
   opacity,
   beatPulse,
   beatPeriodSec,
+  entry,
   selected,
   onSelect,
   onRectChange,
@@ -778,6 +820,8 @@ function SharedImageLayer({
   opacity: number
   beatPulse: number
   beatPeriodSec: number | null
+  /** 入场动画（附加层专用；主图不传 = 无） */
+  entry?: OverlayEntryConfig | null
   selected: boolean
   onSelect: () => void
   onRectChange: (rect: NormRect) => void
@@ -855,6 +899,7 @@ function SharedImageLayer({
             opacity={opacity}
             beatPulse={beatPulse}
             beatPeriodSec={beatPeriodSec}
+            entry={entry}
             layerFxSlotRef={layerFxSlotRef}
           />
         ) : (
@@ -945,6 +990,59 @@ function MainImageLayer({
       canvas={canvas}
       layerFxSlotRef={layerFxSlotRef}
       placeholderLabelKey="canvas.dropCoverPlaceholder"
+    />
+  )
+}
+
+/** 附加图像层（0.8.0）：多层自由增删（z 序=数组序）；共享图片层实现（拖动/缩放/完整 fx/入场/透明度）。 */
+function OverlayLayer({
+  cfg,
+  imageElement,
+  canvas,
+  selected,
+  onSelect,
+  onRectChange,
+  slotRegistryRef,
+  beatPulse,
+  beatPeriodSec
+}: {
+  cfg: OverlayLayerConfig
+  imageElement: CanvasImageElement | null
+  canvas: CanvasSize
+  selected: boolean
+  onSelect: (id: SelectableId) => void
+  onRectChange: (rect: NormRect) => void
+  /** 动效槽注册表（SceneLayers 持有）；本层自持 ref，经 effect 注册/注销 */
+  slotRegistryRef: {
+    current: Map<string, { current: ((t: number, audioT: number) => void) | null }>
+  }
+  beatPulse: number
+  beatPeriodSec: number | null
+}): React.JSX.Element {
+  const localSlotRef = useRef<((t: number, audioT: number) => void) | null>(null)
+  useEffect(() => {
+    const registry = slotRegistryRef.current // 快照：effect 执行期注册表（ref 对象本身恒不变）
+    registry.set(cfg.id, localSlotRef)
+    return () => {
+      registry.delete(cfg.id)
+    }
+  }, [slotRegistryRef, cfg.id])
+  return (
+    <SharedImageLayer
+      imageElement={imageElement}
+      rect={cfg.rect}
+      fillMode={cfg.fillMode}
+      fx={cfg.fx}
+      opacity={cfg.opacity}
+      beatPulse={beatPulse}
+      beatPeriodSec={beatPeriodSec}
+      entry={cfg.entry}
+      selected={selected}
+      onSelect={() => onSelect(`overlay:${cfg.id}`)}
+      onRectChange={onRectChange}
+      canvas={canvas}
+      layerFxSlotRef={localSlotRef}
+      placeholderLabelKey="canvas.overlayPlaceholder"
     />
   )
 }
@@ -1383,7 +1481,9 @@ export function SceneLayers(props: SceneLayersProps): React.JSX.Element {
     analyzer,
     layerFxRef,
     audioLeadSec,
-    mediaDurationSec
+    mediaDurationSec,
+    overlayElements,
+    onOverlayRectChange
   } = props
   const canvas = canvasSize ?? { width: LOGICAL_WIDTH, height: LOGICAL_HEIGHT }
   const show = (name: SceneLayerName): boolean => !layers || layers.includes(name)
@@ -1395,6 +1495,10 @@ export function SceneLayers(props: SceneLayersProps): React.JSX.Element {
   const titleFxSlot = useRef<((t: number) => void) | null>(null)
   const artistFxSlot = useRef<((t: number) => void) | null>(null)
   const introFxSlot = useRef<((t: number, audioT: number) => void) | null>(null)
+  // 附加层动效槽注册表（0.8.0）：OverlayLayer 自持 ref 对象，经 effect 注册/注销
+  const overlaySlotsRef = useRef(
+    new Map<string, { current: ((t: number, audioT: number) => void) | null }>()
+  )
   useEffect(() => {
     if (!layerFxRef) return
     layerFxRef.current = (t: number, audioT?: number) => {
@@ -1404,6 +1508,7 @@ export function SceneLayers(props: SceneLayersProps): React.JSX.Element {
       titleFxSlot.current?.(t)
       artistFxSlot.current?.(t)
       introFxSlot.current?.(t, at)
+      overlaySlotsRef.current.forEach((slot) => slot.current?.(t, at))
     }
     return () => {
       layerFxRef.current = null
@@ -1435,6 +1540,26 @@ export function SceneLayers(props: SceneLayersProps): React.JSX.Element {
             onMainRectChange={onMainRectChange}
             layerFxSlotRef={imgFxSlot}
           />
+        </Layer>
+      )}
+      {show('overlay') && (layout.overlayLayers ?? []).length > 0 && (
+        <Layer name="overlay">
+          {layout.overlayLayers.map((o) => {
+            return (
+              <OverlayLayer
+                key={o.id}
+                cfg={o}
+                imageElement={overlayElements?.[o.id] ?? null}
+                canvas={canvas}
+                selected={selectedId === 'overlay:' + o.id}
+                onSelect={onSelect}
+                onRectChange={(rect) => onOverlayRectChange?.(o.id, rect)}
+                slotRegistryRef={overlaySlotsRef}
+                beatPulse={layout.beat.pulse}
+                beatPeriodSec={beatPeriod(layout.visualizer.bpm, layout.visualizer.beatIntervalSec)}
+              />
+            )
+          })}
         </Layer>
       )}
       {show('text') && (

@@ -29,6 +29,8 @@ interface ExportStageHostProps {
   mediaDurationSec?: number
   /** 前导留白秒（0.7.0）：setFrame 内部把音频驱动量换算到音频轴（audioT = max(0, t − lead)） */
   audioLeadSec?: number
+  /** 附加层图像元素（0.8.0）：layerId → 解码后元素 */
+  overlayElements?: Record<string, CanvasImageElement | null>
   width: number
   height: number
   onReady: (handle: ExportStageHandle) => void
@@ -49,6 +51,7 @@ export function ExportStageHost(props: ExportStageHostProps): React.JSX.Element 
     analyzer,
     mediaDurationSec,
     audioLeadSec,
+    overlayElements,
     width,
     height,
     onReady
@@ -123,10 +126,12 @@ export function ExportStageHost(props: ExportStageHostProps): React.JSX.Element 
           bars={[]}
           analyzer={analyzer}
           canvasSize={{ width, height }}
-          layers={['background', 'main', 'text']}
+          layers={['background', 'main', 'overlay', 'text']}
           layerFxRef={fxStaticHandleRef}
           audioLeadSec={leadSec}
           mediaDurationSec={mediaDurationSec}
+          overlayElements={overlayElements}
+          onOverlayRectChange={noop}
         />
       </Stage>
       <Stage ref={vizRef} width={width} height={height}>
@@ -148,6 +153,8 @@ export function ExportStageHost(props: ExportStageHostProps): React.JSX.Element 
           layerFxRef={fxVizHandleRef}
           audioLeadSec={leadSec}
           mediaDurationSec={mediaDurationSec}
+          overlayElements={overlayElements}
+          onOverlayRectChange={noop}
         />
       </Stage>
       <Stage ref={fullRef} width={width} height={height}>
@@ -168,6 +175,8 @@ export function ExportStageHost(props: ExportStageHostProps): React.JSX.Element 
           layerFxRef={fullFxHandleRef}
           audioLeadSec={leadSec}
           mediaDurationSec={mediaDurationSec}
+          overlayElements={overlayElements}
+          onOverlayRectChange={noop}
         />
       </Stage>
     </div>

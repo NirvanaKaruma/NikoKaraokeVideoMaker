@@ -32,7 +32,8 @@ export const jp = {
   },
   canvas: {
     subtitleZoneWarn: '⚠ メイン画像が下半分（字幕用の予約領域）に入っています。',
-    dropCoverPlaceholder: 'カバー画像をドロップ'
+    dropCoverPlaceholder: 'カバー画像をドロップ',
+    overlayPlaceholder: '画像を追加'
   },
   tabs: {
     assets: '素材と画面',

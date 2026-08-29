@@ -13,7 +13,7 @@
 
 - [x] T1: 数据模型——layout 新增 `overlayLayers: OverlayLayerConfig[]`（id/rect/opacity/fx(复用 MainImageConfig['fx'] 类型)/entry(EntryStyle 子集：none|fade|slide|bounce)；z 序=数组序，默认 []）+ `hasDynamicFx` 计入 overlay 的 fx/entry；assets 侧平行资产（id→{url,file,element}）；layout.test 默认值与类型回归
 - [x] T2: 共享组件提取——把 MainImageLayer 的图像动效（fxGroup 呼吸/微旋转/发光脉冲 + mask 裁剪 + 描边 + 命令式 fx 槽）抽成 `SharedImageFxLayer`；MainImageLayer 改薄壳复用；行为零变化（smoke-visual 主图 fx 项回归全绿）
-- [ ] T3: 附加层渲染——SceneLayers 新增 'overlay' 层（位于主图之上、文本之下）：遍历 `overlayLayers` 渲染 SharedImageFxLayer（拖动/Transformer/选中/边界 clamp 复用）+ 每层命令式 fx 槽注册；ExportStageHost 静态/全层清单含 'overlay'（预览/导出同源）
+- [x] T3: 附加层渲染——SceneLayers 新增 'overlay' 层（位于主图之上、文本之下）：遍历 `overlayLayers` 渲染 SharedImageFxLayer（拖动/Transformer/选中/边界 clamp 复用）+ 每层命令式 fx 槽注册；ExportStageHost 静态/全层清单含 'overlay'（预览/导出同源）
 - [ ] T4: 附加层面板 UI——「素材与画面」页签新增附加层分组：添加图像（文件选择）、层列表（选中/上移/下移/删除）、透明度滑块、四角快速摆位、遮罩/描边复用完整 fx 控件、入场动画（fade/slide/bounce + 时长/延迟）；i18n 三语
 - [ ] T5: 附加层资产与项目文件——setOverlayFile(id,file)（解码上限 3200px 同封面）；buildProjectFile/applyProjectFile 内嵌 dataURL；dirty snapshot 纳入（层 id + 图像存在性）；smoke-project 扩展（多层 → 保存 → 还原 → 层数/图像/参数恢复）
 - [ ] T6: 自定义字体（路径引用，不内嵌）——TextPanel「自定义字体」：选择 ttf/otf → FontFace 注册（document.fonts.add，家庭名=确定性合成名，与文件基名绑定）→ 歌名/作者下拉可选（内置/系统/自定义分组）；项目文件只存 { name, path }（同音频模型）；打开项目：本机路径存在 → 读文件重建 FontFace；缺失 → 提示 + 回退默认字体（下拉标记缺失）；字体=导出与预览同字形（同进程 FontFace，smoke 校验渲染字体名）
