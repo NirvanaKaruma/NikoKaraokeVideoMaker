@@ -312,6 +312,7 @@ export const en = {
     editGlobal: 'Global baseline',
     editSegment: 'Segment {i}',
     editKf: 'Segment {i} - Keyframe t={t}s',
+    editKfGlobal: 'Global baseline - Keyframe t={t}s',
     overlap: '⚠ overlapping segments - the earlier listed one wins'
   },
   kf: {

@@ -41,6 +41,9 @@ const EASING_OPTIONS: EasingName[] = ['linear', 'easeInOutQuad', 'easeOutCubic',
 function displayOf(v: number, c: KeyframeCatalogEntry): number {
   return (v * (c.displayScale ?? 1)) | 0
 }
+function rawOf(v: number, c: KeyframeCatalogEntry): number {
+  return v / (c.displayScale ?? 1)
+}
 
 /**
  * 片段内关键帧编辑器（1.0.0 T5，纯 props）：
@@ -157,6 +160,14 @@ export function KeyframePanel(props: KeyframePanelProps): React.JSX.Element {
       : t(c.labelKey)
   }
   const updateAll = (next: PropertyTrack[]): void => props.onTracksChange(next)
+  const setFrameValueAt = (path: string, tt: number, v: number | string): void =>
+    updateAll(
+      props.tracks.map((tr) =>
+        tr.path !== path
+          ? tr
+          : { ...tr, frames: tr.frames.map((f) => (near(f.t, tt) ? { ...f, value: v } : f)) }
+      )
+    )
   const setFrameEasingAt = (path: string, tt: number, easing: EasingName): void =>
     updateAll(
       props.tracks.map((tr) =>
@@ -396,9 +407,36 @@ export function KeyframePanel(props: KeyframePanelProps): React.JSX.Element {
                 ) : (
                   <div className="kf-frame-row" key={i}>
                     <span className="kf-frame-name">{framePropLabel(path)}</span>
-                    <span className="kf-frame-value">
-                      {en.kind === 'number' ? displayOf(fr.value as number, en) : String(fr.value)}
-                    </span>
+                    {en.kind === 'number' ? (
+                      <input
+                        className="kf-num"
+                        type="number"
+                        step={en.step * (en.displayScale ?? 1)}
+                        value={displayOf(fr.value as number, en)}
+                        onChange={(ev) => {
+                          const n2 = Number(ev.target.value)
+                          if (Number.isFinite(n2)) setFrameValueAt(path, selT, rawOf(n2, en))
+                        }}
+                      />
+                    ) : (
+                      <span className="kf-color">
+                        <input
+                          type="color"
+                          value={
+                            /^#[0-9a-fA-F]{6}$/.test(String(fr.value))
+                              ? String(fr.value)
+                              : '#000000'
+                          }
+                          onChange={(ev) => setFrameValueAt(path, selT, ev.target.value)}
+                        />
+                        <input
+                          className="kf-num"
+                          type="text"
+                          value={String(fr.value)}
+                          onChange={(ev) => setFrameValueAt(path, selT, ev.target.value)}
+                        />
+                      </span>
+                    )}
                     <select
                       className="kf-select"
                       value={fr.easing}

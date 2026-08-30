@@ -4,6 +4,7 @@ import {
   resolveLayoutAt,
   segmentOverlaps,
   splitTimelineAt,
+  trackValueAt,
   type TimelineDocument
 } from './timeline'
 import { DEFAULT_LAYOUT } from './layout'
@@ -90,6 +91,20 @@ describe('timelineSplit（纯函数）', () => {
     expect(resolveLayoutAt(l, 5).mainImage.rect.x).toBeCloseTo(0.3, 5)
     expect(resolveLayoutAt(l, 0).mainImage.rect.x).toBeCloseTo(0.1, 5)
     expect(resolveLayoutAt(l, 10).mainImage.rect.x).toBeCloseTo(0.5, 5)
+  })
+
+  it('用户语义：首帧之前=继承基准；t>=首帧=接管（帧间插值/末帧后 clamp）', () => {
+    const track = {
+      path: 'mainImage.rect.x',
+      frames: [
+        { t: 10, value: 0.8, easing: 'linear' },
+        { t: 20, value: 0.4, easing: 'linear' }
+      ]
+    }
+    expect(trackValueAt(track, 9.9)).toBeNull()
+    expect(trackValueAt(track, 10)).toBe(0.8)
+    expect(trackValueAt(track, 15)).toBeCloseTo(0.6, 5)
+    expect(trackValueAt(track, 30)).toBe(0.4)
   })
 
   it('空帧槽：裸创建后可拆分（>切点平移给新段）、随段删除', () => {

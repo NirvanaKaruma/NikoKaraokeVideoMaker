@@ -45,7 +45,7 @@ describe('timeline 时间轴与插值引擎（1.0.0，纯函数）', () => {
     expect(interpolateValue('snow', 'star', 0.7)).toBe('star')
   })
 
-  it('trackValueAt：排序/区间插值/缓动端点/首尾 clamp', () => {
+  it('trackValueAt：排序/区间插值/缓动端点；首帧前=null（继承基准）/末帧后 clamp', () => {
     const track = {
       path: 'texts.songTitle.style.fontSize',
       frames: [
@@ -54,7 +54,7 @@ describe('timeline 时间轴与插值引擎（1.0.0，纯函数）', () => {
         { t: 8, value: 0.1, easing: 'linear' as const }
       ]
     }
-    expect(trackValueAt(track, 0)).toBe(0.1) // 首帧前 clamp
+    expect(trackValueAt(track, 0)).toBeNull() // 首帧前=继承基准
     expect(trackValueAt(track, 10)).toBe(0.1) // 末帧后 clamp
     expect(trackValueAt(track, 4)).toBeCloseTo(0.12, 6) // 中点线性
     expect(trackValueAt(track, 6)).toBe(0.14)

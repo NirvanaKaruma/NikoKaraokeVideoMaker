@@ -119,11 +119,14 @@ function lerpHex(a: string, b: string, p: number): string {
   )
 }
 
-/** 轨道在 tSec 的值：帧排序后按区间插值；首帧前/末帧后=clamp（剪辑/动画惯例：保持最近值） */
+/**
+ * 轨道在 tSec 的值（用户确认语义）：**首帧之前 → 不应用（继承全局/段基准值——帧轨道的"左端点"开放）；
+ * 首帧起 → 接管：帧间插值、末帧后 clamp（保持最近值，标准惯例）**。
+ */
 export function trackValueAt(track: PropertyTrack, tSec: number): KeyframeValue | null {
   if (track.frames.length === 0) return null
   const frames = [...track.frames].sort((x, y) => x.t - y.t)
-  if (tSec <= frames[0].t) return frames[0].value
+  if (tSec < frames[0].t) return null
   const last = frames[frames.length - 1]
   if (tSec >= last.t) return last.value
   for (let i = 0; i < frames.length - 1; i++) {

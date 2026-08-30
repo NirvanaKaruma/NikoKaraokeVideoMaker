@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type Konva from 'konva'
 import { SUBTITLE_ZONE_Y, defaultLayerOrder, type ProjectLayout } from '@shared/layout'
-import { resolveLayoutAt, segmentOverlaps } from '@shared/timeline'
+import { resolveLayoutAt, segmentOverlaps, setByPath } from '@shared/timeline'
 import { resolvedSnapshotKey } from '@shared/tlDiff'
 import { useLocale } from './hooks/useLocale'
 import { useEditableLayout } from './hooks/useEditableLayout'
@@ -1181,10 +1181,11 @@ async function runAudioSmoke(
 function App(): React.JSX.Element {
   const { t } = useLocale()
   const project = useProject()
-  /** 编辑上下文（1.0.0 T4）：null=全局基线；选中片段 = 段视图（所有面板写入自动路由） */
-  const edit = useEditableLayout(project)
   /** 编辑对象条：段落/全局 + 选中关键帧显式标注（PR 式联动） */
   const [kfSelT, setKfSelT] = useState<number | null>(null)
+  /** 编辑上下文（1.0.0 T4）：null=全局基线；选中片段 = 段视图（所有面板写入自动路由） */
+  const edit = useEditableLayout(project, kfSelT)
+
   /** 面板修改自动创建关键帧（默认关=PR 严格语义：先手动打第一帧；localStorage 持久化） */
   const [kfAuto, setKfAutoState] = useState<boolean>(() => {
     try {
@@ -1204,6 +1205,23 @@ function App(): React.JSX.Element {
   /** 当前编辑片段（关键帧编辑器用；不存在则 null） */
   const editKfSeg =
     (project.layout.timeline?.segments ?? []).find((s) => s.id === edit.segId) ?? null
+  /**
+   * 面板显示视图：选中关键帧时，该帧轨道值覆盖视图（即时显示帧值——修"拖值闪现"）；
+   * 纯展示（写入仍走 commit：无帧属性写基准/有帧写帧）。
+   */
+  const panelView = (() => {
+    if (kfSelT == null) return edit.view
+    const tracks = editKfSeg
+      ? (editKfSeg.keyframes ?? [])
+      : (project.layout.timeline?.keyframes ?? [])
+    const out = structuredClone(edit.view)
+    const rel = editKfSeg ? kfSelT - editKfSeg.startSec : kfSelT
+    for (const tr of tracks) {
+      const f = tr.frames.find((fr) => Math.abs(fr.t - rel) < 0.01)
+      if (f) setByPath(out as unknown as Record<string, unknown>, tr.path, f.value)
+    }
+    return out
+  })()
   const [selectedId, setSelectedId] = useState<SelectableId>(null)
   const [helpOpen, setHelpOpen] = useState(false)
   const [exportOpen, setExportOpen] = useState(false)
@@ -2228,7 +2246,7 @@ function App(): React.JSX.Element {
             }
             onLayerMove={(id, dir) => project.moveLayerState(id, dir)}
             onSnapToggle={(v) => project.updateEditor({ snapEnabled: v })}
-            overlayLayers={edit.view.overlayLayers}
+            overlayLayers={panelView.overlayLayers}
             overlayImageUrls={overlayUrls}
             selectedId={selectedId}
             onOverlaySelect={setSelectedId}
@@ -2258,26 +2276,26 @@ function App(): React.JSX.Element {
             onPlay={pb.play}
             onPause={pb.pause}
             onSeek={pb.seek}
-            mainImage={edit.view.mainImage}
+            mainImage={panelView.mainImage}
             onMainImageChange={project.updateMainImage}
-            background={edit.view.background}
+            background={panelView.background}
             bgUrl={project.assets.bgUrl}
             bgFile={project.assets.bgFile}
             onBackgroundChange={project.updateBackground}
             onBgFile={(f) => void project.setBgFile(f)}
             onClearBg={project.clearBgImage}
-            songTitleCfg={edit.view.texts.songTitle}
-            artistCfg={edit.view.texts.artist}
+            songTitleCfg={panelView.texts.songTitle}
+            artistCfg={panelView.texts.artist}
             onSongTitleCfgChange={(x) => project.updateText('songTitle', x)}
             onArtistCfgChange={(x) => project.updateText('artist', x)}
-            visualizer={edit.view.visualizer}
+            visualizer={panelView.visualizer}
             onVisualizerChange={project.updateVisualizer}
-            backgroundFx={edit.view.background.fx}
-            imageFx={edit.view.mainImage.fx}
-            songTitleEntry={edit.view.texts.songTitle.entry}
-            artistEntry={edit.view.texts.artist.entry}
-            canvasFx={edit.view.canvasFx}
-            introOutro={edit.view.introOutro}
+            backgroundFx={panelView.background.fx}
+            imageFx={panelView.mainImage.fx}
+            songTitleEntry={panelView.texts.songTitle.entry}
+            artistEntry={panelView.texts.artist.entry}
+            canvasFx={panelView.canvasFx}
+            introOutro={panelView.introOutro}
             onBackgroundFxChange={project.updateBackgroundFx}
             onImageFxChange={project.updateImageFx}
             onSongTitleEntryChange={(x) => project.updateTextEntry('songTitle', x)}
@@ -2286,8 +2304,8 @@ function App(): React.JSX.Element {
             onIntroOutroChange={project.updateIntroOutro}
             audio={project.layout.audio}
             onAudioChange={project.updateAudioEngine}
-            beat={edit.view.beat}
-            visualizerForBeat={edit.view.visualizer}
+            beat={panelView.beat}
+            visualizerForBeat={panelView.visualizer}
             onBeatFxChange={project.updateBeatFx}
             onVisualizerForBeatChange={project.updateVisualizer}
             editLabel={edit.label}
@@ -2298,7 +2316,7 @@ function App(): React.JSX.Element {
             kfSegEndSec={editKfSeg?.endSec ?? 0}
             kfDurationSec={pb.duration}
             kfTracks={editKfSeg?.keyframes ?? project.layout.timeline?.keyframes ?? []}
-            kfView={edit.view}
+            kfView={panelView}
             onKfTracksChange={(tracks) => {
               // 1.1.0 #3：未选段 = 全局基线轨道（整曲绝对 t）；选段 = 段级轨道
               if (edit.segId) project.updateSegmentTracks(edit.segId, tracks)

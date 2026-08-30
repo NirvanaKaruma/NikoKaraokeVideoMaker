@@ -314,6 +314,7 @@ export const jp = {
     editGlobal: 'グローバル基線',
     editSegment: 'セグメント {i}',
     editKf: 'セグメント {i}・キーフレーム t={t}s',
+    editKfGlobal: 'グローバル基線・キーフレーム t={t}s',
     overlap: '⚠ セグメント重複——重複区間は先の並びが優先'
   },
   kf: {
