@@ -127,6 +127,11 @@ export interface SidePanelProps {
   kfTracks: PropertyTrack[]
   kfView: ProjectLayout
   onKfTracksChange: (tracks: PropertyTrack[]) => void
+  /** P3b 参数行菱形打帧入口（传给 FxPanel 等） */
+  kfOps?: {
+    hasKeyframe: (path: string) => boolean
+    addKeyframeAt: (path: string) => void
+  }
 }
 
 const TABS: { id: SideTab; labelKey: string }[] = [
@@ -250,6 +255,7 @@ export function SidePanel(props: SidePanelProps): React.JSX.Element {
         )}
         {tab === 'fx' && (
           <FxPanel
+            kfOps={props.kfOps}
             backgroundFx={props.backgroundFx}
             imageFx={props.imageFx}
             songTitleEntry={props.songTitleEntry}

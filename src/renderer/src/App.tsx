@@ -5,6 +5,7 @@ import { resolveLayoutAt, segmentOverlaps } from '@shared/timeline'
 import { resolvedSnapshotKey } from '@shared/tlDiff'
 import { useLocale } from './hooks/useLocale'
 import { useEditableLayout } from './hooks/useEditableLayout'
+import { useKeyframeOps } from './hooks/useKeyframeOps'
 import { useProject, type CanvasImageElement } from './hooks/useProject'
 import { useAudioPlayback, type PlaybackApi } from './hooks/useAudioPlayback'
 import { useCustomFont, customFontFamily } from './hooks/useCustomFont'
@@ -1292,6 +1293,8 @@ function App(): React.JSX.Element {
     TL_RESOLVE_CACHE.set(cur, { key, value: resolved })
     return resolved
   })()
+  /** P3b：参数行菱形打帧（选中段=段轨道，否则全局基线；当前播放头） */
+  const kfOps = useKeyframeOps(project, pb.currentTime)
   /** T9：重叠校验（非破坏：标红提示；缝隙=全局基线显示，无需处理） */
   const overlapIds = useMemo(
     () => segmentOverlaps({ segments: project.layout.timeline?.segments ?? [] }).flat(),
@@ -2275,6 +2278,7 @@ function App(): React.JSX.Element {
             kfDurationSec={pb.duration}
             kfTracks={editKfSeg?.keyframes ?? project.layout.timeline?.keyframes ?? []}
             kfView={edit.view}
+            kfOps={kfOps}
             onKfTracksChange={(tracks) => {
               // 1.1.0 #3：未选段 = 全局基线轨道（整曲绝对 t）；选段 = 段级轨道
               if (edit.segId) project.updateSegmentTracks(edit.segId, tracks)

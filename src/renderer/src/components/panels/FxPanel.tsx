@@ -21,6 +21,11 @@ export interface FxPanelProps {
   artistEntry: TextLayerConfig['entry']
   canvasFx: CanvasFxConfig
   introOutro: IntroOutroConfig
+  /** P3b 关键帧菱形入口（可选项=未接线时隐藏） */
+  kfOps?: {
+    hasKeyframe: (path: string) => boolean
+    addKeyframeAt: (path: string) => void
+  }
   beat: BeatFxConfig
   visualizer: VisualizerConfig
   /** 音频工程（0.7.0）：前导留白 / 淡入淡出（仅作用导出） */
@@ -156,6 +161,9 @@ export function FxPanel(props: FxPanelProps): React.JSX.Element {
         min={0}
         max={1}
         step={0.01}
+        kfPath="background.fx.kenBurns"
+        kfHas={props.kfOps?.hasKeyframe('background.fx.kenBurns')}
+        onKfAdd={props.kfOps?.addKeyframeAt}
         onCommit={(v) => props.onBgFxChange({ kenBurns: v })}
       />
       <DeferredSlider
@@ -193,6 +201,9 @@ export function FxPanel(props: FxPanelProps): React.JSX.Element {
         min={0}
         max={1}
         step={0.01}
+        kfPath="mainImage.fx.breathe"
+        kfHas={props.kfOps?.hasKeyframe('mainImage.fx.breathe')}
+        onKfAdd={props.kfOps?.addKeyframeAt}
         onCommit={(v) => props.onImageFxChange({ breathe: v })}
       />
       <DeferredSlider
@@ -209,6 +220,9 @@ export function FxPanel(props: FxPanelProps): React.JSX.Element {
         min={0}
         max={10}
         step={0.1}
+        kfPath="mainImage.fx.rotateDeg"
+        kfHas={props.kfOps?.hasKeyframe('mainImage.fx.rotateDeg')}
+        onKfAdd={props.kfOps?.addKeyframeAt}
         onCommit={(v) => props.onImageFxChange({ rotateDeg: v })}
       />
       <DeferredSlider
@@ -218,6 +232,9 @@ export function FxPanel(props: FxPanelProps): React.JSX.Element {
         min={0}
         max={1}
         step={0.01}
+        kfPath="mainImage.fx.glowPulse"
+        kfHas={props.kfOps?.hasKeyframe('mainImage.fx.glowPulse')}
+        onKfAdd={props.kfOps?.addKeyframeAt}
         onCommit={(v) => props.onImageFxChange({ glowPulse: v })}
       />
       <label className="field">

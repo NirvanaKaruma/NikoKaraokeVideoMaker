@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { formatSliderValue, nudgeSliderValue, parseSliderInput } from '@shared/slider'
+import { useLocale } from '../hooks/useLocale'
 
 interface DeferredSliderProps {
   /** 标签渲染（参数为当前显示值——拖动中显示草稿、提交后显示真值） */
@@ -12,6 +13,11 @@ interface DeferredSliderProps {
   /** 0.9.0 数字框：显示值 = 模型值 × unitScale（百分比=100；秒/度/毫秒=1 缺省） */
   unitScale?: number
   onCommit: (v: number) => void
+  /** P3b 关键帧菱形入口：提供 path 时本行显示打帧按钮 */
+  kfPath?: string
+  /** 该路径是否已有关键帧（菱形点亮） */
+  kfHas?: boolean
+  onKfAdd?: (path: string) => void
 }
 
 /**
@@ -20,6 +26,7 @@ interface DeferredSliderProps {
  * 0.9.0：右侧新增数字输入框（显示单位值，↑/↓ 步进微调，Shift×10，回车/失焦提交；同步钳制）。
  */
 export function DeferredSlider(props: DeferredSliderProps): React.JSX.Element {
+  const { t } = useLocale()
   const [draft, setDraft] = useState<number | null>(null)
   const [text, setText] = useState<string | null>(null)
   const unit = props.unitScale ?? 1
@@ -55,7 +62,23 @@ export function DeferredSlider(props: DeferredSliderProps): React.JSX.Element {
 
   return (
     <label className="field">
-      <span>{props.label(shown)}</span>
+      <span className="field-label">
+        <span>{props.label(shown)}</span>
+        {props.kfPath && props.onKfAdd && (
+          <button
+            type="button"
+            className={'kf-diamond' + (props.kfHas ? ' on' : '')}
+            title={t('kf.addAt')}
+            onClick={(ev) => {
+              ev.preventDefault()
+              ev.stopPropagation()
+              props.onKfAdd!(props.kfPath!)
+            }}
+          >
+            ◆
+          </button>
+        )}
+      </span>
       <div className="slider-row">
         <input
           type="range"
