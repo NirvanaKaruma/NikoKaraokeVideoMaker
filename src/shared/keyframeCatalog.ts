@@ -11,7 +11,7 @@ export interface KeyframeCatalogEntry {
   path: string
   /** i18n label key（zh-cn 先行；en/jp 回退） */
   labelKey: string
-  kind: 'number' | 'color'
+  kind: 'number' | 'color' | 'choice'
   min: number
   max: number
   /** 数值步进（原始单位） */
@@ -21,6 +21,8 @@ export interface KeyframeCatalogEntry {
   /** 动态条目（附加图层按索引生成）：标签 = 「图层 {idx+1} · 字段」 */
   dynamic?: boolean
   idx?: number
+  /** 选项类条目（kind='choice'，如粒子预设）：下拉选项与标签 */
+  options?: { value: string; labelKey: string }[]
 }
 
 const N = (
@@ -39,6 +41,11 @@ const C = (path: string, labelKey: string): KeyframeCatalogEntry => ({
   max: 1,
   step: 1
 })
+const CHOICE = (
+  path: string,
+  labelKey: string,
+  options: { value: string; labelKey: string }[]
+): KeyframeCatalogEntry => ({ path, labelKey, kind: 'choice', min: 0, max: 1, step: 1, options })
 
 export const KEYFRAME_CATALOG: KeyframeCatalogEntry[] = [
   // 文本样式（歌名/作者）
@@ -69,8 +76,18 @@ export const KEYFRAME_CATALOG: KeyframeCatalogEntry[] = [
   // 可视化：位置/高度（频谱能量律动是天然的动画源，位置/高度关键帧用于场景编排）
   N('visualizer.rect.y', 'kf.vizY', 0, 1, 0.001, 100),
   N('visualizer.rect.h', 'kf.vizH', 0.02, 1, 0.001, 100),
-  N('visualizer.heightRatio', 'kf.vizHeightRatio', 0.1, 1, 0.01, 100)
-  // 附加层/作者颜色等留后续版本扩展（先保证 16 条 v1 清单可测可维护）
+  N('visualizer.heightRatio', 'kf.vizHeightRatio', 0.1, 1, 0.01, 100),
+  // 音乐响应（0.6.0 节拍特效：脉冲/粒子强度与预设——特效同样可按关键帧编排）
+  N('beat.pulse', 'kf.beatPulse', 0, 1, 0.01, 100),
+  N('beat.burst', 'kf.beatBurst', 0, 1, 0.01, 100),
+  N('beat.particleDensity', 'kf.beatDensity', 0, 1, 0.01, 100),
+  CHOICE('beat.particlePreset', 'kf.beatPreset', [
+    { value: 'snow', labelKey: 'fx.beat.presetSnow' },
+    { value: 'sakura', labelKey: 'fx.beat.presetSakura' },
+    { value: 'star', labelKey: 'fx.beat.presetStar' },
+    { value: 'bubble', labelKey: 'fx.beat.presetBubble' }
+  ])
+  // 附加层/作者颜色等留后续版本扩展（先保证 v1 清单可测可维护）
 ]
 
 /** 按路径查目录项（无则 null） */
@@ -95,6 +112,7 @@ export function catalogDiagnostics(): {
   return KEYFRAME_CATALOG.map((c) => {
     const v = getByPath(DEFAULT_LAYOUT, c.path)
     const actual = typeof v
+    // number 条目必须为 number；color/choice 条目必须为字符串（#rrggbb / 预设 id）
     const ok = c.kind === 'number' ? actual === 'number' : actual === 'string'
     return { path: c.path, ok, kind: c.kind, actual }
   })

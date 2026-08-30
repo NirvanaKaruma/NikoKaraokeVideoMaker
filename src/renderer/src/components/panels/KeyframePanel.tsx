@@ -265,6 +265,7 @@ export function KeyframePanel(props: KeyframePanelProps): React.JSX.Element {
     { id: 'image', labelKey: 'kf.groupImage', test: (p) => p.startsWith('mainImage.') },
     { id: 'bg', labelKey: 'kf.groupBg', test: (p) => p.startsWith('background.') },
     { id: 'viz', labelKey: 'kf.groupViz', test: (p) => p.startsWith('visualizer.') },
+    { id: 'beat', labelKey: 'kf.groupBeat', test: (p) => p.startsWith('beat.') },
     { id: 'overlay', labelKey: 'kf.groupOverlay', test: (p) => p.startsWith('overlayLayers.') }
   ]
 
@@ -471,7 +472,19 @@ export function KeyframePanel(props: KeyframePanelProps): React.JSX.Element {
                 ) : (
                   <div className="kf-frame-row" key={i}>
                     <span className="kf-frame-name">{framePropLabel(path)}</span>
-                    {en.kind === 'number' ? (
+                    {en.kind === 'choice' ? (
+                      <select
+                        className="kf-select"
+                        value={String(fr.value)}
+                        onChange={(ev) => setFrameValueAt(path, selT, ev.target.value)}
+                      >
+                        {(en.options ?? []).map((op) => (
+                          <option key={op.value} value={op.value}>
+                            {t(op.labelKey)}
+                          </option>
+                        ))}
+                      </select>
+                    ) : en.kind === 'number' ? (
                       <input
                         className="kf-num"
                         type="number"

@@ -31,7 +31,17 @@ describe('keyframeCatalog', () => {
     expect(typeof currentValueAt(DEFAULT_LAYOUT, 'mainImage.rect.x')).toBe('number')
   })
 
-  it('清单为 v1 完整清单（首版 22 条，后续版本向此扩展）', () => {
-    expect(KEYFRAME_CATALOG.length).toBe(24)
+  it('清单为 v1 完整清单（首版 24 条，后续版本向此扩展）', () => {
+    expect(KEYFRAME_CATALOG.length).toBe(28)
+  })
+
+  it('音乐响应条目：脉冲/爆发/密度为数值、预设为选项类（4 个预设选项）', () => {
+    expect(catalogEntry('beat.pulse')?.kind).toBe('number')
+    expect(catalogEntry('beat.burst')?.kind).toBe('number')
+    expect(catalogEntry('beat.particleDensity')?.kind).toBe('number')
+    const preset = catalogEntry('beat.particlePreset')
+    expect(preset?.kind).toBe('choice')
+    expect(preset?.options).toHaveLength(4)
+    expect(typeof currentValueAt(DEFAULT_LAYOUT, 'beat.particlePreset')).toBe('string')
   })
 })
