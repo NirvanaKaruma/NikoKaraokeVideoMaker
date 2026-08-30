@@ -16,6 +16,8 @@ export interface TimelineBarProps {
   onUpdateBounds: (id: string, startSec: number, endSec: number) => void
   /** 重叠片段 id（T9 非破坏校验：标红 + 提示——重叠区间按排序靠前者生效） */
   overlaps?: string[]
+  /** 点时间轴关键帧/槽：跳播 + 选中帧（段内传 segId；全局传 null）——与普通 seek（清帧）分离 */
+  onKfSeek?: (tAbs: number, segId: string | null) => void
   /** 全局基线关键帧轨道（整曲绝对 t）：在轨道上绘制标注（1.1.0 用户反馈） */
   globalKeyframes?: PropertyTrack[]
   /** 全局空帧槽（裸创建；绝对 t） */
@@ -164,7 +166,7 @@ export function TimelineBar(props: TimelineBarProps): React.JSX.Element {
                   title={'t=' + (s.startSec + f.t).toFixed(2) + 's ' + String(f.value)}
                   onClick={(ev) => {
                     ev.stopPropagation()
-                    props.onSeek(s.startSec + f.t)
+                    props.onKfSeek?.(s.startSec + f.t, s.id)
                   }}
                 />
               ))}
@@ -177,7 +179,7 @@ export function TimelineBar(props: TimelineBarProps): React.JSX.Element {
                 title={t('kf.emptyFrame')}
                 onClick={(ev) => {
                   ev.stopPropagation()
-                  props.onSeek(s.startSec + st)
+                  props.onKfSeek?.(s.startSec + st, s.id)
                 }}
               />
             ))}
@@ -192,7 +194,7 @@ export function TimelineBar(props: TimelineBarProps): React.JSX.Element {
             className="timeline-global-kf slot"
             style={{ left: ratio(st) * 100 + '%' }}
             title={t('kf.emptyFrame')}
-            onClick={() => props.onSeek(st)}
+            onClick={() => props.onKfSeek?.(st, null)}
           />
         ))}
         {/* 全局基线关键帧标注（整曲绝对 t；未分割也可观察） */}
@@ -204,7 +206,7 @@ export function TimelineBar(props: TimelineBarProps): React.JSX.Element {
               className="timeline-global-kf"
               style={{ left: ratio(f.t) * 100 + '%' }}
               title={'t=' + f.t.toFixed(2) + 's ' + String(f.value)}
-              onClick={() => props.onSeek(f.t)}
+              onClick={() => props.onKfSeek?.(f.t, null)}
             />
           ))}
         {/* 播放头 */}

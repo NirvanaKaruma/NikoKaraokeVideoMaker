@@ -119,6 +119,8 @@ export interface SidePanelProps {
   editLabel: string
   editIsSegment: boolean
   onEditGlobal: () => void
+  /** 取消关键帧选择（回到段落/全局编辑上下文） */
+  onKfClear: () => void
   // 关键帧编辑器（1.0.0 T5）
   kfSegId: string | null
   kfSegStartSec: number
@@ -163,6 +165,11 @@ export function SidePanel(props: SidePanelProps): React.JSX.Element {
         {props.editIsSegment && (
           <button type="button" className="mini-btn" onClick={props.onEditGlobal}>
             {t('timeline.editGlobal')}
+          </button>
+        )}
+        {props.kfSelT != null && (
+          <button type="button" className="mini-btn" onClick={props.onKfClear}>
+            ✕ {t('kf.clearKf')}
           </button>
         )}
       </div>

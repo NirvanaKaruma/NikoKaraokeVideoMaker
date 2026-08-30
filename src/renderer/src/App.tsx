@@ -1312,6 +1312,17 @@ function App(): React.JSX.Element {
     project.layout.audio.leadMs
   )
   const pbRef = useRef<PlaybackApi>(pb)
+  /** 普通定位（播放条/时间轴空白拖动）＝取消关键帧选择；点关键帧走 onKfSeek 分离 */
+  const seekWithClear = (t: number): void => {
+    pb.seek(t)
+    setKfSelT(null)
+  }
+  /** 点时间轴关键帧/槽：跳播 + 选中该帧（段内=同时选段；全局=切全局上下文） */
+  const kfSeek = (tAbs: number, segId: string | null): void => {
+    pb.seek(tAbs)
+    project.setEditSegment(segId)
+    setKfSelT(tAbs)
+  }
   /**
    * 1.0.0 T6 差异门控：逐帧 resolve 后用「可动画叶值+片段结构」键缓存。
    * 布局对象身份与键均未变 → 复用同一对象（React 整树跳过）；只有关键帧动画/片段切换/编辑才重渲。
@@ -2275,7 +2286,7 @@ function App(): React.JSX.Element {
             audioFileName={project.assets.audioFile?.name ?? null}
             onPlay={pb.play}
             onPause={pb.pause}
-            onSeek={pb.seek}
+            onSeek={seekWithClear}
             mainImage={panelView.mainImage}
             onMainImageChange={project.updateMainImage}
             background={panelView.background}
@@ -2310,7 +2321,11 @@ function App(): React.JSX.Element {
             onVisualizerForBeatChange={project.updateVisualizer}
             editLabel={edit.label}
             editIsSegment={edit.isSegment}
-            onEditGlobal={() => project.setEditSegment(null)}
+            onEditGlobal={() => {
+              project.setEditSegment(null)
+              setKfSelT(null)
+            }}
+            onKfClear={() => setKfSelT(null)}
             kfSegId={edit.segId}
             kfSegStartSec={editKfSeg?.startSec ?? 0}
             kfSegEndSec={editKfSeg?.endSec ?? 0}
@@ -2365,8 +2380,9 @@ function App(): React.JSX.Element {
             durationSec={pb.duration}
             currentT={pb.currentTime}
             selectedSegmentId={edit.segId}
-            onSeek={pb.seek}
+            onSeek={seekWithClear}
             onSelectSegment={project.setEditSegment}
+            onKfSeek={kfSeek}
             onSplitAt={(t) => project.splitSegment(t, pb.duration)}
             onRemoveSegment={(id) => {
               project.removeSegment(id)
