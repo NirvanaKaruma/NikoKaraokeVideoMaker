@@ -25,6 +25,9 @@ export interface KeyframePanelProps {
   /** 受控选中帧（App 层状态：显式显示"正在编辑的段落/关键帧"+ 时间轴联动） */
   selT: number | null
   onSelTChange: (t: number | null) => void
+  /** 面板修改自动创建关键帧（默认开；用户可直接在此切换） */
+  kfAuto: boolean
+  onKfAutoChange: (on: boolean) => void
 }
 
 const EASING_OPTIONS: EasingName[] = ['linear', 'easeInOutQuad', 'easeOutCubic', 'bounce']
@@ -229,14 +232,34 @@ export function KeyframePanel(props: KeyframePanelProps): React.JSX.Element {
 
   return (
     <div className="kf-panel">
-      {/* 轨道清单（分组折叠） */}
+      {/* 顶部动作区：直接暴露打帧入口（用户：不要藏在二级/三级里） */}
+      <div className="kf-topbar">
+        <span className="kf-time">t={relT.toFixed(2)}s</span>
+        <button type="button" className="btn-sm" onClick={addFrame} disabled={!entry}>
+          {t('kf.addAt')}
+        </button>
+        {props.tracks.length > 0 && (
+          <button type="button" className="btn-sm" onClick={batchAdd}>
+            {t('kf.batchAdd')}
+          </button>
+        )}
+        <label className="kf-auto">
+          <input
+            type="checkbox"
+            checked={props.kfAuto}
+            onChange={(ev) => props.onKfAutoChange(ev.target.checked)}
+          />
+          <span>{t('kf.autoKf')}</span>
+        </label>
+      </div>
+      {/* 轨道清单（分组分隔、默认全展开；可折叠） */}
       {GROUPS.map((gr) => {
         const entriesG = allEntries.filter((c) => gr.test(c.path))
         if (entriesG.length === 0) return null
         const hasFrames = entriesG.some((c) =>
           props.tracks.some((x) => x.path === c.path && x.frames.length > 0)
         )
-        const open = openGroups[gr.id] ?? hasFrames
+        const open = openGroups[gr.id] ?? true
         return (
           <div className="kf-group" key={gr.id}>
             <button
@@ -281,21 +304,6 @@ export function KeyframePanel(props: KeyframePanelProps): React.JSX.Element {
       })}
       {entry && (
         <>
-          {/* 添加关键帧条：显示播放头 + 当前值（T4 面板联动） */}
-          <div className="kf-addbar">
-            <span className="kf-time">t={relT.toFixed(2)}s</span>
-            <span className="kf-cur">
-              {t('kf.currentValue')}: {String(currentValueAt(props.view, entry.path) ?? '—')}
-            </span>
-            <button type="button" className="btn-sm" onClick={addFrame}>
-              {t('kf.addAt')}
-            </button>
-            {props.tracks.length > 0 && (
-              <button type="button" className="btn-sm" onClick={batchAdd}>
-                {t('kf.batchAdd')}
-              </button>
-            )}
-          </div>
           {/* 关键帧点条（全帧聚合：同时间的属性帧显示为一个点——动画软件式） */}
           {allFrameTs.length > 0 ? (
             <div

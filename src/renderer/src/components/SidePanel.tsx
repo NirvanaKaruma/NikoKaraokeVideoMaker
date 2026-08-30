@@ -130,6 +130,9 @@ export interface SidePanelProps {
   /** 选中关键帧（绝对秒；编辑对象条显式显示「段落N · 关键帧 t=」） */
   kfSelT: number | null
   onKfSelTChange: (t: number | null) => void
+  /** 面板修改自动创建关键帧 */
+  kfAuto: boolean
+  onKfAutoChange: (on: boolean) => void
 }
 
 const TABS: { id: SideTab; labelKey: string }[] = [
@@ -141,28 +144,23 @@ const TABS: { id: SideTab; labelKey: string }[] = [
   { id: 'keyframes', labelKey: 'tabs.keyframes' }
 ]
 
-/** 布局四面板（1.0.0 T4）：顶部显示「当前编辑对象」上下文条 */
-const CTX_TABS: SideTab[] = ['layers', 'text', 'visualizer', 'fx']
-
 /** 左侧面板：常驻播放控制 + 分类 tab（M5 UI 重构：避免单列无限堆叠） */
 export function SidePanel(props: SidePanelProps): React.JSX.Element {
   const { t } = useLocale()
   const [tab, setTab] = useState<SideTab>('assets')
   return (
     <aside className="side-panel">
-      {CTX_TABS.includes(tab) && (
-        <div className="edit-ctx-bar">
-          <span className="edit-ctx-label">{t('timeline.editTarget')}</span>
-          <span className={'edit-ctx-value' + (props.editIsSegment ? ' seg' : '')}>
-            {props.editLabel}
-          </span>
-          {props.editIsSegment && (
-            <button type="button" className="mini-btn" onClick={props.onEditGlobal}>
-              {t('timeline.editGlobal')}
-            </button>
-          )}
-        </div>
-      )}
+      <div className="edit-ctx-bar">
+        <span className="edit-ctx-label">{t('timeline.editTarget')}</span>
+        <span className={'edit-ctx-value' + (props.editIsSegment ? ' seg' : '')}>
+          {props.editLabel}
+        </span>
+        {props.editIsSegment && (
+          <button type="button" className="mini-btn" onClick={props.onEditGlobal}>
+            {t('timeline.editGlobal')}
+          </button>
+        )}
+      </div>
       <AudioPanel
         status={props.audioStatus}
         error={props.audioError}
@@ -285,6 +283,8 @@ export function SidePanel(props: SidePanelProps): React.JSX.Element {
             onTracksChange={props.onKfTracksChange}
             selT={props.kfSelT}
             onSelTChange={props.onKfSelTChange}
+            kfAuto={props.kfAuto}
+            onKfAutoChange={props.onKfAutoChange}
           />
         )}
       </div>

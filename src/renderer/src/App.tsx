@@ -1185,6 +1185,22 @@ function App(): React.JSX.Element {
   const edit = useEditableLayout(project)
   /** 编辑对象条：段落/全局 + 选中关键帧显式标注（PR 式联动） */
   const [kfSelT, setKfSelT] = useState<number | null>(null)
+  /** 面板修改自动创建关键帧（默认开；localStorage 持久化） */
+  const [kfAuto, setKfAutoState] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('niko.kfAuto') !== '0'
+    } catch {
+      return true
+    }
+  })
+  const setKfAuto = (on: boolean): void => {
+    setKfAutoState(on)
+    try {
+      localStorage.setItem('niko.kfAuto', on ? '1' : '0')
+    } catch {
+      /* 忽略 */
+    }
+  }
   /** 当前编辑片段（关键帧编辑器用；不存在则 null） */
   const editKfSeg =
     (project.layout.timeline?.segments ?? []).find((s) => s.id === edit.segId) ?? null
@@ -1299,10 +1315,11 @@ function App(): React.JSX.Element {
     () => segmentOverlaps({ segments: project.layout.timeline?.segments ?? [] }).flat(),
     [project.layout.timeline]
   )
-  /** PR 式：面板改已打帧属性 → 自动写播放头处关键帧（播放头同步给 commit） */
+  /** PR 式：面板改可关键帧属性 → 自动写播放头处关键帧（播放头 + 自动开关同步给 commit） */
   useEffect(() => {
     project.setKfCurT(pb.currentTime)
-  }, [pb.currentTime, project])
+    project.setKfAuto(kfAuto)
+  }, [pb.currentTime, kfAuto, project])
 
   /** T9：音频时长变化 → 片段边界自动修正（无改动 no-op，不会循环入史） */
   useEffect(() => {
@@ -2289,6 +2306,8 @@ function App(): React.JSX.Element {
             }}
             kfSelT={kfSelT}
             onKfSelTChange={setKfSelT}
+            kfAuto={kfAuto}
+            onKfAutoChange={setKfAuto}
           />
           <main className="canvas-wrap">
             <CanvasStage

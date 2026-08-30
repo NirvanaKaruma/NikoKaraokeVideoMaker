@@ -327,6 +327,7 @@ export const jp = {
     currentValue: '現在値',
     addAt: 'ここにキーフレーム追加',
     batchAdd: '一括キーフレーム',
+    autoKf: 'パネル編集で自動キーフレーム',
     frameTitle: 't={t}s・{n} プロパティ',
     props: 'プロパティ',
     removeFrame: 'このキーフレームを削除',

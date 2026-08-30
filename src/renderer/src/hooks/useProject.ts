@@ -117,8 +117,10 @@ export function useProject(): {
   /** 1-based 片段序号（0=全局，1.0.0 T4） */
   editSegIndex: number
   setEditSegment: (id: string | null) => void
-  /** PR 式面板 auto-keyframe：同步当前播放头（面板改已打帧属性 → 写播放头处帧） */
+  /** PR 式面板 auto-keyframe：同步当前播放头（面板改可关键帧属性 → 写播放头处帧） */
   setKfCurT: (t: number | null) => void
+  /** 自动创建关键帧开关（默认 true：面板任何可关键帧属性修改立即建/写帧） */
+  setKfAuto: (on: boolean) => void
   assets: ProjectAssets
   fileError: string | null
   notice: string | null
@@ -219,10 +221,15 @@ export function useProject(): {
     setEditSegIdState(id)
   }, [])
 
-  // PR 式面板 auto-keyframe：当前播放头（App 每帧同步）；面板改"已打帧属性"→ 写播放头处帧
+  // PR 式面板 auto-keyframe：当前播放头（App 每帧同步）；面板改可关键帧属性 → 写播放头处帧
   const kfCurTRef = useRef<number | null>(null)
   const setKfCurT = useCallback((t: number | null) => {
     kfCurTRef.current = t
+  }, [])
+  /** 自动创建：面板改任何可关键帧属性 → 立即建/写帧（默认开；关=先打帧才接管） */
+  const kfAutoRef = useRef(true)
+  const setKfAuto = useCallback((on: boolean) => {
+    kfAutoRef.current = on
   }, [])
 
   /** 当前编辑视图：段（未物化=全局快照）或全局基线；面板/画布只读此对象 */
@@ -262,14 +269,14 @@ export function useProject(): {
       const seg = segId ? (base.timeline?.segments ?? []).find((s) => s.id === segId) : null
       const viewBase = seg?.layout ?? base
       const next = fn(viewBase)
-      // ── PR 式 auto-keyframe：差异路径若"已有轨道"且播放头有效 → 写播放头处帧（非基准） ──
+      // ── PR 式 auto-keyframe：可关键帧路径变更 → 写播放头处帧（自动开=首次即建帧；关=需已有轨道） ──
       const curT = kfCurTRef.current
       if (curT != null) {
         const changedPath = firstChangedKeyframePath(base, next, collectKeyframePaths(viewBase))
         if (changedPath != null) {
           const tracks = seg ? (seg.keyframes ?? []) : (base.timeline?.keyframes ?? [])
           const hasTrack = tracks.some((tr) => tr.path === changedPath && tr.frames.length > 0)
-          if (hasTrack) {
+          if (kfAutoRef.current || hasTrack) {
             const v = getByPath(next, changedPath)
             if (typeof v === 'number' || typeof v === 'string') {
               const rel = seg ? Math.max(0, curT - seg.startSec) : curT
@@ -1197,6 +1204,7 @@ export function useProject(): {
     editSegIndex,
     setEditSegment,
     setKfCurT,
+    setKfAuto,
     assets,
     fileError,
     notice,

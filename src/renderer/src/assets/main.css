@@ -280,6 +280,23 @@ body {
   border-color: var(--accent-cyan-border);
 }
 
+/* 关键帧顶部动作区（直接暴露打帧入口） */
+.kf-topbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.kf-auto {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--ev-c-text-2);
+  cursor: pointer;
+}
+
 .field input[type='text'] {
   background: var(--ev-c-black-mute);
   border: 1px solid var(--ev-c-gray-2);
