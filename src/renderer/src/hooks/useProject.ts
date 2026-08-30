@@ -162,8 +162,8 @@ export function useProject(): {
   removeSegment: (segId: string) => void
   splitSegment: (atSec: number, durationSec?: number) => void
   updateSegmentBounds: (segId: string, startSec: number, endSec: number) => void
-  /** 段边界过渡时长（1.0.0 关键帧编辑体验；0 = 硬切，0–3s 钳制） */
-  updateSegmentTransition: (segId: string, sec: number) => void
+  /** 段边界过渡（1.0.0 关键帧编辑体验；boundary='in'=进入 | 'out'=离开回全局；0 = 硬切，0–3s 钳制） */
+  updateSegmentTransition: (segId: string, boundary: 'in' | 'out', sec: number) => void
   /** 段关键帧整体替换（T5；t 相对片段起点） */
   updateSegmentTracks: (segId: string, tracks: PropertyTrack[]) => void
   /** 全局基线关键帧整体替换（1.1.0 #3；t 绝对秒） */
@@ -812,14 +812,20 @@ export function useProject(): {
     [applyLayout, pushHistory]
   )
 
-  /** 段边界过渡时长（0=硬切；0–3s；小于 0.05 视为未配置 → undefined 保持快路径/序列化干净） */
+  /** 段边界过渡（边界单一归属制：进入=段首与上一锚点；离开=段尾回全局，仅无生效段时生效）：
+   * 0=硬切；0–3s；小于 0.05 视为未配置 → undefined 保持快路径/序列化干净 */
   const updateSegmentTransition = useCallback(
-    (segId: string, sec: number) => {
+    (segId: string, boundary: 'in' | 'out', sec: number) => {
       pushHistory()
       const cur = layoutRef.current
       const v = Number.isFinite(sec) ? Math.min(3, Math.max(0, sec)) : 0
+      const val = v >= 0.05 ? v : undefined
       const segments = (cur.timeline?.segments ?? []).map((s) =>
-        s.id === segId ? { ...s, transitionSec: v >= 0.05 ? v : undefined } : s
+        s.id === segId
+          ? boundary === 'in'
+            ? { ...s, transitionInSec: val }
+            : { ...s, transitionOutSec: val }
+          : s
       )
       applyLayout({ ...cur, timeline: { ...(cur.timeline ?? { segments: [] }), segments } })
     },

@@ -1753,12 +1753,12 @@ function App(): React.JSX.Element {
           dSeg
       )
       // 4) 边界过渡（1.0.0 关键帧编辑体验）：s2 进入窗口 [2,4) = 前段 0.7 → 段首 0.06 线性渐变
-      pj.updateSegmentTransition(s2, 2)
+      pj.updateSegmentTransition(s2, 'in', 2)
       // 状态往返等待（React 提交完成后 projectRef 刷新）
       const tTr0 = Date.now()
       while (
         !(projectRef.current.layout.timeline?.segments ?? []).some(
-          (s) => (s.transitionSec ?? 0) > 0
+          (s) => (s.transitionInSec ?? 0) > 0 || (s.transitionOutSec ?? 0) > 0
         ) &&
         Date.now() - tTr0 < 2000
       ) {

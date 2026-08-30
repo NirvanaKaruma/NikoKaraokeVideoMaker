@@ -14,8 +14,8 @@ export interface TimelineBarProps {
   onSplitAt: (t: number) => void
   onRemoveSegment: (id: string) => void
   onUpdateBounds: (id: string, startSec: number, endSec: number) => void
-  /** 段边界过渡时长（1.0.0 关键帧编辑体验：段落到段落/全局；0 = 硬切，0–3s） */
-  onUpdateTransition?: (id: string, sec: number) => void
+  /** 段边界过渡（1.0.0 关键帧编辑体验：段落到段落/全局；kind='in'=进入 | 'out'=离开；0 = 硬切，0–3s） */
+  onUpdateTransition?: (id: string, kind: 'in' | 'out', sec: number) => void
   /** 重叠片段 id（T9 非破坏校验：标红 + 提示——重叠区间按排序靠前者生效） */
   overlaps?: string[]
   /** 点时间轴关键帧/槽：跳播 + 选中帧（段内传 segId；全局传 null）——与普通 seek（清帧）分离 */
@@ -50,6 +50,17 @@ export function TimelineBar(props: TimelineBarProps): React.JSX.Element {
   }
 
   const selected = props.segments.find((s) => s.id === props.selectedSegmentId) ?? null
+
+  /** 段的后继段（start >= endSec-ε 的最近一个） */
+  const nextSegOf = (s: TimelineSegment): TimelineSegment | null =>
+    props.segments
+      .filter((q) => q.id !== s.id && q.startSec >= s.endSec - 0.001)
+      .sort((a, b) => a.startSec - b.startSec)[0] ?? null
+  /** 段尾与下一段相接（无空隙）→ 该边界由下一段的「进入过渡」接管（本段离开过渡不生效） */
+  const boundaryContiguous = (s: TimelineSegment): boolean => {
+    const next = nextSegOf(s)
+    return next != null && next.startSec <= s.endSec + 0.001
+  }
 
   const resize = (e: React.PointerEvent, id: string, edge: 'l' | 'r'): void => {
     e.preventDefault()
@@ -96,19 +107,42 @@ export function TimelineBar(props: TimelineBarProps): React.JSX.Element {
           </button>
         )}
         {selected && (
-          <label className="timeline-transition" title={t('timeline.transitionHint')}>
-            {t('timeline.transition')}
+          <label className="timeline-transition" title={t('timeline.transitionInHint')}>
+            {t('timeline.transitionIn')}
             <input
               type="number"
               min={0}
               max={3}
               step={0.1}
-              value={Math.round((selected.transitionSec ?? 0) * 10) / 10}
-              onChange={(e) => props.onUpdateTransition?.(selected.id, Number(e.target.value))}
+              value={Math.round((selected.transitionInSec ?? 0) * 10) / 10}
+              onChange={(e) =>
+                props.onUpdateTransition?.(selected.id, 'in', Number(e.target.value))
+              }
             />
             s
           </label>
         )}
+        {selected &&
+          (boundaryContiguous(selected) ? (
+            <span className="timeline-transition-na" title={t('timeline.transitionOutHint')}>
+              {t('timeline.transitionOut')}：{t('timeline.transitionOutNa')}
+            </span>
+          ) : (
+            <label className="timeline-transition" title={t('timeline.transitionOutHint')}>
+              {t('timeline.transitionOut')}
+              <input
+                type="number"
+                min={0}
+                max={3}
+                step={0.1}
+                value={Math.round((selected.transitionOutSec ?? 0) * 10) / 10}
+                onChange={(e) =>
+                  props.onUpdateTransition?.(selected.id, 'out', Number(e.target.value))
+                }
+              />
+              s
+            </label>
+          ))}
         <span className="panel-note">{t('timeline.hint')}</span>
         {(props.overlaps?.length ?? 0) > 0 && (
           <span className="timeline-overlap-note">{t('timeline.overlap')}</span>
@@ -142,18 +176,17 @@ export function TimelineBar(props: TimelineBarProps): React.JSX.Element {
             title={i + 's'}
           />
         ))}
-        {/* 边界过渡窗口可视化：段前方 = 进入（与上一锚点）；段尾后无下一段 = 回全局 */}
+        {/* 边界过渡窗口可视化：段前方 = 进入（与上一锚点）；段尾后无下一段 = 离开回全局 */}
         {props.segments.map((s) => {
-          const d = s.transitionSec ?? 0
-          if (d <= 0) return null
-          const next = props.segments
-            .filter((q) => q.id !== s.id && q.startSec >= s.endSec - 0.001)
-            .sort((a, b) => a.startSec - b.startSec)[0]
+          const din = s.transitionInSec ?? 0
+          const dout = s.transitionOutSec ?? 0
+          if (din <= 0 && dout <= 0) return null
+          const next = nextSegOf(s)
           const contiguous = next != null && next.startSec <= s.endSec + 0.001
-          const a0 = Math.max(0, s.startSec - d)
+          const a0 = Math.max(0, s.startSec - din)
           return (
             <div key={'tw' + s.id} className="timeline-trans-windows">
-              {s.startSec > a0 && (
+              {din > 0 && s.startSec > a0 && (
                 <span
                   className="timeline-trans-window"
                   style={{
@@ -162,12 +195,12 @@ export function TimelineBar(props: TimelineBarProps): React.JSX.Element {
                   }}
                 />
               )}
-              {!contiguous && (
+              {dout > 0 && !contiguous && (
                 <span
                   className="timeline-trans-window"
                   style={{
                     left: ratio(s.endSec) * 100 + '%',
-                    width: (ratio(s.endSec + d) - ratio(s.endSec)) * 100 + '%'
+                    width: (ratio(s.endSec + dout) - ratio(s.endSec)) * 100 + '%'
                   }}
                 />
               )}

@@ -811,6 +811,11 @@ body {
   padding: 1px 4px;
   font-size: 12px;
 }
+.timeline-transition-na {
+  font-size: 11px;
+  color: var(--ev-c-text-2);
+  opacity: 0.85;
+}
 .timeline-trans-windows {
   position: absolute;
   inset: 0;

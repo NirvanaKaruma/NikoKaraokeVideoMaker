@@ -43,10 +43,14 @@ export interface TimelineSegment {
   /** 段内空关键帧槽（裸创建；t 相对段起点） */
   frameSlots?: number[]
   /**
-   * 边界过渡时长（秒，0=硬切，默认）：段起始处与上一锚点（前段结尾值 / 全局基线）软过渡；
-   * 段尾之后无生效段（空隙/歌曲结尾）时，同样用于段尾回全局基线的软过渡。
+   * 边界过渡（秒，0=硬切，默认）——**边界归属规则（单一归属，防双重混合）**：
+   * - transitionInSec：段起始边界「上一锚点（前段结尾值 / 全局基线）→ 本段」软过渡时长；
+   *   段与段相连时该边界**完全由后一段的 transitionInSec 决定**（前段不参与）；
+   * - transitionOutSec：段尾后**无生效段**（空隙/歌曲结尾）时「本段 → 全局基线」软过渡时长；
+   *   段尾为相接段落时不生效（该边界归属于下一段的进入过渡）。
    */
-  transitionSec?: number
+  transitionInSec?: number
+  transitionOutSec?: number
 }
 
 export interface TimelineDocument {
@@ -265,18 +269,28 @@ export function splitTimelineAt(
   // 空帧槽拆分：<=t0 留左侧段；>t0 平移给新段
   const slots1 = (seg.frameSlots ?? []).filter((x) => x <= t0)
   const slots2 = (seg.frameSlots ?? []).filter((x) => x > t0).map((x) => x - t0)
+  // 边界过渡归属（边界单一归属制）：进入归属左半段、离开归属右半段；
+  // 分割产生的新内边界（左→右）默认硬切（transitionInSec=undefined）。
   return {
     changed: true,
     segments: [
       ...segs.slice(0, idx),
-      { ...seg, endSec: atSec, keyframes: kf1, frameSlots: slots1 },
+      {
+        ...seg,
+        endSec: atSec,
+        keyframes: kf1,
+        frameSlots: slots1,
+        transitionOutSec: undefined
+      },
       {
         id: id2,
         startSec: atSec,
         endSec: seg.endSec,
         layout: seg.layout,
         keyframes: kf2,
-        frameSlots: slots2
+        frameSlots: slots2,
+        transitionInSec: undefined,
+        transitionOutSec: seg.transitionOutSec
       },
       ...segs.slice(idx + 1)
     ]
@@ -328,13 +342,13 @@ function applyTrackSet(
  *
  * 1.0.0 关键帧编辑体验——锚点间过渡（段落到帧 / 段落到段落 / 段落到全局 / 全局到段落）：
  * - 段落到帧：applyTrackSet 内「基准→首帧」按首帧过渡方式渐变（hold = 硬切）；
- * - 边界过渡（transitionSec）：段起始 = 与上一锚点软过渡；段尾后无生效段 = 回全局基线软过渡。
+ * - 边界过渡（边界单一归属）：transitionInSec=段首与上一锚点；transitionOutSec=段尾回全局（仅无生效段时）。
  * 解析优先级：进入窗口 → 离开窗口 → 常规段/全局；窗口递归嵌套（黑名单剥离已算段，防环）。
  */
 export function resolveLayoutAt(layout: ProjectLayout, tSec: number): ProjectLayout {
   const doc = layout.timeline ?? { segments: [] }
   // 快路径：无边界过渡配置 → 原语义（零拷贝身份返回，WYSIWYG 引用稳定）
-  if (!doc.segments.some((s) => (s.transitionSec ?? 0) > 0)) {
+  if (!doc.segments.some((s) => (s.transitionInSec ?? 0) > 0 || (s.transitionOutSec ?? 0) > 0)) {
     return resolveCore(layout, doc, tSec)
   }
   return resolveTrans(layout, doc, tSec, new Set())
@@ -397,8 +411,8 @@ function resolveTrans(
 ): ProjectLayout {
   // 1) 进入窗口 [start-d, start)：上一锚点世界（前段生效值/全局基线）→ 本段预期世界
   const inc = doc.segments
-    .filter((s) => !black.has(s.id) && (s.transitionSec ?? 0) > 0)
-    .filter((s) => s.startSec > tSec && tSec >= s.startSec - (s.transitionSec ?? 0))
+    .filter((s) => !black.has(s.id) && (s.transitionInSec ?? 0) > 0)
+    .filter((s) => s.startSec > tSec && tSec >= s.startSec - (s.transitionInSec ?? 0))
     .filter(
       (s) =>
         // 交接守卫：前段覆盖本段起始 → 本段实际不生效（重叠，排序靠前者胜）→ 无进入过渡
@@ -409,7 +423,7 @@ function resolveTrans(
     )
     .sort((a, b) => a.startSec - b.startSec)[0]
   if (inc) {
-    const d = Math.max(0.001, inc.transitionSec ?? 0)
+    const d = Math.max(0.001, inc.transitionInSec ?? 0)
     const p = Math.min(1, Math.max(0, (tSec - (inc.startSec - d)) / d))
     const next = new Set(black)
     next.add(inc.id)
@@ -421,11 +435,11 @@ function resolveTrans(
   const active = segmentAtEx(doc, tSec, black)
   if (!active) {
     const out = doc.segments
-      .filter((s) => !black.has(s.id) && (s.transitionSec ?? 0) > 0)
-      .filter((s) => s.endSec <= tSec && tSec < s.endSec + (s.transitionSec ?? 0))
+      .filter((s) => !black.has(s.id) && (s.transitionOutSec ?? 0) > 0)
+      .filter((s) => s.endSec <= tSec && tSec < s.endSec + (s.transitionOutSec ?? 0))
       .sort((a, b) => b.endSec - a.endSec)[0]
     if (out) {
-      const d = Math.max(0.001, out.transitionSec ?? 0)
+      const d = Math.max(0.001, out.transitionOutSec ?? 0)
       const p = Math.min(1, Math.max(0, (tSec - out.endSec) / d))
       const from = resolveSegActive(layout, doc, out, tSec)
       const globalTracks = doc.keyframes ?? []
