@@ -1,5 +1,11 @@
 import { useRef } from 'react'
-import type { PropertyTrack, TimelineSegment } from '@shared/timeline'
+import {
+  computeCutWindows,
+  GLOBAL_ANCHOR,
+  pairCutKey,
+  type PropertyTrack,
+  type TimelineSegment
+} from '@shared/timeline'
 import { useLocale } from '../hooks/useLocale'
 
 export interface TimelineBarProps {
@@ -14,8 +20,10 @@ export interface TimelineBarProps {
   onSplitAt: (t: number) => void
   onRemoveSegment: (id: string) => void
   onUpdateBounds: (id: string, startSec: number, endSec: number) => void
-  /** 段边界过渡（1.0.0 关键帧编辑体验：段落到段落/全局；kind='in'=进入 | 'out'=离开；0 = 硬切，0–3s） */
-  onUpdateTransition?: (id: string, kind: 'in' | 'out', sec: number) => void
+  /** 切点过渡（NLE 式：过渡属于编辑点/切点；cutKey = 左锚点|右锚点，'g' = 全局基线；0 = 硬切，0–3s） */
+  onUpdateCut?: (cutKey: string, sec: number) => void
+  /** 切点过渡配置（doc.transitions 映射：锚点对 -> 秒） */
+  transitions?: Record<string, number>
   /** 重叠片段 id（T9 非破坏校验：标红 + 提示——重叠区间按排序靠前者生效） */
   overlaps?: string[]
   /** 点时间轴关键帧/槽：跳播 + 选中帧（段内传 segId；全局传 null）——与普通 seek（清帧）分离 */
@@ -51,16 +59,25 @@ export function TimelineBar(props: TimelineBarProps): React.JSX.Element {
 
   const selected = props.segments.find((s) => s.id === props.selectedSegmentId) ?? null
 
-  /** 段的后继段（start >= endSec-ε 的最近一个） */
-  const nextSegOf = (s: TimelineSegment): TimelineSegment | null =>
+  /** 相邻段（按端点相接；±0.001 容差） */
+  const prevAdj = (s: TimelineSegment): TimelineSegment | null => {
+    const p = props.segments
+      .filter((q) => q.id !== s.id && q.endSec <= s.startSec + 0.001)
+      .sort((a, b) => b.endSec - a.endSec)[0]
+    return p && Math.abs(p.endSec - s.startSec) <= 0.001 ? p : null
+  }
+  const nextAdj = (s: TimelineSegment): TimelineSegment | null => {
+    const n = props.segments
+      .filter((q) => q.id !== s.id && q.startSec >= s.endSec - 0.001)
+      .sort((a, b) => a.startSec - b.startSec)[0]
+    return n && Math.abs(n.startSec - s.endSec) <= 0.001 ? n : null
+  }
+  /** 按分段顺序的后继（含空隙；用于「断开保留」提示） */
+  const nextByOrder = (s: TimelineSegment): TimelineSegment | null =>
     props.segments
       .filter((q) => q.id !== s.id && q.startSec >= s.endSec - 0.001)
       .sort((a, b) => a.startSec - b.startSec)[0] ?? null
-  /** 段尾与下一段相接（无空隙）→ 该边界由下一段的「进入过渡」接管（本段离开过渡不生效） */
-  const boundaryContiguous = (s: TimelineSegment): boolean => {
-    const next = nextSegOf(s)
-    return next != null && next.startSec <= s.endSec + 0.001
-  }
+  const segIndex = (s: TimelineSegment): number => props.segments.indexOf(s) + 1
 
   const resize = (e: React.PointerEvent, id: string, edge: 'l' | 'r'): void => {
     e.preventDefault()
@@ -106,43 +123,73 @@ export function TimelineBar(props: TimelineBarProps): React.JSX.Element {
             {t('timeline.remove')}
           </button>
         )}
-        {selected && (
-          <label className="timeline-transition" title={t('timeline.transitionInHint')}>
-            {t('timeline.transitionIn')}
-            <input
-              type="number"
-              min={0}
-              max={3}
-              step={0.1}
-              value={Math.round((selected.transitionInSec ?? 0) * 10) / 10}
-              onChange={(e) =>
-                props.onUpdateTransition?.(selected.id, 'in', Number(e.target.value))
-              }
-            />
-            s
-          </label>
-        )}
         {selected &&
-          (boundaryContiguous(selected) ? (
-            <span className="timeline-transition-na" title={t('timeline.transitionOutHint')}>
-              {t('timeline.transitionOut')}：{t('timeline.transitionOutNa')}
-            </span>
-          ) : (
-            <label className="timeline-transition" title={t('timeline.transitionOutHint')}>
-              {t('timeline.transitionOut')}
-              <input
-                type="number"
-                min={0}
-                max={3}
-                step={0.1}
-                value={Math.round((selected.transitionOutSec ?? 0) * 10) / 10}
-                onChange={(e) =>
-                  props.onUpdateTransition?.(selected.id, 'out', Number(e.target.value))
-                }
-              />
-              s
-            </label>
-          ))}
+          (() => {
+            const tns = props.transitions ?? {}
+            const pSeg = prevAdj(selected)
+            const nSeg = nextAdj(selected)
+            const headKey = pSeg
+              ? pairCutKey(pSeg.id, selected.id)
+              : GLOBAL_ANCHOR + '|' + selected.id
+            const tailKey = nSeg
+              ? pairCutKey(selected.id, nSeg.id)
+              : selected.id + '|' + GLOBAL_ANCHOR
+            const headD = tns[headKey] ?? 0
+            const tailD = tns[tailKey] ?? 0
+            // 断开保留提示：按序后段存在且有 (本段|后段) 非零配置——空隙状态下不生效、重接后生效
+            const nOrder = nextByOrder(selected)
+            const kept = nOrder && !nSeg ? (tns[pairCutKey(selected.id, nOrder.id)] ?? 0) : 0
+            return (
+              <>
+                <label
+                  className="timeline-transition"
+                  title={
+                    pSeg
+                      ? t('timeline.cutPairHint', { i: segIndex(pSeg) })
+                      : t('timeline.cutHeadHint')
+                  }
+                >
+                  {pSeg ? t('timeline.cutPair', { i: segIndex(pSeg) }) : t('timeline.cutHead')}
+                  <input
+                    type="number"
+                    min={0}
+                    max={3}
+                    step={0.1}
+                    value={Math.round(headD * 10) / 10}
+                    onChange={(e) => props.onUpdateCut?.(headKey, Number(e.target.value))}
+                  />
+                  s
+                </label>
+                <label
+                  className="timeline-transition"
+                  title={
+                    nSeg
+                      ? t('timeline.cutPairHint', { i: segIndex(nSeg) })
+                      : t('timeline.cutTailHint')
+                  }
+                >
+                  {nSeg ? t('timeline.cutPair', { i: segIndex(nSeg) }) : t('timeline.cutTail')}
+                  <input
+                    type="number"
+                    min={0}
+                    max={3}
+                    step={0.1}
+                    value={Math.round(tailD * 10) / 10}
+                    onChange={(e) => props.onUpdateCut?.(tailKey, Number(e.target.value))}
+                  />
+                  s
+                </label>
+                {kept > 0 && (
+                  <span className="timeline-transition-na">
+                    {t('timeline.cutPairInactive', {
+                      i: segIndex(nOrder as TimelineSegment),
+                      d: String(kept)
+                    })}
+                  </span>
+                )}
+              </>
+            )
+          })()}
         <span className="panel-note">{t('timeline.hint')}</span>
         {(props.overlaps?.length ?? 0) > 0 && (
           <span className="timeline-overlap-note">{t('timeline.overlap')}</span>
@@ -176,37 +223,18 @@ export function TimelineBar(props: TimelineBarProps): React.JSX.Element {
             title={i + 's'}
           />
         ))}
-        {/* 边界过渡窗口可视化：段前方 = 进入（与上一锚点）；段尾后无下一段 = 离开回全局 */}
-        {props.segments.map((s) => {
-          const din = s.transitionInSec ?? 0
-          const dout = s.transitionOutSec ?? 0
-          if (din <= 0 && dout <= 0) return null
-          const next = nextSegOf(s)
-          const contiguous = next != null && next.startSec <= s.endSec + 0.001
-          const a0 = Math.max(0, s.startSec - din)
-          return (
-            <div key={'tw' + s.id} className="timeline-trans-windows">
-              {din > 0 && s.startSec > a0 && (
-                <span
-                  className="timeline-trans-window"
-                  style={{
-                    left: ratio(a0) * 100 + '%',
-                    width: (ratio(s.startSec) - ratio(a0)) * 100 + '%'
-                  }}
-                />
-              )}
-              {dout > 0 && !contiguous && (
-                <span
-                  className="timeline-trans-window"
-                  style={{
-                    left: ratio(s.endSec) * 100 + '%',
-                    width: (ratio(s.endSec + dout) - ratio(s.endSec)) * 100 + '%'
-                  }}
-                />
-              )}
-            </div>
-          )
-        })}
+        {/* 切点过渡窗口可视化（与引擎 computeCutWindows 同一来源 = 所见即所得）：居中、侧向钳制 */}
+        {computeCutWindows({ segments: props.segments }, props.transitions ?? {}).map((w) => (
+          <div key={'tw' + w.key} className="timeline-trans-windows">
+            <span
+              className="timeline-trans-window"
+              style={{
+                left: ratio(w.pos - w.hL) * 100 + '%',
+                width: (ratio(w.pos + w.hR) - ratio(w.pos - w.hL)) * 100 + '%'
+              }}
+            />
+          </div>
+        ))}
         {/* 片段块 */}
         {props.segments.map((s) => (
           <div

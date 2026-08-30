@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type Konva from 'konva'
 import { SUBTITLE_ZONE_Y, defaultLayerOrder, type ProjectLayout } from '@shared/layout'
-import { resolveLayoutAt, segmentOverlaps, setByPath } from '@shared/timeline'
+import { pairCutKey, resolveLayoutAt, segmentOverlaps, setByPath } from '@shared/timeline'
 import { resolvedSnapshotKey } from '@shared/tlDiff'
 import { useLocale } from './hooks/useLocale'
 import { useEditableLayout } from './hooks/useEditableLayout'
@@ -1752,26 +1752,24 @@ function App(): React.JSX.Element {
           ') 差异像素 ' +
           dSeg
       )
-      // 4) 边界过渡（1.0.0 关键帧编辑体验）：s2 进入窗口 [2,4) = 前段 0.7 → 段首 0.06 线性渐变
-      pj.updateSegmentTransition(s2, 'in', 2)
+      // 4) 切点过渡（NLE 式）：段间接点 P|N（s1|s2）：居中互溶，窗口 [4-1, 4+1) = [3,5)
+      pj.updateCutTransition(pairCutKey(s1, s2), 2)
       // 状态往返等待（React 提交完成后 projectRef 刷新）
       const tTr0 = Date.now()
       while (
-        !(projectRef.current.layout.timeline?.segments ?? []).some(
-          (s) => (s.transitionInSec ?? 0) > 0 || (s.transitionOutSec ?? 0) > 0
-        ) &&
+        Object.keys(projectRef.current.layout.timeline?.transitions ?? {}).length === 0 &&
         Date.now() - tTr0 < 2000
       ) {
         await sleep(100)
       }
-      const xt = resolveLayoutAt(projectRef.current.layout, 3).mainImage.rect.x
+      const xt = resolveLayoutAt(projectRef.current.layout, 4).mainImage.rect.x
       add(
-        '引擎·段落到段落',
+        '引擎·段间切点',
         Math.abs(xt - (0.7 + (0.06 - 0.7) * 0.5)) < 0.02,
-        '窗口中点 x=' + xt.toFixed(4) + '（期望≈0.38）'
+        '切点 t=4 x=' + xt.toFixed(4) + '（期望≈0.38）'
       )
-      // 捕获顺序：E（窗口内）→ F（段内）——两时刻同帧预览差异 > 阈值
-      const curE = await seekAndSettle(3)
+      // 捕获顺序：E（窗口内 t=3.5，p=0.25）→ F（段内）——两时刻同帧预览差异 > 阈值
+      const curE = await seekAndSettle(3.5)
       const resolvedE = resolveLayoutAt(projectRef.current.layout, curE).mainImage.rect.x
       const capE = captureRegion(st, ...region)
       const curF = await seekAndSettle(4.05)
@@ -2429,7 +2427,8 @@ function App(): React.JSX.Element {
               if (project.editSegId === id) project.setEditSegment(null)
             }}
             onUpdateBounds={project.updateSegmentBounds}
-            onUpdateTransition={project.updateSegmentTransition}
+            onUpdateCut={project.updateCutTransition}
+            transitions={project.layout.timeline?.transitions ?? {}}
             overlaps={overlapIds}
             globalKeyframes={project.layout.timeline?.keyframes ?? []}
             globalSlots={project.layout.timeline?.frameSlots ?? []}

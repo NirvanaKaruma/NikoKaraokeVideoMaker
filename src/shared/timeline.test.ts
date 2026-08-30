@@ -1,15 +1,19 @@
 import { describe, expect, it } from 'vitest'
 import {
   clampSegmentsToDuration,
+  computeCutWindows,
   getByPath,
-  splitTimelineAt,
+  headCutKey,
   hasTimeline,
   interpolateValue,
   lerpLayouts,
+  pairCutKey,
+  remapTransitionsAfterSplit,
   resolveLayoutAt,
   segmentAt,
   segmentOverlaps,
   setByPath,
+  tailCutKey,
   trackValueAt,
   type TimelineDocument,
   type TimelineSegment
@@ -185,7 +189,7 @@ describe('T9 片段边界语义', () => {
   })
 })
 
-describe('锚点间过渡（1.0.0 关键帧编辑体验：段落到帧 / 段落到段落 / 段落到全局 / 全局到段落）', () => {
+describe('切点过渡（NLE 式：过渡属于编辑点/切点；段落到帧 / 段间切点 / 段首 / 段尾）', () => {
   const FS = 'texts.songTitle.style.fontSize'
   const BASE = DEFAULT_LAYOUT.texts.songTitle.style.fontSize
   const sz = (l: ProjectLayout): number => l.texts.songTitle.style.fontSize
@@ -195,6 +199,14 @@ describe('锚点间过渡（1.0.0 关键帧编辑体验：段落到帧 / 段落�
   ): TimelineSegment => ({
     ...seg({ ...patch }),
     keyframes: [{ path: FS, frames: frames as never }]
+  })
+  /** 带切点过渡配置的时间轴文档 */
+  const dT = (
+    timeline: TimelineDocument,
+    transitions: Record<string, number>
+  ): TimelineDocument => ({
+    ...timeline,
+    transitions
   })
 
   it('段落到帧：基准→首帧按首帧过渡方式渐变；hold=到达前保持基准、到达突变', () => {
@@ -251,80 +263,128 @@ describe('锚点间过渡（1.0.0 关键帧编辑体验：段落到帧 / 段落�
     expect(base.texts.songTitle.style.color).toBe('#ffffff') // 输入不被修改
   })
 
-  it('全局到段落：物化段进入窗口 = 上一锚点（全局基线）→ 段快照软过渡', () => {
+  it('段首切点（全局基线 → 物化段）：居中互溶，切点两侧各半', () => {
     const snap = structuredClone(DEFAULT_LAYOUT)
     snap.texts.songTitle.style.fontSize = 0.3
-    const d = doc([seg({ id: 's1', startSec: 5, endSec: 15, layout: snap, transitionInSec: 1 })])
+    const tl = doc([seg({ id: 's1', startSec: 5, endSec: 15, layout: snap })])
+    const d = dT(tl, { [headCutKey('s1')]: 1 })
     const base = structuredClone(DEFAULT_LAYOUT)
-    expect(sz(resolveLayoutAt({ ...base, timeline: d }, 4))).toBeCloseTo(BASE, 9) // 窗口起点=上一锚点
-    expect(sz(resolveLayoutAt({ ...base, timeline: d }, 4.5))).toBeCloseTo((BASE + 0.3) / 2, 9)
-    expect(sz(resolveLayoutAt({ ...base, timeline: d }, 5))).toBe(0.3)
-    expect(sz(resolveLayoutAt({ ...base, timeline: d }, 6))).toBe(0.3)
+    const at = (t: number): number => sz(resolveLayoutAt({ ...base, timeline: d }, t))
+    // 窗口 [4.5,5.5)：d=1 两侧各半
+    expect(at(4.5)).toBeCloseTo(BASE, 9)
+    expect(at(4.75)).toBeCloseTo(BASE + (0.3 - BASE) * 0.25, 9)
+    expect(at(5)).toBeCloseTo((BASE + 0.3) / 2, 9)
+    expect(at(5.25)).toBeCloseTo(BASE + (0.3 - BASE) * 0.75, 9)
+    expect(at(5.5)).toBe(0.3)
+    expect(at(6)).toBe(0.3)
   })
 
-  it('段落到段落：后段进入窗口 = 前段结尾值 → 后段起始值软过渡（首帧在段起点=边界到达帧值）', () => {
+  it('段间切点（相接 A|B）：单条过渡居中互溶；无配置 = 硬切', () => {
     const base = structuredClone(DEFAULT_LAYOUT)
     const s1 = kfSeg([{ t: 0, value: 0.05, easing: 'linear' }], { id: 'a', startSec: 0, endSec: 5 })
     const s2 = kfSeg([{ t: 0, value: 0.25, easing: 'linear' }], {
       id: 'b',
       startSec: 5,
-      endSec: 15,
-      transitionInSec: 2
+      endSec: 15
     })
-    const d = doc([s1, s2])
-    expect(sz(resolveLayoutAt({ ...base, timeline: d }, 3))).toBeCloseTo(0.05, 9) // 窗口起点=前段生效
-    // 窗口 [3,5)：p=(4-3)/2=0.5；p=(4.5-3)/2=0.75 → lerp(0.05→0.25, p)
-    expect(sz(resolveLayoutAt({ ...base, timeline: d }, 4))).toBeCloseTo(0.05 + 0.2 * 0.5, 9)
-    expect(sz(resolveLayoutAt({ ...base, timeline: d }, 4.5))).toBeCloseTo(0.05 + 0.2 * 0.75, 9)
-    expect(sz(resolveLayoutAt({ ...base, timeline: d }, 4.999))).toBeCloseTo(0.05 + 0.2 * 0.9995, 6)
-    expect(sz(resolveLayoutAt({ ...base, timeline: d }, 5))).toBe(0.25)
+    const d = dT(doc([s1, s2]), { [pairCutKey('a', 'b')]: 2 })
+    const at = (t: number): number => sz(resolveLayoutAt({ ...base, timeline: d }, t))
+    // 窗口 [4,6)：d=2 切点两侧各半
+    expect(at(3)).toBeCloseTo(0.05, 9)
+    expect(at(4)).toBeCloseTo(0.05, 9)
+    expect(at(4.5)).toBeCloseTo(0.05 + 0.2 * 0.25, 9)
+    expect(at(5)).toBeCloseTo(0.05 + 0.2 * 0.5, 9)
+    expect(at(5.5)).toBeCloseTo(0.05 + 0.2 * 0.75, 9)
+    expect(at(6)).toBe(0.25)
+    // 无配置 → 硬切
+    const d0 = doc([s1, s2])
+    expect(sz(resolveLayoutAt({ ...base, timeline: d0 }, 4.99))).toBeCloseTo(0.05, 6)
+    expect(sz(resolveLayoutAt({ ...base, timeline: d0 }, 5))).toBe(0.25)
   })
 
-  it('段落到全局：段尾后无生效段 → 段结尾值回全局基线软过渡', () => {
+  it('段尾切点（本段 → 全局基线）：居中、歌曲尾侧完整', () => {
     const snap = structuredClone(DEFAULT_LAYOUT)
     snap.texts.songTitle.style.fontSize = 0.3
-    const d = doc([seg({ id: 's1', startSec: 0, endSec: 10, layout: snap, transitionOutSec: 2 })])
+    const tl = doc([seg({ id: 's1', startSec: 0, endSec: 10, layout: snap })])
+    const d = dT(tl, { [tailCutKey('s1')]: 2 })
     const base = structuredClone(DEFAULT_LAYOUT)
-    expect(sz(resolveLayoutAt({ ...base, timeline: d }, 9))).toBe(0.3)
-    expect(sz(resolveLayoutAt({ ...base, timeline: d }, 10))).toBe(0.3) // 到达段尾=段值
-    expect(sz(resolveLayoutAt({ ...base, timeline: d }, 11))).toBeCloseTo((0.3 + BASE) / 2, 9)
-    expect(sz(resolveLayoutAt({ ...base, timeline: d }, 12))).toBeCloseTo(BASE, 9)
+    const at = (t: number): number => sz(resolveLayoutAt({ ...base, timeline: d }, t))
+    // 歌曲尾切点：右侧无内容 → 淡出在段内完整 d=2s：[8,10)
+    expect(at(8)).toBe(0.3)
+    expect(at(9)).toBeCloseTo((0.3 + BASE) / 2, 9)
+    expect(at(10)).toBeCloseTo(BASE, 9)
   })
 
-  it('空隙链式过渡：段→全局（离开窗口）与全局→段（进入窗口）嵌套混合、连续无跳变', () => {
+  it('空隙：A|g 与 g|B 两条切点、半隙钳制、精确相接不重叠、中点 = 全局基线', () => {
     const base = structuredClone(DEFAULT_LAYOUT)
-    const s1 = kfSeg([{ t: 0, value: 0.05, easing: 'linear' }], {
-      id: 'a',
-      startSec: 0,
-      endSec: 5,
-      transitionOutSec: 1
-    })
+    const s1 = kfSeg([{ t: 0, value: 0.05, easing: 'linear' }], { id: 'a', startSec: 0, endSec: 5 })
     const s2 = kfSeg([{ t: 0, value: 0.25, easing: 'linear' }], {
       id: 'b',
       startSec: 5.5,
-      endSec: 10,
-      transitionInSec: 1,
-      transitionOutSec: 1
+      endSec: 10
     })
-    const d = doc([s1, s2])
+    const trans = { [tailCutKey('a')]: 1, [headCutKey('b')]: 1 }
+    const d = dT(doc([s1, s2]), trans)
+    const wins = computeCutWindows({ segments: d.segments }, trans)
+    expect(wins).toHaveLength(2)
+    // 精确相接（无重叠无缝隙）：[4.5,5.25) + [5.25,6)
+    expect(wins[0].pos + wins[0].hR).toBeCloseTo(wins[1].pos - wins[1].hL, 9)
     const at = (t: number): number => sz(resolveLayoutAt({ ...base, timeline: d }, t))
-    expect(at(4)).toBeCloseTo(0.05, 9)
-    // t=5：S2 进入窗口 p=0.5（from=S1 离开窗口起点 p=0 → 段值 0.05）
-    expect(at(5)).toBeCloseTo(0.05 + (0.25 - 0.05) * 0.5, 9)
-    // t=5.25：进入 S2 窗口 p=0.75；from=S1 离开 p=0.25 → lerp(0.05, BASE, 0.25)
-    const from = 0.05 + (BASE - 0.05) * 0.25
-    expect(at(5.25)).toBeCloseTo(from + (0.25 - from) * 0.75, 9)
-    expect(at(5.5)).toBe(0.25)
-    expect(at(9.5)).toBe(0.25)
-    expect(at(10.5)).toBeCloseTo((0.25 + BASE) / 2, 9) // S2 离开窗口中点
-    expect(at(11.5)).toBeCloseTo(BASE, 9)
+    expect(at(4.75)).toBeCloseTo(0.05 + (BASE - 0.05) / 3, 9)
+    expect(at(5)).toBeCloseTo(0.05 + (BASE - 0.05) * (2 / 3), 9)
+    expect(at(5.25)).toBeCloseTo(BASE, 9)
+    expect(at(5.5)).toBeCloseTo(BASE + (0.25 - BASE) / 3, 9)
+    expect(at(5.75)).toBeCloseTo(BASE + (0.25 - BASE) * (2 / 3), 9)
+    expect(at(6)).toBe(0.25)
+    expect(at(4)).toBeCloseTo(0.05, 9) // 前段生效
   })
 
-  it('全局轨道与进入窗口并存：全局动画为底、段快照为顶（物化=冻结，全局不覆盖）', () => {
+  it('切点身份保持：拖开（空隙）后 A|B 配置不生效但保留；重接后原样生效', () => {
+    const base = structuredClone(DEFAULT_LAYOUT)
+    const s1 = kfSeg([{ t: 0, value: 0.05, easing: 'linear' }], { id: 'a', startSec: 0, endSec: 5 })
+    const s2 = kfSeg([{ t: 0, value: 0.25, easing: 'linear' }], {
+      id: 'b',
+      startSec: 5,
+      endSec: 10
+    })
+    const trans = { [pairCutKey('a', 'b')]: 1 }
+    const d = dT(doc([s1, s2]), trans)
+    const at = (t: number): number => sz(resolveLayoutAt({ ...base, timeline: d }, t))
+    expect(at(5)).toBeCloseTo(0.15, 9) // 相接：居中互溶
+    // 拖开：b 起始 5.4 → 切点对 (a|b) 不生效（保留在配置里），成为 A|g + g|B（无配置=硬切）
+    const dGap = dT(doc([s1, { ...s2, startSec: 5.4 }]), trans)
+    const wins = computeCutWindows({ segments: dGap.segments }, trans)
+    expect(wins.some((w) => w.key === pairCutKey('a', 'b'))).toBe(false)
+    expect(trans[pairCutKey('a', 'b')]).toBe(1) // 配置保留
+    const atG = (t: number): number => sz(resolveLayoutAt({ ...base, timeline: dGap }, t))
+    expect(atG(4.9)).toBeCloseTo(0.05, 6)
+    expect(atG(5.2)).toBeCloseTo(BASE, 9) // 空隙 = 全局基线（两端硬切）
+    expect(atG(5.4)).toBe(0.25)
+    // 重接：原配置原样生效
+    const dBack = dT(doc([s1, s2]), trans)
+    expect(sz(resolveLayoutAt({ ...base, timeline: dBack }, 5))).toBeCloseTo(0.15, 9)
+  })
+
+  it('0 时刻段首切点：外侧不可达 → 盈余转内侧，获得完整时长', () => {
     const snap = structuredClone(DEFAULT_LAYOUT)
     snap.texts.songTitle.style.fontSize = 0.3
-    const d: TimelineDocument = {
-      segments: [seg({ id: 's1', startSec: 5, endSec: 15, layout: snap, transitionInSec: 1 })],
+    const tl = doc([seg({ id: 's1', startSec: 0, endSec: 10, layout: snap })])
+    const d = dT(tl, { [headCutKey('s1')]: 2 })
+    const wins = computeCutWindows({ segments: d.segments }, d.transitions ?? {})
+    expect(wins[0].hL).toBe(0)
+    expect(wins[0].hR).toBe(2) // 完整 2s 淡入（[0,2)）
+    const base = structuredClone(DEFAULT_LAYOUT)
+    const at = (t: number): number => sz(resolveLayoutAt({ ...base, timeline: d }, t))
+    expect(at(0.5)).toBeCloseTo(BASE + (0.3 - BASE) * 0.25, 9)
+    expect(at(1.5)).toBeCloseTo(BASE + (0.3 - BASE) * 0.75, 9)
+    expect(at(2)).toBe(0.3)
+  })
+
+  it('全局轨道与段首切点并存：全局动画为底、物化段快照为顶（冻结）', () => {
+    const snap = structuredClone(DEFAULT_LAYOUT)
+    snap.texts.songTitle.style.fontSize = 0.3
+    const tl: TimelineDocument = {
+      segments: [seg({ id: 's1', startSec: 5, endSec: 15, layout: snap })],
       keyframes: [
         {
           path: FS,
@@ -335,10 +395,27 @@ describe('锚点间过渡（1.0.0 关键帧编辑体验：段落到帧 / 段落�
         }
       ]
     }
+    const d = dT(tl, { [headCutKey('s1')]: 1 })
     const base = structuredClone(DEFAULT_LAYOUT)
-    // 4.5：全局动画值 0.095；窗口 p=0.5 → lerp(0.095, 0.3, 0.5)
-    expect(sz(resolveLayoutAt({ ...base, timeline: d }, 4.5))).toBeCloseTo((0.095 + 0.3) / 2, 9)
+    // 切点 t=5：p=0.5；from=全局动画值 0.10 → lerp(0.10, 0.3, 0.5)=0.2
+    expect(sz(resolveLayoutAt({ ...base, timeline: d }, 5))).toBeCloseTo(0.2, 9)
     expect(sz(resolveLayoutAt({ ...base, timeline: d }, 10))).toBe(0.3) // 段内物化冻结
+  })
+
+  it('分割重映射：左锚点 = 原段 → 右半段；段首（右锚点 = 原段）留在左半段', () => {
+    const trans: Record<string, number> = {
+      [headCutKey('a')]: 1, // 段首 → 留左半段（a）
+      [tailCutKey('a')]: 0.5, // 段尾 → 右半段（a2）
+      [pairCutKey('a', 'b')]: 2, // 与后段切点 → (a2|b)
+      [pairCutKey('p', 'a')]: 3 // 与前段切点 → 留 (p|a)
+    }
+    const r = remapTransitionsAfterSplit(trans, 'a', 'a2')
+    expect(r[headCutKey('a')]).toBe(1)
+    expect(r[tailCutKey('a2')]).toBe(0.5)
+    expect(r[pairCutKey('a2', 'b')]).toBe(2)
+    expect(r[pairCutKey('p', 'a')]).toBe(3)
+    expect(r[pairCutKey('a', 'b')]).toBeUndefined()
+    expect(r[tailCutKey('a')]).toBeUndefined()
   })
 
   it('lerpLayouts：端点身份、数值/颜色/数组/嵌套插值、输入不被修改', () => {
@@ -363,104 +440,5 @@ describe('锚点间过渡（1.0.0 关键帧编辑体验：段落到帧 / 段落�
   it('未配置过渡：resolveLayoutAt 身份快路径不变（段外返回原布局）', () => {
     const base = structuredClone(DEFAULT_LAYOUT)
     expect(resolveLayoutAt(base, 99)).toBe(base)
-  })
-
-  it('边界归属：段首段尾独立设置——进入/离开时长互不影响', () => {
-    const snap = structuredClone(DEFAULT_LAYOUT)
-    snap.texts.songTitle.style.fontSize = 0.3
-    const d = doc([
-      seg({
-        id: 's1',
-        startSec: 5,
-        endSec: 15,
-        layout: snap,
-        transitionInSec: 1,
-        transitionOutSec: 2
-      })
-    ])
-    const base = structuredClone(DEFAULT_LAYOUT)
-    // 进入窗口 [4,5) 半程（d=1）
-    expect(sz(resolveLayoutAt({ ...base, timeline: d }, 4.5))).toBeCloseTo((BASE + 0.3) / 2, 9)
-    // 段内 = 快照
-    expect(sz(resolveLayoutAt({ ...base, timeline: d }, 10))).toBe(0.3)
-    // 离开窗口 [15,17) 半程（d=2）：段尾与段首取不同时长 → 互不影响
-    expect(sz(resolveLayoutAt({ ...base, timeline: d }, 16))).toBeCloseTo((0.3 + BASE) / 2, 9)
-    expect(sz(resolveLayoutAt({ ...base, timeline: d }, 17))).toBeCloseTo(BASE, 9)
-  })
-
-  it('边界归属：段段相连时边界=下一段的「进入过渡」；前段「离开过渡」在该边界不生效', () => {
-    const base = structuredClone(DEFAULT_LAYOUT)
-    const s1 = kfSeg([{ t: 0, value: 0.05, easing: 'linear' }], {
-      id: 'a',
-      startSec: 0,
-      endSec: 5,
-      transitionOutSec: 3
-    })
-    const s2 = kfSeg([{ t: 0, value: 0.25, easing: 'linear' }], {
-      id: 'b',
-      startSec: 5,
-      endSec: 10
-    })
-    const d = doc([s1, s2])
-    const at = (t: number): number => sz(resolveLayoutAt({ ...base, timeline: d }, t))
-    expect(at(4.99)).toBeCloseTo(0.05, 6) // 前段生效（离开不生效：下个锚点是段而非全局）
-    expect(at(5)).toBe(0.25) // 后段进入=0 → 硬切
-    // 后段设置进入过渡后：边界由后段接管
-    const d2 = doc([s1, { ...s2, transitionInSec: 2 }])
-    const at2 = (t: number): number => sz(resolveLayoutAt({ ...base, timeline: d2 }, t))
-    expect(at2(4)).toBeCloseTo(0.05 + 0.2 * 0.5, 9) // 窗口 [3,5) 半程 = 前段值→后段值
-    expect(at2(5)).toBe(0.25)
-  })
-
-  it('边界归属：空隙（无生效段）段尾「离开过渡」生效（即使后面还有段）', () => {
-    const snap = structuredClone(DEFAULT_LAYOUT)
-    snap.texts.songTitle.style.fontSize = 0.3
-    const s1 = seg({
-      id: 'a',
-      startSec: 0,
-      endSec: 5,
-      layout: snap,
-      transitionOutSec: 1
-    })
-    const s2 = kfSeg([{ t: 0, value: 0.25, easing: 'linear' }], {
-      id: 'b',
-      startSec: 6,
-      endSec: 10
-    })
-    const d = doc([s1, s2])
-    const base = structuredClone(DEFAULT_LAYOUT)
-    const at = (t: number): number => sz(resolveLayoutAt({ ...base, timeline: d }, t))
-    expect(at(5.25)).toBeCloseTo(0.3 + (BASE - 0.3) * 0.25, 9) // 空隙中：段值→全局半程
-    expect(at(6)).toBe(0.25) // 后段起始（进入=0 硬切）
-  })
-
-  it('分割归属：进入过渡随左半段、离开过渡随右半段、新内边界默认硬切', () => {
-    const snap = structuredClone(DEFAULT_LAYOUT)
-    snap.texts.songTitle.style.fontSize = 0.3
-    const d0: TimelineDocument = {
-      segments: [
-        seg({
-          id: 'a',
-          startSec: 0,
-          endSec: 10,
-          layout: snap,
-          transitionInSec: 1,
-          transitionOutSec: 2
-        })
-      ]
-    }
-    const r = splitTimelineAt(d0, 5)
-    expect(r.changed).toBe(true)
-    const [L, R] = r.segments
-    expect(L.transitionInSec).toBe(1)
-    expect(L.transitionOutSec).toBeUndefined()
-    expect(R.transitionInSec).toBeUndefined() // 新内边界：硬切
-    expect(R.transitionOutSec).toBe(2)
-    // 引擎：内边界硬切（左段值直到 5，右段从 5 起=快照）
-    const d1: TimelineDocument = { segments: r.segments }
-    const base = structuredClone(DEFAULT_LAYOUT)
-    expect(sz(resolveLayoutAt({ ...base, timeline: d1 }, 4.9))).toBeCloseTo(0.3, 6)
-    expect(sz(resolveLayoutAt({ ...base, timeline: d1 }, 5))).toBeCloseTo(0.3, 6)
-    expect(sz(resolveLayoutAt({ ...base, timeline: d1 }, 5.1))).toBeCloseTo(0.3, 6)
   })
 })

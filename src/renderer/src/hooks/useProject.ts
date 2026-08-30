@@ -21,6 +21,7 @@ import {
   clampSegmentBoundsToNeighbors,
   clampSegmentsToDuration,
   getByPath,
+  remapTransitionsAfterSplit,
   splitTimelineAt,
   type Keyframe,
   type PropertyTrack
@@ -162,8 +163,8 @@ export function useProject(): {
   removeSegment: (segId: string) => void
   splitSegment: (atSec: number, durationSec?: number) => void
   updateSegmentBounds: (segId: string, startSec: number, endSec: number) => void
-  /** 段边界过渡（1.0.0 关键帧编辑体验；boundary='in'=进入 | 'out'=离开回全局；0 = 硬切，0–3s 钳制） */
-  updateSegmentTransition: (segId: string, boundary: 'in' | 'out', sec: number) => void
+  /** 切点过渡（NLE 式：过渡属于编辑点/切点；cutKey = 左锚点|右锚点，'g' = 全局基线；0 = 硬切，0–3s 钳制） */
+  updateCutTransition: (cutKey: string, sec: number) => void
   /** 段关键帧整体替换（T5；t 相对片段起点） */
   updateSegmentTracks: (segId: string, tracks: PropertyTrack[]) => void
   /** 全局基线关键帧整体替换（1.1.0 #3；t 绝对秒） */
@@ -769,9 +770,22 @@ export function useProject(): {
     (segId: string) => {
       pushHistory()
       const cur = layoutRef.current
+      // 切点过渡（NLE 式）：删除段时一并清除其所有切点配置（左/右锚点命中即删）
+      const trans = Object.fromEntries(
+        Object.entries(cur.timeline?.transitions ?? {}).filter(([k]) => {
+          const i = k.indexOf('|')
+          const L = k.slice(0, i)
+          const R = k.slice(i + 1)
+          return L !== segId && R !== segId
+        })
+      )
       applyLayout({
         ...cur,
-        timeline: { segments: (cur.timeline?.segments ?? []).filter((s) => s.id !== segId) }
+        timeline: {
+          ...(cur.timeline ?? { segments: [] }),
+          segments: (cur.timeline?.segments ?? []).filter((s) => s.id !== segId),
+          transitions: trans
+        }
       })
     },
     [applyLayout, pushHistory]
@@ -788,10 +802,26 @@ export function useProject(): {
       // 纯函数（含无片段=整首切两段；连续多次分割无重叠——单测覆盖）
       const res = splitTimelineAt({ segments: cur.timeline?.segments ?? [] }, atSec, durationSec)
       if (!res.changed) return
+      // 切点过渡（NLE 式）按分段结果重映射：左锚点=原段 id 的切点归右半段（新段）；
+      // 右锚点=原段 id 的切点（段首）留在左半段；新内边界默认硬切（无配置）。
+      const origId = (cur.timeline?.segments ?? []).find(
+        (s) => atSec > s.startSec && atSec < s.endSec
+      )?.id
+      const newId = origId
+        ? res.segments.find((s) => s.id !== origId && s.startSec >= atSec)?.id
+        : null
+      const trans =
+        origId && newId
+          ? remapTransitionsAfterSplit(cur.timeline?.transitions ?? {}, origId, newId)
+          : { ...(cur.timeline?.transitions ?? {}) }
       pushHistory()
       applyLayout({
         ...cur,
-        timeline: { ...(cur.timeline ?? { segments: [] }), segments: res.segments }
+        timeline: {
+          ...(cur.timeline ?? { segments: [] }),
+          segments: res.segments,
+          transitions: trans
+        }
       })
     },
     [applyLayout, pushHistory]
@@ -812,22 +842,20 @@ export function useProject(): {
     [applyLayout, pushHistory]
   )
 
-  /** 段边界过渡（边界单一归属制：进入=段首与上一锚点；离开=段尾回全局，仅无生效段时生效）：
-   * 0=硬切；0–3s；小于 0.05 视为未配置 → undefined 保持快路径/序列化干净 */
-  const updateSegmentTransition = useCallback(
-    (segId: string, boundary: 'in' | 'out', sec: number) => {
+  /** 切点过渡（NLE 式，过渡属于编辑点）：
+   * cutKey = 「左锚点|右锚点」（'g' = 全局基线）；0=硬切；0–3s；<0.05 删除配置（快路径/序列化干净） */
+  const updateCutTransition = useCallback(
+    (cutKey: string, sec: number) => {
       pushHistory()
       const cur = layoutRef.current
       const v = Number.isFinite(sec) ? Math.min(3, Math.max(0, sec)) : 0
-      const val = v >= 0.05 ? v : undefined
-      const segments = (cur.timeline?.segments ?? []).map((s) =>
-        s.id === segId
-          ? boundary === 'in'
-            ? { ...s, transitionInSec: val }
-            : { ...s, transitionOutSec: val }
-          : s
-      )
-      applyLayout({ ...cur, timeline: { ...(cur.timeline ?? { segments: [] }), segments } })
+      const trans = { ...(cur.timeline?.transitions ?? {}) }
+      if (v >= 0.05) trans[cutKey] = v
+      else delete trans[cutKey]
+      applyLayout({
+        ...cur,
+        timeline: { ...(cur.timeline ?? { segments: [] }), transitions: trans }
+      })
     },
     [applyLayout, pushHistory]
   )
@@ -1313,7 +1341,7 @@ export function useProject(): {
     removeSegment,
     splitSegment,
     updateSegmentBounds,
-    updateSegmentTransition,
+    updateCutTransition,
     updateSegmentTracks,
     updateDocKeyframes,
     addEmptyFrame,

@@ -42,15 +42,6 @@ export interface TimelineSegment {
   keyframes: PropertyTrack[]
   /** 段内空关键帧槽（裸创建；t 相对段起点） */
   frameSlots?: number[]
-  /**
-   * 边界过渡（秒，0=硬切，默认）——**边界归属规则（单一归属，防双重混合）**：
-   * - transitionInSec：段起始边界「上一锚点（前段结尾值 / 全局基线）→ 本段」软过渡时长；
-   *   段与段相连时该边界**完全由后一段的 transitionInSec 决定**（前段不参与）；
-   * - transitionOutSec：段尾后**无生效段**（空隙/歌曲结尾）时「本段 → 全局基线」软过渡时长；
-   *   段尾为相接段落时不生效（该边界归属于下一段的进入过渡）。
-   */
-  transitionInSec?: number
-  transitionOutSec?: number
 }
 
 export interface TimelineDocument {
@@ -62,6 +53,13 @@ export interface TimelineDocument {
   keyframes?: PropertyTrack[]
   /** 空关键帧槽（裸创建的关键帧：无任何属性，可点开后逐属性添加；绝对秒） */
   frameSlots?: number[]
+  /**
+   * 切点过渡（NLE 式：**过渡属于编辑点/切点，不属于段落**——对标 Premiere/DaVinci）：
+   * 键 =「左锚点|右锚点」（'g' = 全局基线；段 id = 相接处），值 = 秒（0/缺失 = 硬切）。
+   * 解释：段间相接 = 一条切点 A|B（居中互溶）；空隙/段首/段尾 = 各自切点（A|g / g|B）。
+   * 切点身份 = 锚点对 → 拖动分离再回拖，原切点设置保留并重新生效（跟编辑点走，不跟几何走）。
+   */
+  transitions?: Record<string, number>
 }
 
 /** 时间轴存在判定（导出/预览接入用：有片段 → 逐帧 resolve） */
@@ -269,28 +267,20 @@ export function splitTimelineAt(
   // 空帧槽拆分：<=t0 留左侧段；>t0 平移给新段
   const slots1 = (seg.frameSlots ?? []).filter((x) => x <= t0)
   const slots2 = (seg.frameSlots ?? []).filter((x) => x > t0).map((x) => x - t0)
-  // 边界过渡归属（边界单一归属制）：进入归属左半段、离开归属右半段；
-  // 分割产生的新内边界（左→右）默认硬切（transitionInSec=undefined）。
+  // 切点过渡（NLE 式，doc.transitions）由 useProject 侧按分段结果重映射；
+  // 分割产生的新内边界默认硬切（无切点配置）。
   return {
     changed: true,
     segments: [
       ...segs.slice(0, idx),
-      {
-        ...seg,
-        endSec: atSec,
-        keyframes: kf1,
-        frameSlots: slots1,
-        transitionOutSec: undefined
-      },
+      { ...seg, endSec: atSec, keyframes: kf1, frameSlots: slots1 },
       {
         id: id2,
         startSec: atSec,
         endSec: seg.endSec,
         layout: seg.layout,
         keyframes: kf2,
-        frameSlots: slots2,
-        transitionInSec: undefined,
-        transitionOutSec: seg.transitionOutSec
+        frameSlots: slots2
       },
       ...segs.slice(idx + 1)
     ]
@@ -340,36 +330,139 @@ function applyTrackSet(
  * 解析 tSec 的完整布局：**全局基线轨道（整曲，绝对 t）→ 段布局/段轨道覆盖**（全局为底、段级为顶）。
  * 不修改输入（返回新对象）；path 命中失败/值类型不符 → 跳过该轨道（容错）。
  *
- * 1.0.0 关键帧编辑体验——锚点间过渡（段落到帧 / 段落到段落 / 段落到全局 / 全局到段落）：
+ * 锚点间过渡（NLE 式：**过渡属于切点/编辑点，不属于段落**——对标 Premiere/DaVinci）：
  * - 段落到帧：applyTrackSet 内「基准→首帧」按首帧过渡方式渐变（hold = 硬切）；
- * - 边界过渡（边界单一归属）：transitionInSec=段首与上一锚点；transitionOutSec=段尾回全局（仅无生效段时）。
- * 解析优先级：进入窗口 → 离开窗口 → 常规段/全局；窗口递归嵌套（黑名单剥离已算段，防环）。
+ * - 切点过渡（doc.transitions）：键 = 「左锚点|右锚点」（'g' = 全局基线），值 = 秒（0/缺失 = 硬切）。
+ *   段间相接 = 一条切点 A|B（居中互溶）；空隙/段首/段尾 = 各自切点（A|g / g|B 居中、半隙钳制）。
+ *   窗口按相邻切点距离钳制（每侧 ≤ 半个净距）→ 任意两条窗口在构造上不相交（无嵌套混合/打架）；
+ *   被截断的外侧盈余转给内侧（段首/段尾与全局的切点得到完整时长）。无过渡配置 → 原零拷贝语义。
+ */
+export const GLOBAL_ANCHOR = 'g'
+
+/** 切点键（编辑点身份 = 锚点对；段 id 或 'g' = 全局基线） */
+export function headCutKey(segId: string): string {
+  return GLOBAL_ANCHOR + '|' + segId
+}
+export function tailCutKey(segId: string): string {
+  return segId + '|' + GLOBAL_ANCHOR
+}
+export function pairCutKey(aId: string, bId: string): string {
+  return aId + '|' + bId
+}
+
+/**
+ * 分割后切点重映射（NLE 式切点身份 = 锚点对）：
+ * 左锚点 = 原段（段尾切点 / 与后段的切点）→ 归右半段（newId）；
+ * 右锚点 = 原段（段首切点 / 与前段的切点）留在左半段（保持 origId）。
+ */
+export function remapTransitionsAfterSplit(
+  transitions: Record<string, number>,
+  origId: string,
+  newId: string
+): Record<string, number> {
+  const out: Record<string, number> = {}
+  for (const [k, v] of Object.entries(transitions)) {
+    const i = k.indexOf('|')
+    const L = k.slice(0, i)
+    out[(L === origId ? newId : L) + '|' + k.slice(i + 1)] = v
+  }
+  return out
+}
+
+/** 切点过渡窗口（计算产物）：窗口 = [pos - hL, pos + hR)；leftId/rightId = 左右锚点段 id 或 'g' */
+export interface CutWindow {
+  key: string
+  pos: number
+  hL: number
+  hR: number
+  leftId: string
+  rightId: string
+}
+
+/**
+ * 计算全部生效切点窗口（纯函数；引擎解析与时间轴可视化共用 = 所见即所得）。
+ * 切点清单：每段起点（左锚点 = 相接前段或 g）与终点（右锚点 = 相接后段或 g），按位置排序去重；
+ * 每侧时长 d/2 并按相邻切点「半个净距」钳制（任意两窗口在构造上不相交）；
+ * 某侧空间不足（如 0 时刻段首、歌曲尾段）→ 缺额补给另一侧（受邻居半距约束）。
+ */
+export function computeCutWindows(
+  doc: TimelineDocument,
+  transitions: Record<string, number>
+): CutWindow[] {
+  const segs = [...doc.segments].sort((a, b) => a.startSec - b.startSec)
+  const raw: { key: string; pos: number }[] = []
+  const seen = new Set<string>()
+  for (const s of segs) {
+    const prev = segs
+      .filter((q) => q.id !== s.id && q.endSec <= s.startSec + 0.001)
+      .sort((a, b) => b.endSec - a.endSec)[0]
+    const next = segs
+      .filter((q) => q.id !== s.id && q.startSec >= s.endSec - 0.001)
+      .sort((a, b) => a.startSec - b.startSec)[0]
+    const hKey =
+      prev && Math.abs(prev.endSec - s.startSec) <= 0.001
+        ? pairCutKey(prev.id, s.id)
+        : headCutKey(s.id)
+    const tKey =
+      next && Math.abs(next.startSec - s.endSec) <= 0.001
+        ? pairCutKey(s.id, next.id)
+        : tailCutKey(s.id)
+    if (!seen.has(hKey)) {
+      seen.add(hKey)
+      raw.push({ key: hKey, pos: s.startSec })
+    }
+    if (!seen.has(tKey)) {
+      seen.add(tKey)
+      raw.push({ key: tKey, pos: s.endSec })
+    }
+  }
+  raw.sort((a, b) => a.pos - b.pos)
+  const out: CutWindow[] = []
+  for (let i = 0; i < raw.length; i++) {
+    const d = transitions[raw[i].key]
+    if (d == null || d <= 0) continue
+    const prevPos = i > 0 ? raw[i - 1].pos : 0
+    const nextPos = i < raw.length - 1 ? raw[i + 1].pos : Number.POSITIVE_INFINITY
+    const dl = d / 2
+    const capL = (raw[i].pos - prevPos) / 2
+    const capR = (nextPos - raw[i].pos) / 2
+    // 外侧规则：歌曲起点（pos≈0）左侧无内容 → 0，右侧承接完整时长 d；
+    // 歌曲尾切点同理（右侧无内容 → 0，左侧承接 d）；其余居中 d/2×2；全部受邻居半距钳制。
+    const outerL = raw[i].pos <= 0.001
+    const outerR = i >= raw.length - 1
+    const hL = outerL ? 0 : outerR ? Math.min(d, capL) : Math.min(dl, capL)
+    const hR = outerR ? 0 : outerL ? Math.min(d, capR) : Math.min(dl, capR)
+    const [L, R] = raw[i].key.split('|')
+    if (hL + hR <= 0) continue
+    out.push({ key: raw[i].key, pos: raw[i].pos, hL, hR, leftId: L, rightId: R })
+  }
+  return out
+}
+
+/**
+ * 解析 tSec 的完整布局（公开入口）：快路径（无切点过渡）→ 原零拷贝语义；
+ * 否则按生效切点窗口解析（命中 → 双锚点世界互溶；未命中 → 常规段/全局）。
  */
 export function resolveLayoutAt(layout: ProjectLayout, tSec: number): ProjectLayout {
   const doc = layout.timeline ?? { segments: [] }
-  // 快路径：无边界过渡配置 → 原语义（零拷贝身份返回，WYSIWYG 引用稳定）
-  if (!doc.segments.some((s) => (s.transitionInSec ?? 0) > 0 || (s.transitionOutSec ?? 0) > 0)) {
+  const transitions = doc.transitions ?? {}
+  if (Object.keys(transitions).length === 0) {
     return resolveCore(layout, doc, tSec)
   }
-  return resolveTrans(layout, doc, tSec, new Set())
+  return resolveTrans(layout, doc, tSec, transitions)
 }
 
-/** 常规解析（无边界过渡；black = 剥离段，供递归过渡的世界使用） */
-function resolveCore(
-  layout: ProjectLayout,
-  doc: TimelineDocument,
-  tSec: number,
-  black?: Set<string>
-): ProjectLayout {
+/** 常规解析（无过渡窗口命中）：生效段或全局 */
+function resolveCore(layout: ProjectLayout, doc: TimelineDocument, tSec: number): ProjectLayout {
   const globalTracks = doc.keyframes ?? []
-  const seg = black ? segmentAtEx(doc, tSec, black) : segmentAt(doc, tSec)
+  const seg = segmentAt(doc, tSec)
   if (!seg) {
     return globalTracks.length > 0 ? applyTrackSet(layout, globalTracks, tSec) : layout
   }
   return resolveSegActive(layout, doc, seg, tSec)
 }
 
-/** 段」生效状态」解析（核心段分支复用）：全局轨道（绝对 t）→ 段快照/段轨道（相对起点） */
+/** 段「生效态」解析（核心段分支复用）：全局轨道（绝对 t）→ 段快照/段轨道（相对起点） */
 function resolveSegActive(
   layout: ProjectLayout,
   doc: TimelineDocument,
@@ -389,66 +482,37 @@ function resolveSegActive(
   return applyTrackSet(withGlobal, seg.keyframes ?? [], tSec - seg.startSec)
 }
 
-/** 段查找（黑名单版）：忽略已剥离段（递归过渡的「无本段世界」）；防御性按 startSec 排序 */
-function segmentAtEx(
-  doc: TimelineDocument,
-  tSec: number,
-  black: Set<string>
-): TimelineSegment | null {
-  return (
-    [...doc.segments]
-      .sort((a, b) => a.startSec - b.startSec)
-      .find((s) => !black.has(s.id) && tSec >= s.startSec && tSec < s.endSec) ?? null
-  )
-}
-
-/** 边界过渡递归解析：black 每层剥离一个段（同段不重复、深度 ≤ 段数），嵌套混合（近边界优先） */
+/** 切点过渡解析（非递归）：命中生效窗口 → 双锚点世界互溶；未命中 → 常规 */
 function resolveTrans(
   layout: ProjectLayout,
   doc: TimelineDocument,
   tSec: number,
-  black: Set<string>
+  transitions: Record<string, number>
 ): ProjectLayout {
-  // 1) 进入窗口 [start-d, start)：上一锚点世界（前段生效值/全局基线）→ 本段预期世界
-  const inc = doc.segments
-    .filter((s) => !black.has(s.id) && (s.transitionInSec ?? 0) > 0)
-    .filter((s) => s.startSec > tSec && tSec >= s.startSec - (s.transitionInSec ?? 0))
-    .filter(
-      (s) =>
-        // 交接守卫：前段覆盖本段起始 → 本段实际不生效（重叠，排序靠前者胜）→ 无进入过渡
-        !doc.segments.some(
-          (q) =>
-            q.id !== s.id && !black.has(q.id) && q.startSec <= s.startSec && s.startSec < q.endSec
-        )
-    )
-    .sort((a, b) => a.startSec - b.startSec)[0]
-  if (inc) {
-    const d = Math.max(0.001, inc.transitionInSec ?? 0)
-    const p = Math.min(1, Math.max(0, (tSec - (inc.startSec - d)) / d))
-    const next = new Set(black)
-    next.add(inc.id)
-    const from = resolveTrans(layout, doc, tSec, next)
-    const to = resolveSegActive(layout, doc, inc, tSec)
-    return lerpLayouts(from, to, p)
+  const wins = computeCutWindows(doc, transitions)
+  if (wins.length === 0) return resolveCore(layout, doc, tSec)
+  const w = wins.find((x) => tSec >= x.pos - x.hL && tSec < x.pos + x.hR)
+  if (!w) return resolveCore(layout, doc, tSec)
+  const p = Math.min(1, Math.max(0, (tSec - (w.pos - w.hL)) / Math.max(0.001, w.hL + w.hR)))
+  const from = resolveAnchor(layout, doc, w.leftId, tSec)
+  const to = resolveAnchor(layout, doc, w.rightId, tSec)
+  return lerpLayouts(from, to, p)
+}
+
+/** 锚点解析：'g' = 全局基线（轨道应用）；段 id = 段生效态（拉伸/提前语义由 resolveSegActive 处理） */
+function resolveAnchor(
+  layout: ProjectLayout,
+  doc: TimelineDocument,
+  id: string,
+  tSec: number
+): ProjectLayout {
+  if (id === GLOBAL_ANCHOR || id === '') {
+    const globalTracks = doc.keyframes ?? []
+    return globalTracks.length > 0 ? applyTrackSet(layout, globalTracks, tSec) : layout
   }
-  // 2) 离开窗口 [endSec, endSec+d)：无生效段（空隙/歌曲结尾）→ 段结尾值回全局基线
-  const active = segmentAtEx(doc, tSec, black)
-  if (!active) {
-    const out = doc.segments
-      .filter((s) => !black.has(s.id) && (s.transitionOutSec ?? 0) > 0)
-      .filter((s) => s.endSec <= tSec && tSec < s.endSec + (s.transitionOutSec ?? 0))
-      .sort((a, b) => b.endSec - a.endSec)[0]
-    if (out) {
-      const d = Math.max(0.001, out.transitionOutSec ?? 0)
-      const p = Math.min(1, Math.max(0, (tSec - out.endSec) / d))
-      const from = resolveSegActive(layout, doc, out, tSec)
-      const globalTracks = doc.keyframes ?? []
-      const to = globalTracks.length > 0 ? applyTrackSet(layout, globalTracks, tSec) : layout
-      return lerpLayouts(from, to, p)
-    }
-  }
-  // 3) 常规
-  return resolveCore(layout, doc, tSec, black)
+  const seg = doc.segments.find((s) => s.id === id)
+  if (!seg) return resolveAnchor(layout, doc, GLOBAL_ANCHOR, tSec)
+  return resolveSegActive(layout, doc, seg, tSec)
 }
 
 /**

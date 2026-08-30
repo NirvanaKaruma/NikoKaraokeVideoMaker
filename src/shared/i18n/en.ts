@@ -305,14 +305,16 @@ export const en = {
     toggleTitle: 'Show/Hide timeline',
     split: '✂ Split here',
     remove: 'Remove segment',
-    transitionIn: 'Transition in',
-    transitionOut: 'Transition out',
-    transitionInHint:
-      'Soft transition at segment start from the previous anchor (previous segment end value / global baseline). 0 = hard cut.',
-    transitionOutHint:
-      'Soft transition back to the global baseline when no next segment follows (gap / song end). 0 = hard cut.',
-    transitionOutNa:
-      "joins the next segment - that boundary is owned by the next segment's transition in",
+    cutHead: 'Head cut',
+    cutTail: 'Tail cut',
+    cutPair: 'Cut with seg {i}',
+    cutHeadHint:
+      'Cut "global baseline -> this segment": transition length (centered cross-dissolve, half each side). 0 = hard cut.',
+    cutTailHint:
+      'Cut "this segment -> next anchor (next segment start value / global baseline)". 0 = hard cut.',
+    cutPairHint:
+      'Shared cut with segment {i} (adjacent endpoints) - centered cross-dissolve. 0 = hard cut.',
+    cutPairInactive: 'Cut with seg {i} kept {d}s - becomes active again when re-joined',
     hint: 'Click/drag the track to position; split the song into segments and edit each one separately',
     segmentLabel: 'Seg {i}',
     inherit: 'follows global',
