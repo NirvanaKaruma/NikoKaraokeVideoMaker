@@ -1183,6 +1183,8 @@ function App(): React.JSX.Element {
   const project = useProject()
   /** 编辑上下文（1.0.0 T4）：null=全局基线；选中片段 = 段视图（所有面板写入自动路由） */
   const edit = useEditableLayout(project)
+  /** 编辑对象条：段落/全局 + 选中关键帧显式标注（PR 式联动） */
+  const [kfSelT, setKfSelT] = useState<number | null>(null)
   /** 当前编辑片段（关键帧编辑器用；不存在则 null） */
   const editKfSeg =
     (project.layout.timeline?.segments ?? []).find((s) => s.id === edit.segId) ?? null
@@ -1297,6 +1299,11 @@ function App(): React.JSX.Element {
     () => segmentOverlaps({ segments: project.layout.timeline?.segments ?? [] }).flat(),
     [project.layout.timeline]
   )
+  /** PR 式：面板改已打帧属性 → 自动写播放头处关键帧（播放头同步给 commit） */
+  useEffect(() => {
+    project.setKfCurT(pb.currentTime)
+  }, [pb.currentTime, project])
+
   /** T9：音频时长变化 → 片段边界自动修正（无改动 no-op，不会循环入史） */
   useEffect(() => {
     if (pb.status === 'ready' && pb.duration > 0) {
@@ -2280,6 +2287,8 @@ function App(): React.JSX.Element {
               if (edit.segId) project.updateSegmentTracks(edit.segId, tracks)
               else project.updateDocKeyframes(tracks)
             }}
+            kfSelT={kfSelT}
+            onKfSelTChange={setKfSelT}
           />
           <main className="canvas-wrap">
             <CanvasStage

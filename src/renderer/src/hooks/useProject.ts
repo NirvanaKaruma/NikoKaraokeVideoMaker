@@ -20,9 +20,12 @@ import {
 import {
   clampSegmentBoundsToNeighbors,
   clampSegmentsToDuration,
+  getByPath,
   splitTimelineAt,
+  type Keyframe,
   type PropertyTrack
 } from '@shared/timeline'
+import { collectKeyframePaths, firstChangedKeyframePath } from '@shared/keyframeCatalog'
 import type { ProjectFile } from '@shared/project'
 import { t } from '@shared/i18n'
 
@@ -114,6 +117,8 @@ export function useProject(): {
   /** 1-based 片段序号（0=全局，1.0.0 T4） */
   editSegIndex: number
   setEditSegment: (id: string | null) => void
+  /** PR 式面板 auto-keyframe：同步当前播放头（面板改已打帧属性 → 写播放头处帧） */
+  setKfCurT: (t: number | null) => void
   assets: ProjectAssets
   fileError: string | null
   notice: string | null
@@ -214,6 +219,12 @@ export function useProject(): {
     setEditSegIdState(id)
   }, [])
 
+  // PR 式面板 auto-keyframe：当前播放头（App 每帧同步）；面板改"已打帧属性"→ 写播放头处帧
+  const kfCurTRef = useRef<number | null>(null)
+  const setKfCurT = useCallback((t: number | null) => {
+    kfCurTRef.current = t
+  }, [])
+
   /** 当前编辑视图：段（未物化=全局快照）或全局基线；面板/画布只读此对象 */
   const editSegIndex = editSegId
     ? (layout.timeline?.segments ?? []).findIndex((s) => s.id === editSegId) + 1
@@ -248,17 +259,61 @@ export function useProject(): {
       pushHistory()
       const base = layoutRef.current
       const segId = editSegIdRef.current
-      if (!segId) {
-        applyLayout(fn(base))
-        return
+      const seg = segId ? (base.timeline?.segments ?? []).find((s) => s.id === segId) : null
+      const viewBase = seg?.layout ?? base
+      const next = fn(viewBase)
+      // ── PR 式 auto-keyframe：差异路径若"已有轨道"且播放头有效 → 写播放头处帧（非基准） ──
+      const curT = kfCurTRef.current
+      if (curT != null) {
+        const changedPath = firstChangedKeyframePath(base, next, collectKeyframePaths(viewBase))
+        if (changedPath != null) {
+          const tracks = seg ? (seg.keyframes ?? []) : (base.timeline?.keyframes ?? [])
+          const hasTrack = tracks.some((tr) => tr.path === changedPath && tr.frames.length > 0)
+          if (hasTrack) {
+            const v = getByPath(next, changedPath)
+            if (typeof v === 'number' || typeof v === 'string') {
+              const rel = seg ? Math.max(0, curT - seg.startSec) : curT
+              const t = +rel.toFixed(3)
+              const frame: Keyframe = { t, value: v, easing: 'linear' }
+              let tracks2: PropertyTrack[]
+              const exist = tracks.find((tr) => tr.path === changedPath)
+              if (exist) {
+                tracks2 = tracks.map((tr) =>
+                  tr.path !== changedPath
+                    ? tr
+                    : {
+                        ...tr,
+                        frames: [...tr.frames.filter((f) => Math.abs(f.t - t) > 0.01), frame].sort(
+                          (a, b) => a.t - b.t
+                        )
+                      }
+                )
+              } else {
+                tracks2 = [...tracks, { path: changedPath, frames: [frame] }]
+              }
+              if (seg) {
+                const segments = (base.timeline?.segments ?? []).map((s) =>
+                  s.id === segId ? { ...s, keyframes: tracks2 } : s
+                )
+                applyLayout({ ...base, timeline: { ...base.timeline, segments } })
+              } else {
+                applyLayout({
+                  ...base,
+                  timeline: { ...(base.timeline ?? { segments: [] }), keyframes: tracks2 }
+                })
+              }
+              return
+            }
+          }
+        }
       }
-      const seg = (base.timeline?.segments ?? []).find((s) => s.id === segId)
+      // ── 缺省：写基准（全局直改 或 段写时复制物化） ──
       if (!seg) {
-        applyLayout(fn(base))
+        applyLayout(next)
         return
       }
       const segments = (base.timeline?.segments ?? []).map((s) =>
-        s.id === segId ? { ...s, layout: fn(seg.layout ?? base) } : s
+        s.id === segId ? { ...s, layout: next } : s
       )
       applyLayout({ ...base, timeline: { ...base.timeline, segments } })
     },
@@ -1141,6 +1196,7 @@ export function useProject(): {
     /** 1-based 片段序号（0=全局） */
     editSegIndex,
     setEditSegment,
+    setKfCurT,
     assets,
     fileError,
     notice,

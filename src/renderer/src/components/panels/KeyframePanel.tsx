@@ -22,6 +22,9 @@ export interface KeyframePanelProps {
   /** 当前编辑视图（捕获「添加关键帧」的当前属性值——T4 面板联动） */
   view: ProjectLayout
   onTracksChange: (tracks: PropertyTrack[]) => void
+  /** 受控选中帧（App 层状态：显式显示"正在编辑的段落/关键帧"+ 时间轴联动） */
+  selT: number | null
+  onSelTChange: (t: number | null) => void
 }
 
 const EASING_OPTIONS: EasingName[] = ['linear', 'easeInOutQuad', 'easeOutCubic', 'bounce']
@@ -29,9 +32,6 @@ const EASING_OPTIONS: EasingName[] = ['linear', 'easeInOutQuad', 'easeOutCubic',
 /** 数字显示：×displayScale（默认原值） */
 function displayOf(v: number, c: KeyframeCatalogEntry): number {
   return (v * (c.displayScale ?? 1)) | 0
-}
-function rawOf(v: number, c: KeyframeCatalogEntry): number {
-  return v / (c.displayScale ?? 1)
 }
 
 /**
@@ -42,8 +42,9 @@ function rawOf(v: number, c: KeyframeCatalogEntry): number {
 export function KeyframePanel(props: KeyframePanelProps): React.JSX.Element {
   const { t } = useLocale()
   const [selPath, setSelPath] = useState<string | null>(null)
-  /** 选中的关键帧时间（帧级编辑器；同时间的属性帧合并为一个关键帧） */
-  const [selT, setSelT] = useState<number | null>(null)
+  /** 选中帧（受控：App 持有——编辑对象条/时间轴联动） */
+  const selT = props.selT
+  const setSelT = props.onSelTChange
   /** P3a 目录分组折叠：默认收起无帧的组，有帧的组展开 */
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({})
   const stripRef = useRef<HTMLDivElement>(null)
@@ -143,14 +144,6 @@ export function KeyframePanel(props: KeyframePanelProps): React.JSX.Element {
       : t(c.labelKey)
   }
   const updateAll = (next: PropertyTrack[]): void => props.onTracksChange(next)
-  const setFrameValueAt = (path: string, tt: number, v: number | string): void =>
-    updateAll(
-      props.tracks.map((tr) =>
-        tr.path !== path
-          ? tr
-          : { ...tr, frames: tr.frames.map((f) => (near(f.t, tt) ? { ...f, value: v } : f)) }
-      )
-    )
   const setFrameEasingAt = (path: string, tt: number, easing: EasingName): void =>
     updateAll(
       props.tracks.map((tr) =>
@@ -352,37 +345,13 @@ export function KeyframePanel(props: KeyframePanelProps): React.JSX.Element {
                   {t('kf.removeFrame')}
                 </button>
               </div>
+              {/* 只读一览（改值统一回面板——PR 式 auto-keyframe；此处保留过渡方式/删除） */}
               {frameEntriesAt(selT).map(({ path, frame: fr, entry: en }, i) => (
                 <div className="kf-frame-row" key={i}>
                   <span className="kf-frame-name">{framePropLabel(path)}</span>
-                  {en.kind === 'number' ? (
-                    <input
-                      className="kf-num"
-                      type="number"
-                      step={en.step * (en.displayScale ?? 1)}
-                      value={displayOf(fr.value as number, en)}
-                      onChange={(ev) => {
-                        const n2 = Number(ev.target.value)
-                        if (Number.isFinite(n2)) setFrameValueAt(path, selT, rawOf(n2, en))
-                      }}
-                    />
-                  ) : (
-                    <span className="kf-color">
-                      <input
-                        type="color"
-                        value={
-                          /^#[0-9a-fA-F]{6}$/.test(String(fr.value)) ? String(fr.value) : '#000000'
-                        }
-                        onChange={(ev) => setFrameValueAt(path, selT, ev.target.value)}
-                      />
-                      <input
-                        className="kf-num"
-                        type="text"
-                        value={String(fr.value)}
-                        onChange={(ev) => setFrameValueAt(path, selT, ev.target.value)}
-                      />
-                    </span>
-                  )}
+                  <span className="kf-frame-value">
+                    {en.kind === 'number' ? displayOf(fr.value as number, en) : String(fr.value)}
+                  </span>
                   <select
                     className="kf-select"
                     value={fr.easing}

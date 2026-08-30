@@ -311,6 +311,7 @@ export const zhCn = {
     editTarget: '当前编辑对象',
     editGlobal: '全局基线',
     editSegment: '段落 {i}',
+    editKf: '段落 {i} · 关键帧 t={t}s',
     overlap: '⚠ 段落有重叠——重叠区间按排序靠前者生效'
   },
   kf: {

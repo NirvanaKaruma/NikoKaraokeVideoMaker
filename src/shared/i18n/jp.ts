@@ -313,6 +313,7 @@ export const jp = {
     editTarget: '編集中の対象',
     editGlobal: 'グローバル基線',
     editSegment: 'セグメント {i}',
+    editKf: 'セグメント {i}・キーフレーム t={t}s',
     overlap: '⚠ セグメント重複——重複区間は先の並びが優先'
   },
   kf: {

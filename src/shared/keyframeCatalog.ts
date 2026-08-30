@@ -99,3 +99,39 @@ export function catalogDiagnostics(): {
     return { path: c.path, ok, kind: c.kind, actual }
   })
 }
+
+/**
+ * 收集当前视图全部可关键帧路径（静态目录 + 附加图层动态索引路径）。
+ * PR 式面板 auto-keyframe 路由用：commit 差异在这些路径上比对，决定"写帧"还是"写基准"。
+ */
+export function collectKeyframePaths(view: ProjectLayout): string[] {
+  const paths = KEYFRAME_CATALOG.map((c) => c.path)
+  for (let i = 0; i < (view.overlayLayers ?? []).length; i++) {
+    const b = 'overlayLayers.' + i + '.'
+    paths.push(
+      b + 'rect.x',
+      b + 'rect.y',
+      b + 'rect.w',
+      b + 'rect.h',
+      b + 'opacity',
+      b + 'fx.breathe',
+      b + 'fx.rotateDeg',
+      b + 'fx.glowPulse'
+    )
+  }
+  return paths
+}
+
+/** 首个发生变化的可关键帧路径（PR 式路由用；无变化返回 null） */
+export function firstChangedKeyframePath(
+  base: ProjectLayout,
+  next: ProjectLayout,
+  paths: string[]
+): string | null {
+  for (const p of paths) {
+    const a = getByPath(base, p)
+    const b = getByPath(next, p)
+    if (a !== b) return p
+  }
+  return null
+}

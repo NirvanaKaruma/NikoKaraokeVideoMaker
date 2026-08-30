@@ -127,6 +127,9 @@ export interface SidePanelProps {
   kfTracks: PropertyTrack[]
   kfView: ProjectLayout
   onKfTracksChange: (tracks: PropertyTrack[]) => void
+  /** 选中关键帧（绝对秒；编辑对象条显式显示「段落N · 关键帧 t=」） */
+  kfSelT: number | null
+  onKfSelTChange: (t: number | null) => void
 }
 
 const TABS: { id: SideTab; labelKey: string }[] = [
@@ -280,6 +283,8 @@ export function SidePanel(props: SidePanelProps): React.JSX.Element {
             currentT={props.currentTime}
             view={props.kfView}
             onTracksChange={props.onKfTracksChange}
+            selT={props.kfSelT}
+            onSelTChange={props.onKfSelTChange}
           />
         )}
       </div>
