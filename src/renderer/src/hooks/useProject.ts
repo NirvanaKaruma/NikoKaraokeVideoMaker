@@ -26,7 +26,11 @@ import {
   type Keyframe,
   type PropertyTrack
 } from '@shared/timeline'
-import { collectKeyframePaths, firstChangedKeyframePath } from '@shared/keyframeCatalog'
+import {
+  catalogEntry,
+  collectKeyframePaths,
+  firstChangedKeyframePath
+} from '@shared/keyframeCatalog'
 import type { ProjectFile } from '@shared/project'
 import { t } from '@shared/i18n'
 
@@ -284,7 +288,7 @@ export function useProject(): {
       const curT = kfCurTRef.current
       if (curT != null) {
         const changedPath = firstChangedKeyframePath(base, next, collectKeyframePaths(viewBase))
-        if (changedPath != null) {
+        if (changedPath != null && catalogEntry(changedPath)?.autoKf !== false) {
           const tracks = seg ? (seg.keyframes ?? []) : (base.timeline?.keyframes ?? [])
           const hasTrack = tracks.some((tr) => tr.path === changedPath && tr.frames.length > 0)
           if (kfAutoRef.current || hasTrack) {

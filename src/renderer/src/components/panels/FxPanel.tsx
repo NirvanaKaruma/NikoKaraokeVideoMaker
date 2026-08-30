@@ -61,6 +61,12 @@ function FreeNumberField({
   onCommit: (v: number | null) => void
 }): React.JSX.Element {
   const [draft, setDraft] = useState<string>(value == null ? '' : String(value))
+  // 值同步：外部（段落/关键帧切换）更新时刷新显示（渲染期调整模式，避免陈旧值误导）
+  const [prevValue, setPrevValue] = useState<number | null>(value)
+  if (value !== prevValue) {
+    setPrevValue(value)
+    setDraft(value == null ? '' : String(value))
+  }
   const commit = (): void => {
     const trimmed = draft.trim()
     if (trimmed === '') {

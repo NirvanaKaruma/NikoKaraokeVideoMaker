@@ -1643,7 +1643,10 @@ function App(): React.JSX.Element {
       }
       const pj = projectRef.current
       const st = stageRef.current
-      // 0) 音频就绪（8s 双音 WAV；预览 seek 需要时长）
+      // 0) 复位工程（烟雾持久化残留：重复段落/历史 bpm 会污染 segmentAt 断言）
+      await pj.resetProject()
+      await sleep(150)
+      // 0.1) 音频就绪（8s 双音 WAV；预览 seek 需要时长）
       pj.setAudioFile(makeTwoToneWavFile(8, 8000))
       const t0 = Date.now()
       while (pbRef.current.status !== 'ready' && Date.now() - t0 < 30000) {
@@ -1793,6 +1796,31 @@ function App(): React.JSX.Element {
           resolvedF.toFixed(3) +
           ') 差异像素 ' +
           dTrans
+      )
+      // 5) 段落属性变 BPM（真实 commit 路径）：选中段落 → 音乐响应面板改值 → 段快照自带 bpm
+      pj.setEditSegment(s1)
+      pj.updateVisualizer({ bpm: 120 })
+      await sleep(200)
+      pj.setEditSegment(s2)
+      pj.updateVisualizer({ bpm: 60 })
+      await sleep(200)
+      pj.setEditSegment(null)
+      // 注意：t=5 处于 s2 段首过渡窗口 [4,6)——过渡会把 bpm 一起互溶（120→60 中点 90 = 边界平滑）
+      const bpmS1 = resolveLayoutAt(projectRef.current.layout, 3).visualizer.bpm
+      const bpmMid = resolveLayoutAt(projectRef.current.layout, 5).visualizer.bpm
+      const bpmS2 = resolveLayoutAt(projectRef.current.layout, 6.01).visualizer.bpm
+      const bpmOut = resolveLayoutAt(projectRef.current.layout, 9).visualizer.bpm
+      add(
+        '引擎·段落属性变BPM',
+        bpmS1 === 120 && bpmMid === 90 && bpmS2 === 60 && bpmOut == null,
+        '段1=' +
+          String(bpmS1) +
+          ' 过渡中点=' +
+          String(bpmMid) +
+          ' 段2=' +
+          String(bpmS2) +
+          ' 段外=' +
+          String(bpmOut)
       )
       return { ok: checks.every((c) => c.pass), checks }
     }

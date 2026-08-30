@@ -40,6 +40,9 @@ describe('keyframeCatalog', () => {
     expect(catalogEntry('visualizer.bpm')?.nullable).toBe(true)
     expect(catalogEntry('visualizer.beatIntervalSec')?.nullable).toBe(true)
     expect(currentValueAt(DEFAULT_LAYOUT, 'visualizer.bpm')).toBeUndefined() // null 不捕获为帧值
+    // 不参与自动关键帧（面板改值=段落属性/全局基准——段落间变 BPM 语义）
+    expect(catalogEntry('visualizer.bpm')?.autoKf).toBe(false)
+    expect(catalogEntry('visualizer.beatIntervalSec')?.autoKf).toBe(false)
   })
 
   it('音乐响应条目：脉冲/爆发/密度为数值、预设为选项类（4 个预设选项）', () => {
