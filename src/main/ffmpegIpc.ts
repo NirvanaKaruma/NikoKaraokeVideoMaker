@@ -41,6 +41,8 @@ interface AudioDecodeSession {
   sampleRate: number
   channels: number
   cancelled: boolean
+  /** spawn 时同步注册的 'close' 承诺（dispose 等它——在途退出也无 TOCTOU 丢失） */
+  closedP: Promise<number | null> | null
 }
 const audioDecodeSessions = new Map<string, AudioDecodeSession>()
 /** 单块 PCM 字节数：4MB 分块拉取（渲染侧 transfer 进 Worker，块间让出事件循环） */
@@ -81,7 +83,8 @@ async function startAudioDecode(
     size: 0,
     sampleRate: 44100,
     channels: 2,
-    cancelled: false
+    cancelled: false,
+    closedP: null
   }
   audioDecodeSessions.set(token, session)
   const proc = spawn(
@@ -112,6 +115,7 @@ async function startAudioDecode(
   const closeP = new Promise<number | null>((res) => {
     proc.on('close', res)
   })
+  session.closedP = closeP
   try {
     await pipeline(proc.stdout, createWriteStream(tmpPath, { flags: 'w' }))
     const code = await closeP
@@ -166,22 +170,27 @@ async function readPcmChunk(
   }
 }
 
-/** 读毕/中断清理：关句柄、删临时文件、移除会话（幂等） */
+/**
+ * 读毕/中断清理：关句柄、删临时文件、移除会话（幂等）。
+ * ⚠ Windows：子进程未退出前写入流仍持有临时文件 → 必须先 kill 并 await 'close' 再 unlink，
+ * 否则 unlink 静默失败留下孤儿文件（decode 中取消的必然路径）。
+ */
 async function disposeAudioDecode(token: string): Promise<void> {
   const s = audioDecodeSessions.get(token)
   if (!s) return
+  s.cancelled = true
+  if (s.proc && s.proc.exitCode === null) {
+    s.proc.kill()
+    if (s.closedP) await s.closedP.catch(() => null)
+  }
   await s.fh?.close().catch(() => undefined)
   s.fh = null
   await fs.unlink(s.tmpPath).catch(() => undefined)
   audioDecodeSessions.delete(token)
 }
 
-/** 解码中断：kill 子进程 + 清会话（渲染侧切换音频/新建项目时调用） */
+/** 解码中断：kill 子进程（等退出）+ 删临时文件 + 清会话（渲染侧切换音频/新建项目时调用） */
 async function cancelAudioDecode(token: string): Promise<void> {
-  const s = audioDecodeSessions.get(token)
-  if (!s) return
-  s.cancelled = true
-  s.proc?.kill()
   await disposeAudioDecode(token)
 }
 
