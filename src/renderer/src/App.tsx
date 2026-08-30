@@ -1508,6 +1508,8 @@ function App(): React.JSX.Element {
         seconds: number
         error: string | null
         message: string
+        encodingMsg: string | null
+        eta: string | null
         outputPath: string
         metrics?: {
           resolve: { p50: number; p95: number; avg: number }
@@ -1545,6 +1547,12 @@ function App(): React.JSX.Element {
         ) {
           await sleep(500)
           phase = exporterStateRef.current.phase
+          // P1a：暂存编码期间最后一条完整进度消息 + eta——校验 ETA 确实下发
+          if (phase === 'encoding' && exporterStateRef.current.message) {
+            const winD = window as unknown as { __lastEncodingMsg?: string; __lastEta?: string }
+            winD.__lastEncodingMsg = exporterStateRef.current.message
+            winD.__lastEta = (exporterStateRef.current as unknown as { eta?: string }).eta ?? ''
+          }
         }
         const st = exporterStateRef.current
         return {
@@ -1553,6 +1561,9 @@ function App(): React.JSX.Element {
           seconds: Math.round((performance.now() - started) / 100) / 10,
           error: st.error,
           message: st.encodeInfo ?? st.message,
+          encodingMsg:
+            (window as unknown as { __lastEncodingMsg?: string }).__lastEncodingMsg ?? null,
+          eta: (window as unknown as { __lastEta?: string }).__lastEta ?? null,
           outputPath: st.outputPath ?? '',
           metrics: st.metrics ?? undefined
         }

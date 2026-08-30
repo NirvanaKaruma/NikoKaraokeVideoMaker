@@ -435,6 +435,12 @@ export function FxPanel(props: FxPanelProps): React.JSX.Element {
             onCommit={(v) => props.onVisualizerChange({ beatIntervalSec: v })}
           />
           <p className="panel-note">{t('fx.beat.note')}</p>
+          {/* 无节拍源时粒子只有常速漂移、爆发不生效——提示需先设 BPM/周期（0.6.0 用户问"粒子爆发是什么"） */}
+          {visualizer.bpm == null &&
+            visualizer.beatIntervalSec == null &&
+            (beat.particleDensity > 0 || beat.burst > 0) && (
+              <p className="panel-note">{t('fx.beat.burstNote')}</p>
+            )}
           <DeferredSlider
             label={(v) => t('fx.beat.pulse', { v: Math.round(v * 100) })}
             unitScale={100}

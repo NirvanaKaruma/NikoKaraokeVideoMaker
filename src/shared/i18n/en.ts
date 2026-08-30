@@ -563,6 +563,8 @@ export const en = {
       interval: 'Interval (sec / beat)',
       intervalPlaceholder: 'e.g. 0.5 (blank = off)',
       note: 'BPM wins when both are set.',
+      burstNote:
+        '"Particle burst" = particles surge in count/size/brightness at every beat, decaying to normal within 0.18s. Set BPM or beat interval first: without a beat source particles just drift and the burst has no effect.',
       pulse: 'Beat pulse: {v}%',
       burst: 'Particle burst: {v}%',
       particlePreset: 'Particle preset',

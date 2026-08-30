@@ -540,6 +540,8 @@ export const zhCn = {
       interval: '周期（秒/次）',
       intervalPlaceholder: '如 0.5（留空=关闭）',
       note: 'BPM 与周期同时填写时，BPM 优先。',
+      burstNote:
+        '「粒子爆发」= 每拍开始时粒子瞬间增多、变大、变亮，0.18 秒内衰减回常态。需先设置 BPM 或周期才有节拍，否则粒子只是匀速飘落、爆发不生效。',
       pulse: '踩点脉冲：{v}%',
       burst: '粒子爆发：{v}%',
       particlePreset: '粒子预设',

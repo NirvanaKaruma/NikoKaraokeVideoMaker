@@ -25,6 +25,8 @@ export interface ExportProgressInfo {
   total: number
   mergePercent: number | null
   message: string
+  /** 剩余时间估算（编码阶段）：持久显示在进度消息下一行；null = 尚无估算 */
+  eta?: string | null
 }
 
 const H264_CODECS = ['avc1.640033', 'avc1.640028', 'avc1.4d0028', 'avc1.42e01f', 'avc1.42001f']
@@ -363,6 +365,10 @@ export async function encodeVideo(opts: EncodeVideoOptions): Promise<ExportVideo
     analyzer.freqMax = Math.min(half, Math.max(vizCfg.freqMax, lo + 1))
   }
   const frameMs: number[] = []
+  // ETA 持久显示（修复"预计还需"几乎看不到）：once 计算后持续使用——原实现每帧重置 message
+  // 为 t('exporter.encoding')，ETA 只在 %15 帧拼入、下帧又被覆盖，15 帧中仅 1 帧可见
+  let etaMsg: string | null = null
+  let etaRollAvg = 0
   // P1a 计量：单阶段计时数组（resolve=布局解析+提交 / draw=渲染合成 / transfer=VideoFrame+encode /
   // encodeWait=编码器背压等待 / mux=写盘回调 / yield=让出事件循环）
   const resolveMs: number[] = []
@@ -513,20 +519,33 @@ export async function encodeVideo(opts: EncodeVideoOptions): Promise<ExportVideo
       if (encoderError) throw encoderError
       transferMs.push(performance.now() - tXfer0)
       frameMs.push(performance.now() - f0)
-      let message = t('exporter.encoding')
+      // ETA 持久化：首次出现后持续携带（onProgress 每帧渲染 UI——原实现 message 每帧重置为
+      // 「正在生成视频…」，ETA 只在 15 帧中 1 帧拼入、下帧被覆盖 → 用户几乎看不到）
+      if (etaMsg == null) etaMsg = t('exporter.encoding')
+      let eta: string | null = null
       if ((i + 1) % 15 === 0) {
-        // 滚动均耗时 → 剩余时间估算（预计还需 mm:ss）
-        const avg = frameMs.reduce((a, b) => a + b, 0) / frameMs.length
+        // 滚动均耗时（平均，O(n) 每 15 帧一次可接受）→ 剩余时间估算（预计还需 mm:ss）
+        let frameSum = 0
+        for (const v of frameMs) frameSum += v
+        const avg = frameMs.length > 0 ? frameSum / frameMs.length : 0
+        etaRollAvg = avg
         const percent = Math.round(((i + 1) / totalFrames) * 100)
-        message = t('exporter.encodingProgress', { p: percent, ms: Math.round(avg) })
-        const remainS = Math.max(0, Math.round((avg * (totalFrames - i - 1)) / 1000))
+        etaMsg = t('exporter.encodingProgress', { p: percent, ms: Math.round(avg) })
+        const remainS = Math.round((avg * (totalFrames - i - 1)) / 1000)
         if (remainS > 0) {
-          message +=
-            ' · ' +
-            t('exporter.etaRemain', {
-              m: Math.floor(remainS / 60),
-              s: String(remainS % 60).padStart(2, '0')
-            })
+          eta = t('exporter.etaRemain', {
+            m: Math.floor(remainS / 60),
+            s: String(remainS % 60).padStart(2, '0')
+          })
+        }
+      } else if (etaRollAvg > 0) {
+        // 非刷新帧：复用上次的快照值（剩余秒数随 i 单调减少——每帧重算 O(n) 无必要）
+        const remainS = Math.round((etaRollAvg * (totalFrames - i - 1)) / 1000)
+        if (remainS > 0) {
+          eta = t('exporter.etaRemain', {
+            m: Math.floor(remainS / 60),
+            s: String(remainS % 60).padStart(2, '0')
+          })
         }
       }
       onProgress({
@@ -534,7 +553,8 @@ export async function encodeVideo(opts: EncodeVideoOptions): Promise<ExportVideo
         encoded: i + 1,
         total: totalFrames,
         mergePercent: null,
-        message
+        message: etaMsg,
+        eta
       })
       // 每 2 帧让出事件循环（进度 UI / 取消响应）；MessageChannel 不受后台节流影响
       if (i % 2 === 1) {

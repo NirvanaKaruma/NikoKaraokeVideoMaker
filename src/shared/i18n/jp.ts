@@ -567,6 +567,8 @@ export const jp = {
       interval: '周期（秒/回）',
       intervalPlaceholder: '例 0.5（空欄=オフ）',
       note: 'BPM と周期が両方あれば、BPM 優先。',
+      burstNote:
+        '「パーティクルバースト」= 各拍の開始で粒子が一瞬増え・大きく・明るくなり、0.18 秒で元に戻ります。BPM か周期を先に設定しないと、粒子は一定速度で漂うだけでバーストは効きません。',
       pulse: 'ビートパルス：{v}%',
       burst: 'パーティクルバースト：{v}%',
       particlePreset: 'パーティクルプリセット',

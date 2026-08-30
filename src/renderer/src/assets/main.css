@@ -773,6 +773,12 @@ body {
   transition: width 200ms;
 }
 
+/* ETA 第二行（编码剩余时间估算）：比主消息更醒目一点点，仍属辅助信息 */
+.export-progress .export-eta {
+  font-size: 12px;
+  color: var(--ev-c-text-2);
+}
+
 .warn-banner {
   position: absolute;
   top: 12px;

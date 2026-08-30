@@ -60,9 +60,12 @@ export function particlesAt(
 ): Particle[] {
   if (!(density > 0) || w <= 0 || h <= 0) return []
   const meta = META[preset]
-  const n = Math.round(meta.base * Math.min(1, density))
   const out: Particle[] = []
   const boostClamped = Math.min(2, Math.max(0, boost))
+  // 爆发 boost（0.6.0 增强——原仅半径 +15%、透明度被 clamp，肉眼几乎无感）：
+  // 粒子数 ×(1+0.5b) 瞬间增密 + 半径 ×(1+0.5b) + 透明度提权 —— beat 起点粒子明显多/亮/大，
+  // 0.18s 指数衰减回常态；仍是 (t, boost) 纯函数，30/60fps 与预览/导出同源。
+  const n = Math.round(meta.base * Math.min(1, density) * (1 + boostClamped * 0.5))
   for (let i = 0; i < n; i++) {
     const rnd = seededRng(i * 733 + PRESET_SEED[preset])
     const x0 = rnd() * w
@@ -78,8 +81,8 @@ export function particlesAt(
       out.push({
         x: x0,
         y: y0,
-        r,
-        alpha: (0.25 + 0.75 * tw) * (1 + boostClamped * 0.4),
+        r: r * (1 + boostClamped * 0.35),
+        alpha: Math.min(1, (0.25 + 0.75 * tw) * (1 + boostClamped * 0.8)),
         color,
         hollow: false
       })
@@ -87,15 +90,16 @@ export function particlesAt(
     }
     const tt = ((t + phase) % cycle) / cycle
     const fade = Math.sin(Math.PI * tt) // 0→1→0 出入场
-    const alpha = fade * (0.55 + 0.45 * (1 + boostClamped * 0.5))
+    const alpha = Math.min(1, fade * (0.55 + 0.45 * (1 + boostClamped * 1.1)))
     if (alpha <= 0.01) continue
     const sway = Math.sin(tt * Math.PI * 4 + swayPhase) * meta.sway * w
+    const rBoost = r * (1 + boostClamped * 0.5)
     if (preset === 'bubble') {
       const y = h + 20 - tt * (h + 40)
-      out.push({ x: x0 + sway, y, r: r * (1 + boostClamped * 0.15), alpha, color, hollow: true })
+      out.push({ x: x0 + sway, y, r: rBoost, alpha, color, hollow: true })
     } else {
       const y = -20 + tt * (h + 40)
-      out.push({ x: x0 + sway, y, r: r * (1 + boostClamped * 0.15), alpha, color, hollow: false })
+      out.push({ x: x0 + sway, y, r: rBoost, alpha, color, hollow: false })
     }
   }
   return out

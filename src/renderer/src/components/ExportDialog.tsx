@@ -171,6 +171,8 @@ export function ExportDialog(props: ExportDialogProps): React.JSX.Element | null
                 {state.message}
                 {percent != null ? ' ' + percent + '%' : ''}
               </p>
+              {/* ETA 第二行（修复：原拼接进 message 只有 15 帧中 1 帧可见；独立行持续显示） */}
+              {state.eta != null && <p className="panel-note export-eta">{state.eta}</p>}
               <button type="button" className="mini-btn danger" onClick={onCancel}>
                 {t('exportDialog.cancel')}
               </button>
