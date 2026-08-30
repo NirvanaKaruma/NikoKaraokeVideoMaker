@@ -8,6 +8,7 @@ import {
   type ResolutionOption
 } from '@shared/layout'
 import { beatTimeAt, hasTimeline, resolveLayoutAt } from '@shared/timeline'
+import { resolvedSnapshotKey } from '@shared/tlDiff'
 import { bandEnergiesAt, spectrumAt, type SpectrumAnalyzer } from '@shared/spectrum'
 import { beatEnvelopeCurve, beatPeriod, smoothBarsFx, type SmoothFxState } from '@shared/fx'
 import { drawCanvasFx } from '@shared/canvasfx'
@@ -320,6 +321,7 @@ export async function encodeVideo(opts: EncodeVideoOptions): Promise<ExportVideo
   }
   const frameMs: number[] = []
   const totalT0 = performance.now()
+  let lastDlKey = '' // T7 差异门控：最近一次提交到导出场景的布局快照键
 
   onProgress({
     phase: 'encoding',
@@ -363,8 +365,16 @@ export async function encodeVideo(opts: EncodeVideoOptions): Promise<ExportVideo
         }
       }
       stage.setFrame(tSec)
-      // 1.0.0 T7：时间轴逐帧解析（tSec = wall 总轴；片段按 wall 轴分割）并应用到导出场景
-      if (tlActive) stage.setLayout(resolveLayoutAt(layout, tSec))
+      // 1.0.0 T7：时间轴逐帧解析（tSec = wall 总轴；片段按 wall 轴分割）并应用到导出场景。
+      // 差异门控：快照键不变（该帧布局与上一帧视觉等价）→ 跳过 React flushSync 重渲（与预览同策略）
+      if (tlActive) {
+        const resolved = resolveLayoutAt(layout, tSec)
+        const key = resolvedSnapshotKey(resolved)
+        if (key !== lastDlKey) {
+          stage.setLayout(resolved)
+          lastDlKey = key
+        }
+      }
       if (dynamic) {
         // 全层逐帧渲染（含背景/主图/文本动效、片头片尾；同一 SceneLayers 绘制代码）
         ctx.clearRect(0, 0, resolution.width, resolution.height)
@@ -437,13 +447,20 @@ export async function encodeVideo(opts: EncodeVideoOptions): Promise<ExportVideo
       if (encoderError) throw encoderError
       frameMs.push(performance.now() - f0)
       let message = t('exporter.encoding')
-      if ((i + 1) % 30 === 0) {
+      if ((i + 1) % 15 === 0) {
+        // 滚动均耗时 → 剩余时间估算（预计还需 mm:ss）
         const avg = frameMs.reduce((a, b) => a + b, 0) / frameMs.length
         const percent = Math.round(((i + 1) / totalFrames) * 100)
-        message = t('exporter.encodingProgress', {
-          p: percent,
-          ms: Math.round(avg)
-        })
+        message = t('exporter.encodingProgress', { p: percent, ms: Math.round(avg) })
+        const remainS = Math.max(0, Math.round((avg * (totalFrames - i - 1)) / 1000))
+        if (remainS > 0) {
+          message +=
+            ' · ' +
+            t('exporter.etaRemain', {
+              m: Math.floor(remainS / 60),
+              s: String(remainS % 60).padStart(2, '0')
+            })
+        }
       }
       onProgress({
         phase: 'encoding',

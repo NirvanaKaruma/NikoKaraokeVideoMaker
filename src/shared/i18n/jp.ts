@@ -446,6 +446,7 @@ export const jp = {
     preparing: '書き出しを準備中…',
     encoding: '動画を生成中…',
     encodingProgress: '動画を生成中… {p}% 完了（平均 {ms} ms/フレーム）',
+    etaRemain: '残り見込み {m}分 {s}秒',
     encodeDone: '動画エンコードが完了しました（所要時間 {s} 秒）',
     prepareMerge: '合成を準備中…',
     merging: '音声と動画を合成中…',

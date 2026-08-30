@@ -426,6 +426,7 @@ export const zhCn = {
     preparing: '准备导出…',
     encoding: '正在生成视频…',
     encodingProgress: '正在生成视频… 已完成 {p}%（平均 {ms} ms/帧）',
+    etaRemain: '预计还需 {m} 分 {s} 秒',
     encodeDone: '视频编码完成（用时 {s} 秒）',
     prepareMerge: '正在准备合成…',
     merging: '正在合成音视频…',

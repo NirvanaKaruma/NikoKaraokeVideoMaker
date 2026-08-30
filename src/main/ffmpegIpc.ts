@@ -136,8 +136,17 @@ async function streamAudioDecode(
         }
       }
     } finally {
-      if (!finished && poolLen < PCM_CHUNK_BYTES) proc.stdout.resume()
       sending = false
+      // 背压死锁修复（实测：>4MB 音频只解出第一块 ≈11.6s）：暂停生效前列队的数据可能又攒满一块，
+      // 原逻辑 poolLen≥4MB 时既不 resume 也不再触发 pump → ffmpeg 阻塞在管道、流停在此处。
+      // 修复：残留满块立即再泵（循环），否则才 resume——任何状态都保持流动直至 EOF。
+      if (!finished) {
+        if (poolLen >= PCM_CHUNK_BYTES) {
+          void pump()
+        } else {
+          proc.stdout.resume()
+        }
+      }
     }
   }
   proc.stdout.on('data', (d: Buffer) => {

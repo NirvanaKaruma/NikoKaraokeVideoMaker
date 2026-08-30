@@ -444,6 +444,7 @@ export const en = {
     preparing: 'Preparing export…',
     encoding: 'Generating video…',
     encodingProgress: 'Generating video… {p}% complete (average {ms} ms/frame)',
+    etaRemain: 'ETA {m}m {s}s',
     encodeDone: 'Video encoding complete ({s} s elapsed)',
     prepareMerge: 'Preparing to merge…',
     merging: 'Merging audio and video…',

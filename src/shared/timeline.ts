@@ -298,13 +298,26 @@ export function splitTimelineAt(
   }
 }
 
+/** 懒克隆（容器重建、叶子原值共享）：与 structuredClone 等价安全（写入均为“容器替换”，
+ * 从不原地改叶子），但**不拷贝字符串**——封面/背景 dataURL 等大字符串按引用共享，
+ * 逐帧 resolve（预览/导出同一引擎）不再反复 memcpy 数 MB 字符串（导出速度关键优化）。 */
+function cloneLite(value: unknown): unknown {
+  if (value == null || typeof value !== 'object') return value
+  if (Array.isArray(value)) return value.map(cloneLite)
+  const out: Record<string, unknown> = {}
+  for (const k of Object.keys(value as Record<string, unknown>)) {
+    out[k] = cloneLite((value as Record<string, unknown>)[k])
+  }
+  return out
+}
+
 /** 轨道集应用（纯函数）：base 布局 + 轨道（t 为轨道内相对秒）→ 新布局；不修改输入 */
 function applyTrackSet(
   base: ProjectLayout,
   tracks: PropertyTrack[],
   tSecRel: number
 ): ProjectLayout {
-  const out = structuredClone(base)
+  const out = cloneLite(base) as ProjectLayout
   for (const track of tracks) {
     const first = [...track.frames].sort((x, y) => x.t - y.t)[0]
     // 「基准 → 首帧」过渡：t < 首帧 且非 hold → 基准与首帧值按首帧过渡方式渐变（段落到帧）
