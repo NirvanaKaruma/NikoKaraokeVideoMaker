@@ -26,6 +26,11 @@ const MASKS: { value: OverlayLayerConfig['fx']['mask']; labelKey: string }[] = [
 
 interface OverlayPanelProps {
   layers: OverlayLayerConfig[]
+  /** P3b 菱形打帧入口 */
+  kfOps?: {
+    hasKeyframe: (path: string) => boolean
+    addKeyframeAt: (path: string) => void
+  }
   /** layerId → 预览 URL（objectURL / dataURL；null = 无图） */
   imageUrls: Record<string, string | null>
   selectedId: SelectableId
@@ -41,9 +46,12 @@ interface OverlayPanelProps {
 /** 附加图层面板（0.8.0）：多层自由增删（z 序=数组序）+ 透明度/四角摆位 + 完整 fx + 入场动画。 */
 export function OverlayPanel(props: OverlayPanelProps): React.JSX.Element {
   const { t } = useLocale()
+  const { kfOps } = props
   const [addingId, setAddingId] = useState<string | null>(null)
   const newFileRef = useRef<HTMLInputElement>(null)
   const selected = props.layers.find((o) => props.selectedId === 'overlay:' + o.id) ?? null
+  /** 动态关键帧路径前缀（与 KeyframePanel 的 overlay 条目索引一致） */
+  const selIdx = props.layers.findIndex((o) => o === selected)
 
   const handleAdd = (): void => {
     const id = props.onAdd()
@@ -203,6 +211,9 @@ export function OverlayPanel(props: OverlayPanelProps): React.JSX.Element {
             min={0}
             max={1}
             step={0.01}
+            kfPath={'overlayLayers.' + selIdx + '.fx.breathe'}
+            kfHas={kfOps?.hasKeyframe('overlayLayers.' + selIdx + '.fx.breathe')}
+            onKfAdd={kfOps?.addKeyframeAt}
             onCommit={(v) => props.onUpdate(selected.id, { fx: { ...selected.fx, breathe: v } })}
           />
           <DeferredSlider
@@ -221,6 +232,9 @@ export function OverlayPanel(props: OverlayPanelProps): React.JSX.Element {
             min={0}
             max={30}
             step={0.5}
+            kfPath={'overlayLayers.' + selIdx + '.fx.rotateDeg'}
+            kfHas={kfOps?.hasKeyframe('overlayLayers.' + selIdx + '.fx.rotateDeg')}
+            onKfAdd={kfOps?.addKeyframeAt}
             onCommit={(v) => props.onUpdate(selected.id, { fx: { ...selected.fx, rotateDeg: v } })}
           />
           <DeferredSlider
@@ -230,6 +244,9 @@ export function OverlayPanel(props: OverlayPanelProps): React.JSX.Element {
             min={0}
             max={1}
             step={0.01}
+            kfPath={'overlayLayers.' + selIdx + '.fx.glowPulse'}
+            kfHas={kfOps?.hasKeyframe('overlayLayers.' + selIdx + '.fx.glowPulse')}
+            onKfAdd={kfOps?.addKeyframeAt}
             onCommit={(v) => props.onUpdate(selected.id, { fx: { ...selected.fx, glowPulse: v } })}
           />
 

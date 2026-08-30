@@ -23,7 +23,14 @@ const systemFontValue = (family: string): string => '"' + family.replace(/"/g, '
 interface StyleControlsProps {
   title: string
   cfg: TextLayerConfig
+  /** 用于构造关键帧路径：texts.<kind>.style.* */
+  kind: 'songTitle' | 'artist'
   systemFonts: string[]
+  /** P3b 菱形打帧入口 */
+  kfOps?: {
+    hasKeyframe: (path: string) => boolean
+    addKeyframeAt: (path: string) => void
+  }
   /** 自定义字体（0.8.0）：注册成功后的家庭名 + 文件名 */
   customFontFamily?: string | null
   customFontName?: string | null
@@ -33,11 +40,14 @@ interface StyleControlsProps {
 function StyleControls({
   title,
   cfg,
+  kind,
   systemFonts,
   customFontFamily,
   customFontName,
-  onChange
+  onChange,
+  kfOps
 }: StyleControlsProps): React.JSX.Element {
+  const kfp = (p: string): string => 'texts.' + kind + '.' + p
   const { t } = useLocale()
   const s = cfg.style
   const setStyle = (patch: Partial<TextLayerConfig['style']>): void =>
@@ -78,6 +88,9 @@ function StyleControls({
         min={0.02}
         max={0.2}
         step={0.005}
+        kfPath={kfp('style.fontSize')}
+        kfHas={kfOps?.hasKeyframe(kfp('style.fontSize'))}
+        onKfAdd={kfOps?.addKeyframeAt}
         onCommit={(v) => setStyle({ fontSize: v })}
       />
       <label className="check-row">
@@ -107,6 +120,9 @@ function StyleControls({
         min={0}
         max={0.02}
         step={0.0005}
+        kfPath={kfp('style.strokeWidth')}
+        kfHas={kfOps?.hasKeyframe(kfp('style.strokeWidth'))}
+        onKfAdd={kfOps?.addKeyframeAt}
         onCommit={(v) => setStyle({ strokeWidth: v })}
       />
       <label className="check-row">
@@ -131,6 +147,9 @@ function StyleControls({
         min={0}
         max={0.05}
         step={0.0005}
+        kfPath={kfp('style.glowBlur')}
+        kfHas={kfOps?.hasKeyframe(kfp('style.glowBlur'))}
+        onKfAdd={kfOps?.addKeyframeAt}
         onCommit={(v) => setStyle({ glowBlur: v })}
       />
     </div>
@@ -146,6 +165,11 @@ interface TextPanelProps {
   customFontFamily?: string | null
   customFontName?: string | null
   onPickFont?: (file: File | null) => void
+  /** P3b 菱形打帧入口 */
+  kfOps?: {
+    hasKeyframe: (path: string) => boolean
+    addKeyframeAt: (path: string) => void
+  }
 }
 
 /** 文本样式面板：歌曲名 / 作者分别独立可调（T11）；支持扫描系统全部字体 + 自定义 ttf/otf */
@@ -185,18 +209,22 @@ export function TextPanel(props: TextPanelProps): React.JSX.Element {
       </div>
       <StyleControls
         title={t('textPanel.songTitle')}
+        kind="songTitle"
         cfg={props.songTitle}
         systemFonts={sys.fonts}
         customFontFamily={props.customFontFamily}
         customFontName={props.customFontName}
+        kfOps={props.kfOps}
         onChange={props.onSongTitleChange}
       />
       <StyleControls
         title={t('textPanel.artist')}
+        kind="artist"
         cfg={props.artist}
         systemFonts={sys.fonts}
         customFontFamily={props.customFontFamily}
         customFontName={props.customFontName}
+        kfOps={props.kfOps}
         onChange={props.onArtistChange}
       />
     </section>

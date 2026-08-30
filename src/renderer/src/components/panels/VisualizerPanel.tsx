@@ -62,10 +62,19 @@ function saveCustomPresets(presets: string[][]): void {
 interface VisualizerPanelProps {
   config: VisualizerConfig
   onChange: (patch: Partial<VisualizerConfig>) => void
+  /** P3b 菱形打帧入口 */
+  kfOps?: {
+    hasKeyframe: (path: string) => boolean
+    addKeyframeAt: (path: string) => void
+  }
 }
 
 /** 可视化参数面板（T13）：柱数/柱宽/高度/圆角/平滑/灵敏度/配色（含自定义渐变预置） */
-export function VisualizerPanel({ config, onChange }: VisualizerPanelProps): React.JSX.Element {
+export function VisualizerPanel({
+  config,
+  onChange,
+  kfOps
+}: VisualizerPanelProps): React.JSX.Element {
   const { t } = useLocale()
   const [customPresets, setCustomPresets] = useState<string[][]>(() => loadCustomPresets())
   const [gradientText, setGradientText] = useState<string>(config.colors.join(', '))
@@ -195,6 +204,9 @@ export function VisualizerPanel({ config, onChange }: VisualizerPanelProps): Rea
         min={0.2}
         max={1}
         step={0.01}
+        kfPath="visualizer.heightRatio"
+        kfHas={kfOps?.hasKeyframe('visualizer.heightRatio')}
+        onKfAdd={kfOps?.addKeyframeAt}
         onCommit={(v) => onChange({ heightRatio: v })}
       />
       <DeferredSlider
