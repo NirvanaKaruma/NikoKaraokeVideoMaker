@@ -1079,3 +1079,30 @@ button:not(.mini-btn):not(.btn-sm):not(.kf-track):not(.tab):not(.banner-btn):not
   -webkit-appearance: none;
   margin: 0;
 }
+
+/* P3a 关键帧目录分组折叠 */
+.kf-group {
+  margin-bottom: 6px;
+}
+
+.kf-group-head {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: var(--btn-bg);
+  color: var(--btn-text);
+  border: 1px solid var(--btn-border);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.kf-group-head:hover {
+  background: var(--btn-bg-hover);
+}
+
+.kf-track-list {
+  margin-top: 6px;
+}

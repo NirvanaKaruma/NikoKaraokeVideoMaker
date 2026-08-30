@@ -318,6 +318,12 @@ export const jp = {
   kf: {
     hint: 'プロパティを選択：再生ヘッドを目的位置へ、次に「ここにキーフレーム追加」。',
     hintNoSegment: 'タイムラインでセグメントを選択するとキーフレームを編集できます',
+    hintGlobal: 'セグメント未選択：キーフレームは曲全体に適用（グローバル基線）',
+    groupText: 'テキスト',
+    groupImage: 'メイン画像',
+    groupBg: '背景',
+    groupViz: 'ビジュアライザー',
+    groupOverlay: 'オーバーレイ',
     currentValue: '取得値',
     addAt: 'ここにキーフレーム追加',
     batchAdd: '一括キーフレーム',

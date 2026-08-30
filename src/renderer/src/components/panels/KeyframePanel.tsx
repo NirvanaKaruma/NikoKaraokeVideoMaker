@@ -43,6 +43,8 @@ export function KeyframePanel(props: KeyframePanelProps): React.JSX.Element {
   const { t } = useLocale()
   const [selPath, setSelPath] = useState<string | null>(null)
   const [selPoint, setSelPoint] = useState<number>(0)
+  /** P3a 目录分组折叠：默认收起无帧的组，有帧的组展开 */
+  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({})
   const stripRef = useRef<HTMLDivElement>(null)
 
   /** 片段模式 = 段长；全局模式（未选段）= 整曲时长（1.1.0 #3） */
@@ -171,152 +173,178 @@ export function KeyframePanel(props: KeyframePanelProps): React.JSX.Element {
 
   const sel = frames[selPoint]
 
+  /** P3a 目录分组：折叠展示（有帧组默认展开；未选段 = 全局基线模式，同样可打帧） */
+  const GROUPS: { id: string; labelKey: string; test: (p: string) => boolean }[] = [
+    { id: 'text', labelKey: 'kf.groupText', test: (p) => p.startsWith('texts.') },
+    { id: 'image', labelKey: 'kf.groupImage', test: (p) => p.startsWith('mainImage.') },
+    { id: 'bg', labelKey: 'kf.groupBg', test: (p) => p.startsWith('background.') },
+    { id: 'viz', labelKey: 'kf.groupViz', test: (p) => p.startsWith('visualizer.') },
+    { id: 'overlay', labelKey: 'kf.groupOverlay', test: (p) => p.startsWith('overlayLayers.') }
+  ]
+
   return (
     <div className="kf-panel">
-      {!props.segId ? (
-        <div className="panel-note">{t('kf.hintNoSegment')}</div>
-      ) : (
-        <>
-          <div className="panel-note">{t('kf.hint')}</div>
-          {/* 轨道清单 */}
-          <div className="kf-track-list">
-            {allEntries.map((c) => {
-              const has = props.tracks.some((x) => x.path === c.path && x.frames.length > 0)
-              const dyn = c as KeyframeCatalogEntry & { dynamic?: boolean; idx?: number }
-              const label = dyn.dynamic
-                ? t('overlay.layerI', { i: (dyn.idx ?? 0) + 1 }) + ' · ' + t(c.labelKey)
-                : t(c.labelKey)
-              return (
-                <button
-                  key={c.path}
-                  type="button"
-                  className={'kf-track' + (selPath === c.path ? ' active' : '')}
-                  onClick={() => {
-                    setSelPath(c.path)
-                    setSelPoint(Math.max(0, framesOf(props.tracks, c.path).length - 1))
-                  }}
-                >
-                  <span>{label}</span>
-                  {has && <span className="kf-dot">◆</span>}
-                </button>
-              )
-            })}
-          </div>
-          {entry && (
-            <>
-              {/* 添加关键帧条：显示播放头 + 当前值（T4 面板联动） */}
-              <div className="kf-addbar">
-                <span className="kf-time">t={relT.toFixed(2)}s</span>
-                <span className="kf-cur">
-                  {t('kf.currentValue')}: {String(currentValueAt(props.view, entry.path) ?? '—')}
-                </span>
-                <button type="button" className="btn-sm" onClick={addFrame}>
-                  {t('kf.addAt')}
-                </button>
-                {props.tracks.length > 0 && (
-                  <button type="button" className="btn-sm" onClick={batchAdd}>
-                    {t('kf.batchAdd')}
-                  </button>
-                )}
+      <div className="panel-note">{props.segId ? t('kf.hint') : t('kf.hintGlobal')}</div>
+      {/* 轨道清单（分组折叠） */}
+      {GROUPS.map((gr) => {
+        const entriesG = allEntries.filter((c) => gr.test(c.path))
+        if (entriesG.length === 0) return null
+        const hasFrames = entriesG.some((c) =>
+          props.tracks.some((x) => x.path === c.path && x.frames.length > 0)
+        )
+        const open = openGroups[gr.id] ?? hasFrames
+        return (
+          <div className="kf-group" key={gr.id}>
+            <button
+              type="button"
+              className="kf-group-head"
+              onClick={() => setOpenGroups((s) => ({ ...s, [gr.id]: !open }))}
+            >
+              <span>
+                {open ? '▾ ' : '▸ '}
+                {t(gr.labelKey)}
+              </span>
+              {hasFrames && <span className="kf-dot">◆</span>}
+            </button>
+            {open && (
+              <div className="kf-track-list">
+                {entriesG.map((c) => {
+                  const has = props.tracks.some((x) => x.path === c.path && x.frames.length > 0)
+                  const dyn = c as KeyframeCatalogEntry & { dynamic?: boolean; idx?: number }
+                  const label = dyn.dynamic
+                    ? t('overlay.layerI', { i: (dyn.idx ?? 0) + 1 }) + ' · ' + t(c.labelKey)
+                    : t(c.labelKey)
+                  return (
+                    <button
+                      key={c.path}
+                      type="button"
+                      className={'kf-track' + (selPath === c.path ? ' active' : '')}
+                      onClick={() => {
+                        setSelPath(c.path)
+                        setSelPoint(Math.max(0, framesOf(props.tracks, c.path).length - 1))
+                      }}
+                    >
+                      <span>{label}</span>
+                      {has && <span className="kf-dot">◆</span>}
+                    </button>
+                  )
+                })}
               </div>
-              {/* 关键帧点条 */}
-              {frames.length > 0 ? (
+            )}
+          </div>
+        )
+      })}
+      {entry && (
+        <>
+          {/* 添加关键帧条：显示播放头 + 当前值（T4 面板联动） */}
+          <div className="kf-addbar">
+            <span className="kf-time">t={relT.toFixed(2)}s</span>
+            <span className="kf-cur">
+              {t('kf.currentValue')}: {String(currentValueAt(props.view, entry.path) ?? '—')}
+            </span>
+            <button type="button" className="btn-sm" onClick={addFrame}>
+              {t('kf.addAt')}
+            </button>
+            {props.tracks.length > 0 && (
+              <button type="button" className="btn-sm" onClick={batchAdd}>
+                {t('kf.batchAdd')}
+              </button>
+            )}
+          </div>
+          {/* 关键帧点条 */}
+          {frames.length > 0 ? (
+            <div
+              ref={stripRef}
+              className="kf-strip"
+              onPointerDown={(e) => {
+                const el = stripRef.current
+                if (!el) return
+                const rect = el.getBoundingClientRect()
+                const t = ((e.clientX - rect.left) / Math.max(1, rect.width)) * segLen
+                addFrameAt(t)
+              }}
+            >
+              {frames.map((f, i) => (
                 <div
-                  ref={stripRef}
-                  className="kf-strip"
+                  key={i}
+                  className={
+                    'kf-point' + (selPoint === i && selPath === track?.path ? ' active' : '')
+                  }
+                  style={{ left: (f.t / segLen) * 100 + '%' }}
                   onPointerDown={(e) => {
-                    const el = stripRef.current
-                    if (!el) return
-                    const rect = el.getBoundingClientRect()
-                    const t = ((e.clientX - rect.left) / Math.max(1, rect.width)) * segLen
-                    addFrameAt(t)
+                    e.stopPropagation()
+                    setSelPoint(i)
+                    movePoint(e, i)
                   }}
-                >
-                  {frames.map((f, i) => (
-                    <div
-                      key={i}
-                      className={
-                        'kf-point' + (selPoint === i && selPath === track?.path ? ' active' : '')
-                      }
-                      style={{ left: (f.t / segLen) * 100 + '%' }}
-                      onPointerDown={(e) => {
-                        e.stopPropagation()
-                        setSelPoint(i)
-                        movePoint(e, i)
-                      }}
-                      title={JSON.stringify(f.value)}
-                    />
-                  ))}
-                </div>
+                  title={JSON.stringify(f.value)}
+                />
+              ))}
+            </div>
+          ) : (
+            <div className="kf-strip empty">{t('kf.noPoint')}</div>
+          )}
+          {/* 选中点编辑：值 + 缓动 + 删除 */}
+          {sel && (
+            <div className="kf-editor">
+              <span className="kf-editor-label">{t('kf.value')}</span>
+              {entry.kind === 'number' ? (
+                <input
+                  className="kf-num"
+                  type="number"
+                  step={entry.step * (entry.displayScale ?? 1)}
+                  value={displayOf(sel.value as number, entry)}
+                  onChange={(e) => {
+                    const n = Number(e.target.value)
+                    if (Number.isFinite(n)) setPointValue(rawOf(n, entry))
+                  }}
+                />
               ) : (
-                <div className="kf-strip empty">{t('kf.noPoint')}</div>
-              )}
-              {/* 选中点编辑：值 + 缓动 + 删除 */}
-              {sel && (
-                <div className="kf-editor">
-                  <span className="kf-editor-label">{t('kf.value')}</span>
-                  {entry.kind === 'number' ? (
-                    <input
-                      className="kf-num"
-                      type="number"
-                      step={entry.step * (entry.displayScale ?? 1)}
-                      value={displayOf(sel.value as number, entry)}
-                      onChange={(e) => {
-                        const n = Number(e.target.value)
-                        if (Number.isFinite(n)) setPointValue(rawOf(n, entry))
-                      }}
-                    />
-                  ) : (
-                    <span className="kf-color">
-                      <input
-                        type="color"
-                        value={
-                          /^#[0-9a-fA-F]{6}$/.test(String(sel.value))
-                            ? String(sel.value)
-                            : '#000000'
-                        }
-                        onChange={(e) => setPointValue(e.target.value)}
-                      />
-                      <input
-                        className="kf-num"
-                        type="text"
-                        value={String(sel.value)}
-                        onChange={(e) => setPointValue(e.target.value)}
-                      />
-                    </span>
-                  )}
-                  <span className="kf-editor-label">{t('kf.easing')}</span>
-                  <select
-                    className="kf-select"
-                    value={sel.easing}
-                    onChange={(e) =>
-                      setFrames(
-                        frames.map((f, j) =>
-                          j === selPoint ? { ...f, easing: e.target.value as EasingName } : f
-                        )
-                      )
+                <span className="kf-color">
+                  <input
+                    type="color"
+                    value={
+                      /^#[0-9a-fA-F]{6}$/.test(String(sel.value)) ? String(sel.value) : '#000000'
                     }
-                  >
-                    {EASING_OPTIONS.map((k) => (
-                      <option key={k} value={k}>
-                        {t('kf.easing' + capitalize(k))}
-                      </option>
-                    ))}
-                  </select>
-                  <button
-                    type="button"
-                    className="btn-sm danger"
-                    onClick={() => {
-                      const next = frames.filter((_, j) => j !== selPoint)
-                      setFrames(next)
-                      setSelPoint(Math.max(0, selPoint - 1))
-                    }}
-                  >
-                    {t('kf.remove')}
-                  </button>
-                </div>
+                    onChange={(e) => setPointValue(e.target.value)}
+                  />
+                  <input
+                    className="kf-num"
+                    type="text"
+                    value={String(sel.value)}
+                    onChange={(e) => setPointValue(e.target.value)}
+                  />
+                </span>
               )}
-            </>
+              <span className="kf-editor-label">{t('kf.easing')}</span>
+              <select
+                className="kf-select"
+                value={sel.easing}
+                onChange={(e) =>
+                  setFrames(
+                    frames.map((f, j) =>
+                      j === selPoint ? { ...f, easing: e.target.value as EasingName } : f
+                    )
+                  )
+                }
+              >
+                {EASING_OPTIONS.map((k) => (
+                  <option key={k} value={k}>
+                    {t('kf.easing' + capitalize(k))}
+                  </option>
+                ))}
+              </select>
+              <button
+                type="button"
+                className="btn-sm danger"
+                onClick={() => {
+                  const next = frames.filter((_, j) => j !== selPoint)
+                  setFrames(next)
+                  setSelPoint(Math.max(0, selPoint - 1))
+                }}
+              >
+                {t('kf.remove')}
+              </button>
+            </div>
           )}
         </>
       )}
