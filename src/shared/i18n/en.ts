@@ -547,6 +547,10 @@ export const en = {
       note: 'Intro/outro are timeline-based; preview and export stay consistent.'
     },
     beatTitle: 'Music response',
+    subMotion: 'Motion FX',
+    subMusic: 'Music response',
+    subCanvas: 'Post FX',
+    subProj: 'Intro/Outro & audio',
     beat: {
       bpm: 'BPM (beats per minute)',
       bpmPlaceholder: 'e.g. 120 (blank = off)',

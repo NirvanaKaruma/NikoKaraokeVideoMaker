@@ -551,6 +551,10 @@ export const jp = {
       note: 'イントロ/アウトロはタイムライン基準で、プレビューと書き出しが一致します。'
     },
     beatTitle: '音楽レスポンス',
+    subMotion: '画面動画',
+    subMusic: '音楽応答',
+    subCanvas: 'ポストFX',
+    subProj: 'イントロ/アウトロと音声',
     beat: {
       bpm: 'BPM（毎分拍数）',
       bpmPlaceholder: '例 120（空欄=オフ）',

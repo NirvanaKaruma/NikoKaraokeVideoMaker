@@ -524,6 +524,10 @@ export const zhCn = {
       note: '片头/片尾按时间轴计算，预览与导出一致。'
     },
     beatTitle: '音乐响应',
+    subMotion: '画面动效',
+    subMusic: '音乐响应',
+    subCanvas: '后期特效',
+    subProj: '片头片尾与音频',
     beat: {
       bpm: 'BPM（每分钟拍数）',
       bpmPlaceholder: '如 120（留空=关闭）',

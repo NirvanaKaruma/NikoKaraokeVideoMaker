@@ -219,6 +219,31 @@ body {
   border-color: #ff5f9e;
 }
 
+/* 动效与后期二级选项卡（用户反馈：单页内容过多 → 分栏） */
+.fx-subtabs {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+.fx-subtab {
+  flex: 1;
+  min-width: 96px;
+  padding: 6px 8px;
+  font-size: 12px;
+  font-weight: 600;
+  background: var(--ev-c-black-mute);
+  color: var(--ev-c-text-2);
+  border: 1px solid var(--ev-c-gray-2);
+  border-radius: 6px;
+  cursor: pointer;
+}
+.fx-subtab.active {
+  background: var(--ev-c-gray-3);
+  color: var(--text-pink);
+  border-color: #ff5f9e;
+}
+
 .tab-content {
   border: 1px solid var(--ev-c-gray-2);
   border-top: none;
