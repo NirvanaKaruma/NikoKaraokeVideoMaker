@@ -161,11 +161,13 @@ function createWindow(): BrowserWindow {
   if (isSmokeVisual || isSmokeBench) {
     mainWindow.loadFile(join(__dirname, '../renderer/index.html'), { query: { smokeVisual: '1' } })
   } else if (isSmokeExport) {
-    // P1a 基线：fx 变体分辨率经 query 透传（--smoke-export=fx4k@35 场景）
+    // P1a 基线：fx 变体分辨率/差分模式经 query 透传（NIKO_SMOKE_FX_RES / NIKO_SMOKE_FX_MODE）
     const fxRes = process.env['NIKO_SMOKE_FX_RES']
-    mainWindow.loadFile(join(__dirname, '../renderer/index.html'), {
-      query: fxRes ? { smokeExport: '1', smokeFxRes: fxRes } : { smokeExport: '1' }
-    })
+    const fxMode = process.env['NIKO_SMOKE_FX_MODE']
+    const q: Record<string, string> = { smokeExport: '1' }
+    if (fxRes) q['smokeFxRes'] = fxRes
+    if (fxMode) q['smokeFxMode'] = fxMode
+    mainWindow.loadFile(join(__dirname, '../renderer/index.html'), { query: q })
   } else if (isSmokeProject) {
     mainWindow.loadFile(join(__dirname, '../renderer/index.html'), { query: { smokeProject: '1' } })
   } else if (isSmokeTime) {

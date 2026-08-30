@@ -190,6 +190,14 @@ function BackgroundLayer({
   const CACHE_RATIO = 0.5
   const blurRadius = (background.blur / 100) * 60 * CACHE_RATIO
   const showBlur = background.blur > 0
+  /**
+   * filters 数组必须 useMemo：Konva setter（filters/blurRadius）每次调用都会置
+   * _filterUpToDate=false → 下帧 drawScene 重滤（getImageData/putImageData 全缓存像素）。
+   * 导出期间 App 每帧 setState → 本组件每帧重渲染 → 若直接传 [Blur] 每帧重建数组 → react-konva
+   * 每帧重设 filters → 每帧全量重滤（1080p 35ms/4K 120ms——P1a 逐层计量定位）。固定身份即一次缓存。
+   */
+  const blurFilters = useMemo(() => (showBlur ? [Blur] : []), [showBlur])
+  const blurRadiusMemo = useMemo(() => blurRadius, [blurRadius])
 
   // 图片来源：自定义（用户额外上传）优先，否则封面图
   const sourceImage = background.imageSource === 'custom' && bgElement ? bgElement : coverElement
@@ -288,13 +296,19 @@ function BackgroundLayer({
           : 0
       const bright = breatheBrightRef.current
       if (bright) {
-        bright.opacity(
-          Math.min(1, bassV * background.fx.bassBrightness * 1.4 + env * layout.beat.pulse * 0.55)
+        const bv = Math.min(
+          1,
+          bassV * background.fx.bassBrightness * 1.4 + env * layout.beat.pulse * 0.55
         )
+        bright.opacity(bv)
+        // opacity≈0 时隐藏跳过全屏 fill（软件光栅化下每帧 ≤4 次全屏 fill 是背景层主成本）
+        bright.visible(bv > 0.001)
       }
       const hue = breatheHueRef.current
       if (hue) {
-        hue.opacity(Math.min(0.7, bassV * background.fx.bassHue * 0.7))
+        const hv = Math.min(0.7, bassV * background.fx.bassHue * 0.7)
+        hue.opacity(hv)
+        hue.visible(hv > 0.001)
       }
       g?.getLayer()?.batchDraw()
     }
@@ -316,7 +330,7 @@ function BackgroundLayer({
 
   return (
     <>
-      <Group ref={bgRef} filters={showBlur ? [Blur] : []} blurRadius={blurRadius}>
+      <Group ref={bgRef} filters={blurFilters} blurRadius={blurRadiusMemo}>
         <Rect
           x={0}
           y={0}

@@ -1572,6 +1572,16 @@ function App(): React.JSX.Element {
       project.updateIntroOutro({ introFade: 1, introTitleCard: 2, outroFade: 1 })
       project.updateVisualizer({ bpm: 120 })
       project.updateBeatFx({ pulse: 0.8, burst: 1, particlePreset: 'snow', particleDensity: 0.6 })
+      // 差分实验：smokeFxMode=kb 只开 Ken Burns；kb0 = kb + blur=0（隔离模糊每帧重滤成本）
+      const fxMode = new URLSearchParams(window.location.search).get('smokeFxMode')
+      if (fxMode === 'kb' || fxMode === 'kb0') {
+        project.updateBackgroundFx({ kenBurns: 0.05, kenBurnsDuration: 30, bassBrightness: 0 })
+        project.updateImageFx({ breathe: 0, rotateDeg: 0, glowPulse: 0, border: 0 })
+        project.updateTextEntry('songTitle', { type: 'none' })
+        project.updateCanvasFx({ vignette: 0, grain: 0, scanline: 0, lightLeak: 0 })
+        project.updateBeatFx({ pulse: 0, burst: 0, particleDensity: 0 })
+        if (fxMode === 'kb0') project.updateBackground({ blur: 0 })
+      }
       // 0.8.0：附加层 + 自定义字体加入动态路径导出（全层逐帧渲染同源）
       const fxOvId = project.addOverlayLayer()
       const fxOvF = await makeSyntheticCoverFile()
@@ -1612,6 +1622,20 @@ function App(): React.JSX.Element {
       await sleep(400)
       const fxDone = await runExportOnce()
       results.push({ ...fxDone, resolution: fxRes + '+fx' })
+      // P1a 数据：逐 Layer 耗时（p50/p95；复合画布 wind 收集）
+      const win2 = window as unknown as { __nikoLayerMs?: Record<string, number[]> }
+      const layerMs = win2.__nikoLayerMs
+      if (layerMs && fxDone.phase === 'done') {
+        const stats: Record<string, { p50: number; p95: number }> = {}
+        for (const [ln, arr] of Object.entries(layerMs)) {
+          const s = [...arr].sort((a, b) => a - b)
+          const pct = (p: number): number =>
+            Math.round(s[Math.min(s.length - 1, Math.floor((p / 100) * s.length))] * 10) / 10
+          stats[ln] = { p50: pct(50), p95: pct(95) }
+        }
+        ;(results[results.length - 1] as { layerMs?: unknown }).layerMs = stats
+      }
+      delete win2.__nikoLayerMs
       project.removeOverlayLayer(fxOvId)
       project.setFontFile(null)
       // 0.7.0 音频工程端到端：lead 2s + fade 0.5s（视频总长 = 音频 + 2s；黑场/标题卡填充）

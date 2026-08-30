@@ -99,12 +99,19 @@ export function ExportStageHost(props: ExportStageHostProps): React.JSX.Element 
       octx.clearRect(0, 0, width, height)
       for (const layer of stage.getLayers()) {
         if (!layer.isVisible()) continue
+        const tDraw = performance.now()
         layer.drawScene()
         const native = layer.getNativeCanvasElement()
         // Layer 画布以 Konva 全局 pixelRatio（=devicePixelRatio）缩放；按逻辑尺寸绘制保证与
         // toCanvas({pixelRatio:1}) 输出一致（DPR=1 时 1:1 零采样）
         const ratio = layer.getCanvas().getPixelRatio() || 1
         octx.drawImage(native, layer.x(), layer.y(), native.width / ratio, native.height / ratio)
+        // P1a 数据：逐 Layer 耗时（window 收集 → smoke 报告透传；生产路径零开销字段）
+        const ln = layer.name() || layer.nodeType || '?'
+        const win = window as unknown as { __nikoLayerMs: Record<string, number[]> }
+        ;(win.__nikoLayerMs ??= {})[ln] ??= []
+
+        win.__nikoLayerMs[ln]!.push(performance.now() - tDraw)
       }
       return out
     },
