@@ -233,6 +233,10 @@ export interface ExportFrameMetrics {
   fpsActual: number
   resolve: PhaseStat
   draw: PhaseStat
+  /** draw 细拆：Konva 舞台渲染（renderFull/renderViz） */
+  drawStage: PhaseStat
+  /** draw 细拆：粒子 + CanvasFX 叠加 */
+  drawFx: PhaseStat
   transfer: PhaseStat
   encodeWait: PhaseStat
   mux: PhaseStat
@@ -363,6 +367,8 @@ export async function encodeVideo(opts: EncodeVideoOptions): Promise<ExportVideo
   // encodeWait=编码器背压等待 / mux=写盘回调 / yield=让出事件循环）
   const resolveMs: number[] = []
   const drawMs: number[] = []
+  const drawStageMs: number[] = []
+  const drawFxMs: number[] = []
   const transferMs: number[] = []
   const encodeWaitMs: number[] = []
   const muxMs: number[] = []
@@ -427,13 +433,18 @@ export async function encodeVideo(opts: EncodeVideoOptions): Promise<ExportVideo
       const tDraw0 = performance.now()
       if (dynamic) {
         // 全层逐帧渲染（含背景/主图/文本动效、片头片尾；同一 SceneLayers 绘制代码）
+        const full = stage.renderFull()
+        drawStageMs.push(performance.now() - tDraw0)
         ctx.clearRect(0, 0, resolution.width, resolution.height)
-        ctx.drawImage(stage.renderFull(), 0, 0)
+        ctx.drawImage(full, 0, 0)
       } else {
         const viz = stage.renderViz()
+        drawStageMs.push(performance.now() - tDraw0)
+        ctx.clearRect(0, 0, resolution.width, resolution.height)
         ctx.drawImage(staticCanvas!, 0, 0)
         ctx.drawImage(viz, 0, 0)
       }
+      const tFx0 = performance.now()
       // 0.6.0 音乐响应：手动节拍源（beat 包络）→ 粒子爆发 + 踩点闪光（同函数）。
       // 0.7.0 lead：驱动时间 = 音频轴（audioT + offset）；音乐未开始（audioT<0）→ 不叠加（纯黑前导）。
       if (audioT >= 0) {
@@ -475,6 +486,7 @@ export async function encodeVideo(opts: EncodeVideoOptions): Promise<ExportVideo
           )
         }
       }
+      drawFxMs.push(performance.now() - tFx0)
       drawMs.push(performance.now() - tDraw0)
       // 1.0.0 T7b 背压①：编码器排队 ≤2（4K RGBA≈30MB/帧，防原始帧队列 OOM）
       const tWait0 = performance.now()
@@ -538,6 +550,8 @@ export async function encodeVideo(opts: EncodeVideoOptions): Promise<ExportVideo
       fpsActual: Math.round((totalFrames / Math.max(0.001, totalMs / 1000)) * 10) / 10,
       resolve: phaseStat(resolveMs),
       draw: phaseStat(drawMs),
+      drawStage: phaseStat(drawStageMs),
+      drawFx: phaseStat(drawFxMs),
       transfer: phaseStat(transferMs),
       encodeWait: phaseStat(encodeWaitMs),
       mux: phaseStat(muxMs),
