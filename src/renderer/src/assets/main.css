@@ -9,6 +9,16 @@
   --btn-border: #41414b;
   --btn-text: #d8d8e0;
   --btn-danger-text: #ff9b9b;
+
+  /* 主题令牌层（未来新主题只改这里；组件一律用令牌） */
+  --surface-track: #1a1a22;
+  --accent-cyan: #7ce3ff;
+  --accent-cyan-border: #3f6f80;
+  --text-accent: #bfefff;
+  --text-pink: #ff9ec3;
+  --warn-orange: #d98a3d;
+  --warn-orange-text: #ffb46e;
+  --kf-dot-ring: #123;
 }
 
 /* 浅色模式：仅覆盖上表 + electron-toolkit 基座变量，其余组件自动跟随 */
@@ -28,6 +38,16 @@
   --ev-c-text-1: #1c1c24;
   --ev-c-text-2: #4a4a56;
   --ev-c-text-3: #86868f;
+
+  /* 浅色令牌（深底/青/粉/橙 → 浅底可读值） */
+  --surface-track: #e6e6ee;
+  --accent-cyan: #0077b6;
+  --accent-cyan-border: #62b3d8;
+  --text-accent: #125a7d;
+  --text-pink: #c2185b;
+  --warn-orange: #b97716;
+  --warn-orange-text: #8a4b00;
+  --kf-dot-ring: #ffffff;
 }
 
 body {
@@ -124,7 +144,7 @@ body {
 .help-section h3 {
   font-size: 14px;
   font-weight: 700;
-  color: #ff9ec3;
+  color: var(--text-pink);
   margin-bottom: 8px;
 }
 
@@ -195,7 +215,7 @@ body {
 
 .tab.active {
   background: var(--ev-c-gray-3);
-  color: #ff9ec3;
+  color: var(--text-pink);
   border-color: #ff5f9e;
 }
 
@@ -256,8 +276,8 @@ body {
 }
 
 .kf-diamond.on {
-  color: #7ce3ff;
-  border-color: #3f6f80;
+  color: var(--accent-cyan);
+  border-color: var(--accent-cyan-border);
 }
 
 .field input[type='text'] {
@@ -516,7 +536,7 @@ body {
   font-size: 13px;
   font-weight: 700;
   margin-bottom: 8px;
-  color: #ff9ec3;
+  color: var(--text-pink);
 }
 
 .audio-file {
@@ -707,7 +727,7 @@ body {
 
 .dl-fill {
   height: 100%;
-  background: linear-gradient(90deg, #ff5f9e, #7ce3ff);
+  background: linear-gradient(90deg, #ff5f9e, var(--accent-cyan));
   transition: width 200ms;
 }
 
@@ -769,7 +789,7 @@ body {
   position: relative;
   flex: 1;
   min-height: 0;
-  background: #1a1a22;
+  background: var(--surface-track);
   border: 1px solid var(--ev-c-gray-2);
   border-radius: 6px;
   cursor: crosshair;
@@ -810,14 +830,14 @@ body {
   top: 24px;
   bottom: 16px;
   background: rgba(124, 227, 255, 0.16);
-  border: 1px solid #3f6f80;
+  border: 1px solid var(--accent-cyan-border);
   border-radius: 6px;
   cursor: pointer;
   overflow: hidden;
 }
 
 .segment-block.selected {
-  border-color: #7ce3ff;
+  border-color: var(--accent-cyan);
   background: rgba(124, 227, 255, 0.3);
   box-shadow: 0 0 8px rgba(124, 227, 255, 0.35);
 }
@@ -827,13 +847,13 @@ body {
 }
 
 .segment-block.overlap {
-  border-color: #d98a3d;
+  border-color: var(--warn-orange);
   background: rgba(217, 138, 61, 0.22);
 }
 
 .timeline-overlap-note {
   font-size: 11px;
-  color: #ffb46e;
+  color: var(--warn-orange-text);
 }
 
 .segment-label {
@@ -841,7 +861,7 @@ body {
   top: 4px;
   left: 8px;
   font-size: 11px;
-  color: #bfefff;
+  color: var(--text-accent);
   white-space: nowrap;
   pointer-events: none;
 }
@@ -854,8 +874,8 @@ body {
   height: 10px;
   margin: -5px 0 0 -5px;
   border-radius: 50%;
-  background: #7ce3ff;
-  border: 2px solid #123;
+  background: var(--accent-cyan);
+  border: 2px solid var(--kf-dot-ring);
   pointer-events: auto;
   cursor: pointer;
 }
@@ -868,7 +888,7 @@ body {
   margin: -5px 0 0 -5px;
   border-radius: 50%;
   background: #ff5f9e;
-  border: 2px solid #3a1220;
+  border: 2px solid var(--kf-dot-ring);
   pointer-events: auto;
   cursor: pointer;
 }
@@ -943,7 +963,7 @@ body {
 }
 
 .edit-ctx-value.seg {
-  color: #7ce3ff;
+  color: var(--accent-cyan);
 }
 
 .edit-ctx-bar .mini-btn {
@@ -980,12 +1000,12 @@ body {
 }
 
 .kf-track.active {
-  border-color: #7ce3ff;
-  color: #bfefff;
+  border-color: var(--accent-cyan);
+  color: var(--text-accent);
 }
 
 .kf-dot {
-  color: #7ce3ff;
+  color: var(--accent-cyan);
   font-size: 10px;
 }
 
@@ -1014,7 +1034,7 @@ body {
   height: 40px;
   border: 1px solid var(--ev-c-gray-2);
   border-radius: 6px;
-  background: #1a1a22;
+  background: var(--surface-track);
   cursor: crosshair;
 }
 
@@ -1034,8 +1054,8 @@ body {
   height: 12px;
   margin: -6px 0 0 -6px;
   border-radius: 50%;
-  background: #7ce3ff;
-  border: 2px solid #123;
+  background: var(--accent-cyan);
+  border: 2px solid var(--kf-dot-ring);
   cursor: ew-resize;
 }
 
