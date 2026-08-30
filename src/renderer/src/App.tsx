@@ -2326,6 +2326,7 @@ function App(): React.JSX.Element {
             }}
             onUpdateBounds={project.updateSegmentBounds}
             overlaps={overlapIds}
+            globalKeyframes={project.layout.timeline?.keyframes ?? []}
             onClose={() => setTimelineOpen(false)}
           />
         )}

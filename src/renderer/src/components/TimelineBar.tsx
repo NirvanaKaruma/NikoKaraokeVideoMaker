@@ -1,5 +1,5 @@
 import { useRef } from 'react'
-import type { TimelineSegment } from '@shared/timeline'
+import type { PropertyTrack, TimelineSegment } from '@shared/timeline'
 import { useLocale } from '../hooks/useLocale'
 
 export interface TimelineBarProps {
@@ -16,6 +16,8 @@ export interface TimelineBarProps {
   onUpdateBounds: (id: string, startSec: number, endSec: number) => void
   /** 重叠片段 id（T9 非破坏校验：标红 + 提示——重叠区间按排序靠前者生效） */
   overlaps?: string[]
+  /** 全局基线关键帧轨道（整曲绝对 t）：在轨道上绘制标注（1.1.0 用户反馈） */
+  globalKeyframes?: PropertyTrack[]
   /** 关闭时间轴（可选；App 顶部可重开） */
   onClose?: () => void
 }
@@ -147,10 +149,34 @@ export function TimelineBar(props: TimelineBarProps): React.JSX.Element {
               {t('timeline.segmentLabel', { i: props.segments.indexOf(s) + 1 })}
               {s.layout ? '' : ' · ' + t('timeline.inherit')}
             </span>
+            {/* 关键帧点标注（t 相对片段起点；用户反馈"时间轴不可观察"→ 直接可视化） */}
+            {(s.keyframes ?? [])
+              .flatMap((tr) => tr.frames)
+              .map((f, fi) => (
+                <span
+                  key={fi}
+                  className="segment-kf"
+                  style={{
+                    left: (f.t / Math.max(0.1, s.endSec - s.startSec)) * 100 + '%'
+                  }}
+                  title={'t=' + (s.startSec + f.t).toFixed(2) + 's ' + String(f.value)}
+                />
+              ))}
             <span className="segment-handle l" onPointerDown={(e) => resize(e, s.id, 'l')} />
             <span className="segment-handle r" onPointerDown={(e) => resize(e, s.id, 'r')} />
           </div>
         ))}
+        {/* 全局基线关键帧标注（整曲绝对 t；未分割也可观察） */}
+        {(props.globalKeyframes ?? [])
+          .flatMap((tr) => tr.frames)
+          .map((f, fi) => (
+            <span
+              key={fi}
+              className="timeline-global-kf"
+              style={{ left: ratio(f.t) * 100 + '%' }}
+              title={'t=' + f.t.toFixed(2) + 's ' + String(f.value)}
+            />
+          ))}
         {/* 播放头 */}
         <div className="timeline-playhead" style={{ left: ratio(props.currentT) * 100 + '%' }}>
           <div className="timeline-playhead-head" />

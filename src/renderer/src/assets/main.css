@@ -846,6 +846,32 @@ body {
   pointer-events: none;
 }
 
+/* 关键帧标注（1.1.0）：段落块内小点（青）/ 全局基线点（轨道上竖标） */
+.segment-kf {
+  position: absolute;
+  top: 55%;
+  width: 6px;
+  height: 6px;
+  margin: -3px 0 0 -3px;
+  border-radius: 50%;
+  background: #7ce3ff;
+  border: 1px solid #123;
+  pointer-events: auto;
+  cursor: crosshair;
+}
+
+.timeline-global-kf {
+  position: absolute;
+  top: 17px;
+  width: 2px;
+  height: 5px;
+  margin-left: -1px;
+  background: #ff5f9e;
+  border-radius: 1px;
+  pointer-events: auto;
+  cursor: crosshair;
+}
+
 .segment-handle {
   position: absolute;
   top: 0;
