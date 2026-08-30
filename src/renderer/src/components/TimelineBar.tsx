@@ -18,6 +18,8 @@ export interface TimelineBarProps {
   overlaps?: string[]
   /** 全局基线关键帧轨道（整曲绝对 t）：在轨道上绘制标注（1.1.0 用户反馈） */
   globalKeyframes?: PropertyTrack[]
+  /** 全局空帧槽（裸创建；绝对 t） */
+  globalSlots?: number[]
   /** 关闭时间轴（可选；App 顶部可重开） */
   onClose?: () => void
 }
@@ -166,9 +168,32 @@ export function TimelineBar(props: TimelineBarProps): React.JSX.Element {
                   }}
                 />
               ))}
+            {/* 段内空槽点（裸创建的关键帧） */}
+            {(s.frameSlots ?? []).map((st, si) => (
+              <span
+                key={'s' + si}
+                className="segment-kf slot"
+                style={{ left: (st / Math.max(0.1, s.endSec - s.startSec)) * 100 + '%' }}
+                title={t('kf.emptyFrame')}
+                onClick={(ev) => {
+                  ev.stopPropagation()
+                  props.onSeek(s.startSec + st)
+                }}
+              />
+            ))}
             <span className="segment-handle l" onPointerDown={(e) => resize(e, s.id, 'l')} />
             <span className="segment-handle r" onPointerDown={(e) => resize(e, s.id, 'r')} />
           </div>
+        ))}
+        {/* 全局空槽标注 */}
+        {(props.globalSlots ?? []).map((st, si) => (
+          <span
+            key={'gs' + si}
+            className="timeline-global-kf slot"
+            style={{ left: ratio(st) * 100 + '%' }}
+            title={t('kf.emptyFrame')}
+            onClick={() => props.onSeek(st)}
+          />
         ))}
         {/* 全局基线关键帧标注（整曲绝对 t；未分割也可观察） */}
         {(props.globalKeyframes ?? [])

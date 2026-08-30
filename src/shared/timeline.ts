@@ -40,6 +40,8 @@ export interface TimelineSegment {
   /** 布局快照；null = 继承全局基线（未拆分） */
   layout: ProjectLayout | null
   keyframes: PropertyTrack[]
+  /** 段内空关键帧槽（裸创建；t 相对段起点） */
+  frameSlots?: number[]
 }
 
 export interface TimelineDocument {
@@ -49,6 +51,8 @@ export interface TimelineDocument {
    * 作用于整曲（t 为绝对时间），段级布局/轨道在其上覆盖（全局为底、段级为顶）。
    */
   keyframes?: PropertyTrack[]
+  /** 空关键帧槽（裸创建的关键帧：无任何属性，可点开后逐属性添加；绝对秒） */
+  frameSlots?: number[]
 }
 
 /** 时间轴存在判定（导出/预览接入用：有片段 → 逐帧 resolve） */
@@ -246,17 +250,21 @@ export function splitTimelineAt(
       frames: tr.frames.filter((f) => f.t > t0).map((f) => ({ ...f, t: f.t - t0 }))
     }))
     .filter((tr) => tr.frames.length > 0)
+  // 空帧槽拆分：<=t0 留左侧段；>t0 平移给新段
+  const slots1 = (seg.frameSlots ?? []).filter((x) => x <= t0)
+  const slots2 = (seg.frameSlots ?? []).filter((x) => x > t0).map((x) => x - t0)
   return {
     changed: true,
     segments: [
       ...segs.slice(0, idx),
-      { ...seg, endSec: atSec, keyframes: kf1 },
+      { ...seg, endSec: atSec, keyframes: kf1, frameSlots: slots1 },
       {
         id: id2,
         startSec: atSec,
         endSec: seg.endSec,
         layout: seg.layout,
-        keyframes: kf2
+        keyframes: kf2,
+        frameSlots: slots2
       },
       ...segs.slice(idx + 1)
     ]

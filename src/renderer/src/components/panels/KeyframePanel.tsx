@@ -28,6 +28,11 @@ export interface KeyframePanelProps {
   /** 面板修改自动创建关键帧（默认开；用户可直接在此切换） */
   kfAuto: boolean
   onKfAutoChange: (on: boolean) => void
+  /** 空帧槽（裸创建的关键帧；与 relT 同单位：段内=相对秒/全局=绝对秒） */
+  frameSlots: number[]
+  onFrameSlotsChange: (slots: number[]) => void
+  /** 裸建关键帧（绝对秒；App 路由段/全局） */
+  onAddEmptyFrame: (tAbs: number) => void
 }
 
 const EASING_OPTIONS: EasingName[] = ['linear', 'easeInOutQuad', 'easeOutCubic', 'bounce']
@@ -123,8 +128,13 @@ export function KeyframePanel(props: KeyframePanelProps): React.JSX.Element {
   /** —— 帧级编辑辅助（统一编辑器） —— */
   const near = (a: number, b: number): boolean => Math.abs(a - b) < 0.01
   const allFrameTs: number[] = [
-    ...new Set(props.tracks.flatMap((tr) => tr.frames.map((f) => +f.t.toFixed(3))))
+    ...new Set([
+      ...props.tracks.flatMap((tr) => tr.frames.map((f) => +f.t.toFixed(3))),
+      ...props.frameSlots.map((s) => +s.toFixed(3))
+    ])
   ].sort((a, b) => a - b)
+  const _isSlot = (tt: number): boolean => props.frameSlots.some((s) => near(s, tt))
+  void _isSlot
   const frameEntriesAt = (
     tt: number
   ): { path: string; frame: Keyframe; entry: KeyframeCatalogEntry }[] => {
@@ -155,20 +165,32 @@ export function KeyframePanel(props: KeyframePanelProps): React.JSX.Element {
           : { ...tr, frames: tr.frames.map((f) => (near(f.t, tt) ? { ...f, easing } : f)) }
       )
     )
-  const setFramePropRemove = (path: string, tt: number): void =>
-    updateAll(
-      props.tracks
-        .map((tr) =>
-          tr.path !== path ? tr : { ...tr, frames: tr.frames.filter((f) => !near(f.t, tt)) }
-        )
-        .filter((tr) => tr.frames.length > 0)
-    )
-  const removeFrameAt = (tt: number): void =>
+  /** 剔除某槽（属性添加后该时间点转为真帧） */
+  const dropSlot = (tt: number): void =>
+    props.onFrameSlotsChange(props.frameSlots.filter((s) => !near(s, tt)))
+  /** 全属性移除后帧保留为空槽（裸帧对象不消失——可继续添加属性） */
+  const setFramePropRemove = (path: string, tt: number): void => {
+    const next = props.tracks
+      .map((tr) =>
+        tr.path !== path ? tr : { ...tr, frames: tr.frames.filter((f) => !near(f.t, tt)) }
+      )
+      .filter((tr) => tr.frames.length > 0)
+    updateAll(next)
+    if (
+      next.every((tr) => !tr.frames.some((f) => near(f.t, tt))) &&
+      !props.frameSlots.some((s) => near(s, tt))
+    ) {
+      props.onFrameSlotsChange([...props.frameSlots, +tt.toFixed(3)].sort((a, b) => a - b))
+    }
+  }
+  const removeFrameAt = (tt: number): void => {
     updateAll(
       props.tracks
         .map((tr) => ({ ...tr, frames: tr.frames.filter((f) => !near(f.t, tt)) }))
         .filter((tr) => tr.frames.length > 0)
     )
+    dropSlot(tt)
+  }
   const addPropAt = (path: string, tt: number): void => {
     const raw = currentValueAt(props.view, path)
     if (raw == null) return
@@ -190,6 +212,7 @@ export function KeyframePanel(props: KeyframePanelProps): React.JSX.Element {
     } else {
       updateAll([...props.tracks, { path, frames: [frame] }])
     }
+    dropSlot(+tt.toFixed(3))
   }
 
   const addFrame = (): void => {
@@ -235,7 +258,15 @@ export function KeyframePanel(props: KeyframePanelProps): React.JSX.Element {
       {/* 顶部动作区：直接暴露打帧入口（用户：不要藏在二级/三级里） */}
       <div className="kf-topbar">
         <span className="kf-time">t={relT.toFixed(2)}s</span>
-        <button type="button" className="btn-sm" onClick={addFrame} disabled={!entry}>
+        <button
+          type="button"
+          className="btn-sm"
+          onClick={() => {
+            // 裸建关键帧（无选中属性也直接打帧——用户：帧=独立时间点对象）
+            if (entry) addFrame()
+            else props.onAddEmptyFrame(props.segId ? props.segStartSec + relT : relT)
+          }}
+        >
           {t('kf.addAt')}
         </button>
         {props.tracks.length > 0 && (
@@ -353,34 +384,43 @@ export function KeyframePanel(props: KeyframePanelProps): React.JSX.Element {
                   {t('kf.removeFrame')}
                 </button>
               </div>
-              {/* 只读一览（改值统一回面板——PR 式 auto-keyframe；此处保留过渡方式/删除） */}
-              {frameEntriesAt(selT).map(({ path, frame: fr, entry: en }, i) => (
-                <div className="kf-frame-row" key={i}>
-                  <span className="kf-frame-name">{framePropLabel(path)}</span>
-                  <span className="kf-frame-value">
-                    {en.kind === 'number' ? displayOf(fr.value as number, en) : String(fr.value)}
-                  </span>
-                  <select
-                    className="kf-select"
-                    value={fr.easing}
-                    onChange={(ev) => setFrameEasingAt(path, selT, ev.target.value as EasingName)}
-                  >
-                    {EASING_OPTIONS.map((k) => (
-                      <option key={k} value={k}>
-                        {t('kf.easing' + capitalize(k))}
-                      </option>
-                    ))}
-                  </select>
-                  <button
-                    type="button"
-                    className="btn-sm danger"
-                    title={t('kf.removeProp')}
-                    onClick={() => setFramePropRemove(path, selT)}
-                  >
-                    ✕
-                  </button>
-                </div>
-              ))}
+              {/* 只读一览（改值统一回面板——PR 式 auto-keyframe；此处保留过渡方式/删除）；空帧=仅添加区 */}
+              {(frameEntriesAt(selT).length === 0
+                ? [{ path: '', frame: null, entry: null }]
+                : frameEntriesAt(selT)
+              ).map(({ path, frame: fr, entry: en }, i) =>
+                fr == null ? (
+                  <div className="kf-frame-row empty" key={i}>
+                    <span className="kf-frame-name">{t('kf.emptyFrame')}</span>
+                  </div>
+                ) : (
+                  <div className="kf-frame-row" key={i}>
+                    <span className="kf-frame-name">{framePropLabel(path)}</span>
+                    <span className="kf-frame-value">
+                      {en.kind === 'number' ? displayOf(fr.value as number, en) : String(fr.value)}
+                    </span>
+                    <select
+                      className="kf-select"
+                      value={fr.easing}
+                      onChange={(ev) => setFrameEasingAt(path, selT, ev.target.value as EasingName)}
+                    >
+                      {EASING_OPTIONS.map((k) => (
+                        <option key={k} value={k}>
+                          {t('kf.easing' + capitalize(k))}
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      className="btn-sm danger"
+                      title={t('kf.removeProp')}
+                      onClick={() => setFramePropRemove(path, selT)}
+                    >
+                      ✕
+                    </button>
+                  </div>
+                )
+              )}
               <div className="kf-frame-add">
                 <select
                   className="kf-select"

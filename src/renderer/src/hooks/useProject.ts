@@ -166,6 +166,10 @@ export function useProject(): {
   updateSegmentTracks: (segId: string, tracks: PropertyTrack[]) => void
   /** 全局基线关键帧整体替换（1.1.0 #3；t 绝对秒） */
   updateDocKeyframes: (tracks: PropertyTrack[]) => void
+  /** 裸创建关键帧（空帧槽；segId=null → 全局） */
+  addEmptyFrame: (segId: string | null, atSec: number) => void
+  /** 空帧槽整体替换（段内 t 相对段起点） */
+  updateFrameSlots: (segId: string | null, slots: number[]) => void
   /** 音频长度变化边界修正（T9；无改动时 no-op 不入历史） */
   clampTimelineToDuration: (durationSec: number) => void
   applySegmentToAll: (segId: string) => void
@@ -831,6 +835,50 @@ export function useProject(): {
     [applyLayout, pushHistory]
   )
 
+  /** 裸创建关键帧（空帧槽：无属性、可点开后逐属性添加；segId=null → 全局基线） */
+  const addEmptyFrame = useCallback(
+    (segId: string | null, atSec: number) => {
+      pushHistory()
+      const cur = layoutRef.current
+      if (segId) {
+        const segments = (cur.timeline?.segments ?? []).map((s) =>
+          s.id === segId
+            ? {
+                ...s,
+                frameSlots: [...(s.frameSlots ?? []), atSec - s.startSec].sort((a, b) => a - b)
+              }
+            : s
+        )
+        applyLayout({ ...cur, timeline: { ...(cur.timeline ?? { segments: [] }), segments } })
+      } else {
+        const doc = cur.timeline ?? { segments: [] }
+        applyLayout({
+          ...cur,
+          timeline: { ...doc, frameSlots: [...(doc.frameSlots ?? []), atSec].sort((a, b) => a - b) }
+        })
+      }
+    },
+    [applyLayout, pushHistory]
+  )
+
+  /** 空帧槽整体替换（segId=null → 全局；段内 t 相对段起点） */
+  const updateFrameSlots = useCallback(
+    (segId: string | null, slots: number[]) => {
+      pushHistory()
+      const cur = layoutRef.current
+      if (segId) {
+        const segments = (cur.timeline?.segments ?? []).map((s) =>
+          s.id === segId ? { ...s, frameSlots: slots } : s
+        )
+        applyLayout({ ...cur, timeline: { ...(cur.timeline ?? { segments: [] }), segments } })
+      } else {
+        const doc = cur.timeline ?? { segments: [] }
+        applyLayout({ ...cur, timeline: { ...doc, frameSlots: slots } })
+      }
+    },
+    [applyLayout, pushHistory]
+  )
+
   /** 段关键帧整体替换（1.0.0 T5：关键帧编辑器提交；t 相对片段起点） */
   const updateSegmentTracks = useCallback(
     (segId: string, tracks: PropertyTrack[]) => {
@@ -1245,6 +1293,8 @@ export function useProject(): {
     updateSegmentBounds,
     updateSegmentTracks,
     updateDocKeyframes,
+    addEmptyFrame,
+    updateFrameSlots,
     clampTimelineToDuration,
     applySegmentToAll,
     saveProject,

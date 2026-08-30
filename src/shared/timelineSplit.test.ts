@@ -92,6 +92,16 @@ describe('timelineSplit（纯函数）', () => {
     expect(resolveLayoutAt(l, 10).mainImage.rect.x).toBeCloseTo(0.5, 5)
   })
 
+  it('空帧槽：裸创建后可拆分（>切点平移给新段）、随段删除', () => {
+    const d = docOf([{ id: 'A', a: 0, b: 60 }])
+    d.segments[0].frameSlots = [10, 45]
+    const r = splitTimelineAt(d, 30, 60)
+    expect(r.changed).toBe(true)
+    const [s1, s2] = r.segments
+    expect(s1.frameSlots).toEqual([10])
+    expect(s2.frameSlots).toEqual([15])
+  })
+
   it('全局为底、段级为顶：段内轨道覆盖全局轨道', () => {
     const base = structuredClone(DEFAULT_LAYOUT)
     const l = {

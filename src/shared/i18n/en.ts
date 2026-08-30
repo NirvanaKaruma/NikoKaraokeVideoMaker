@@ -325,6 +325,7 @@ export const en = {
     currentValue: 'Current value',
     addAt: 'Add keyframe here',
     batchAdd: 'Batch keyframe',
+    emptyFrame: 'No properties yet - add below or edit in panels',
     autoKf: 'Auto-keyframe on panel edits',
     frameTitle: 't={t}s - {n} props',
     props: 'props',

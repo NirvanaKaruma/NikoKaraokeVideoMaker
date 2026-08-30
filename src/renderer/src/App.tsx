@@ -2308,6 +2308,12 @@ function App(): React.JSX.Element {
             onKfSelTChange={setKfSelT}
             kfAuto={kfAuto}
             onKfAutoChange={setKfAuto}
+            kfFrameSlots={editKfSeg?.frameSlots ?? project.layout.timeline?.frameSlots ?? []}
+            onKfFrameSlotsChange={(slots) => {
+              if (edit.segId) project.updateFrameSlots(edit.segId, slots)
+              else project.updateFrameSlots(null, slots)
+            }}
+            onKfAddEmptyFrame={(tAbs) => project.addEmptyFrame(edit.segId, tAbs)}
           />
           <main className="canvas-wrap">
             <CanvasStage
@@ -2351,6 +2357,7 @@ function App(): React.JSX.Element {
             onUpdateBounds={project.updateSegmentBounds}
             overlaps={overlapIds}
             globalKeyframes={project.layout.timeline?.keyframes ?? []}
+            globalSlots={project.layout.timeline?.frameSlots ?? []}
             onClose={() => setTimelineOpen(false)}
           />
         )}

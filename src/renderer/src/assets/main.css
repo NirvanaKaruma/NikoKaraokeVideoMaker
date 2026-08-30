@@ -897,6 +897,12 @@ body {
   cursor: pointer;
 }
 
+.segment-kf.slot,
+.timeline-global-kf.slot {
+  background: transparent;
+  border: 2px dashed var(--accent-cyan-border);
+}
+
 .timeline-global-kf {
   position: absolute;
   top: 22px;

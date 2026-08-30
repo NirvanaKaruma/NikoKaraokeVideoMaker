@@ -325,6 +325,7 @@ export const zhCn = {
     currentValue: '当前值',
     addAt: '在此添加关键帧',
     batchAdd: '批量定格',
+    emptyFrame: '此关键帧暂无属性——在下方添加或回面板修改',
     autoKf: '面板修改自动创建关键帧',
     frameTitle: 't={t}s · {n} 个属性',
     props: '个属性',

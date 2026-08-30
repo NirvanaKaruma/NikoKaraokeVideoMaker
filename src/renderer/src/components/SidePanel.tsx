@@ -133,6 +133,11 @@ export interface SidePanelProps {
   /** 面板修改自动创建关键帧 */
   kfAuto: boolean
   onKfAutoChange: (on: boolean) => void
+  /** 空帧槽（段内=相对秒；全局=绝对秒） */
+  kfFrameSlots: number[]
+  onKfFrameSlotsChange: (slots: number[]) => void
+  /** 裸建关键帧（绝对秒；App 路由段/全局） */
+  onKfAddEmptyFrame: (tAbs: number) => void
 }
 
 const TABS: { id: SideTab; labelKey: string }[] = [
@@ -285,6 +290,9 @@ export function SidePanel(props: SidePanelProps): React.JSX.Element {
             onSelTChange={props.onKfSelTChange}
             kfAuto={props.kfAuto}
             onKfAutoChange={props.onKfAutoChange}
+            frameSlots={props.kfFrameSlots}
+            onFrameSlotsChange={props.onKfFrameSlotsChange}
+            onAddEmptyFrame={props.onKfAddEmptyFrame}
           />
         )}
       </div>
