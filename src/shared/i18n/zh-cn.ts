@@ -305,6 +305,9 @@ export const zhCn = {
     toggleTitle: '显示/隐藏时间轴',
     split: '✂ 在此剪切',
     remove: '删除段落',
+    transition: '过渡',
+    transitionHint:
+      '段起始处与上一锚点（前段/全局基线）软过渡；段尾后无下一段时同样软过渡回全局。0 = 硬切。',
     hint: '点击/拖动轨道试听定位；剪切出段落后可分别编辑。',
     segmentLabel: '段落 {i}',
     inherit: '跟随全局',

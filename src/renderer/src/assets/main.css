@@ -798,6 +798,36 @@ body {
   color: var(--ev-c-text-2);
 }
 
+/* 1.0.0 关键帧编辑体验：段边界过渡时长输入 + 过渡窗口可视化（虚线斜纹=软过渡区） */
+.timeline-transition {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--ev-c-text-2);
+}
+.timeline-transition input {
+  width: 48px;
+  padding: 1px 4px;
+  font-size: 12px;
+}
+.timeline-trans-windows {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.timeline-trans-window {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: repeating-linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--accent-cyan) 30%, transparent) 0 3px,
+    transparent 3px 7px
+  );
+  opacity: 0.55;
+}
+
 .timeline-toolbar .timeline-close {
   margin-left: auto;
 }

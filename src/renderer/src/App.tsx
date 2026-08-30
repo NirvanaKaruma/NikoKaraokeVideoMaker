@@ -1752,6 +1752,46 @@ function App(): React.JSX.Element {
           ') 差异像素 ' +
           dSeg
       )
+      // 4) 边界过渡（1.0.0 关键帧编辑体验）：s2 进入窗口 [2,4) = 前段 0.7 → 段首 0.06 线性渐变
+      pj.updateSegmentTransition(s2, 2)
+      // 状态往返等待（React 提交完成后 projectRef 刷新）
+      const tTr0 = Date.now()
+      while (
+        !(projectRef.current.layout.timeline?.segments ?? []).some(
+          (s) => (s.transitionSec ?? 0) > 0
+        ) &&
+        Date.now() - tTr0 < 2000
+      ) {
+        await sleep(100)
+      }
+      const xt = resolveLayoutAt(projectRef.current.layout, 3).mainImage.rect.x
+      add(
+        '引擎·段落到段落',
+        Math.abs(xt - (0.7 + (0.06 - 0.7) * 0.5)) < 0.02,
+        '窗口中点 x=' + xt.toFixed(4) + '（期望≈0.38）'
+      )
+      // 捕获顺序：E（窗口内）→ F（段内）——两时刻同帧预览差异 > 阈值
+      const curE = await seekAndSettle(3)
+      const resolvedE = resolveLayoutAt(projectRef.current.layout, curE).mainImage.rect.x
+      const capE = captureRegion(st, ...region)
+      const curF = await seekAndSettle(4.05)
+      const resolvedF = resolveLayoutAt(projectRef.current.layout, curF).mainImage.rect.x
+      const capF = captureRegion(st, ...region)
+      const dTrans = countDiffPixels(capE, capF)
+      add(
+        '预览·边界过渡像素',
+        dTrans > 5000,
+        't=' +
+          curE.toFixed(2) +
+          '(x=' +
+          resolvedE.toFixed(3) +
+          ') vs t=' +
+          curF.toFixed(2) +
+          '(x=' +
+          resolvedF.toFixed(3) +
+          ') 差异像素 ' +
+          dTrans
+      )
       return { ok: checks.every((c) => c.pass), checks }
     }
     return () => {
@@ -2389,6 +2429,7 @@ function App(): React.JSX.Element {
               if (project.editSegId === id) project.setEditSegment(null)
             }}
             onUpdateBounds={project.updateSegmentBounds}
+            onUpdateTransition={project.updateSegmentTransition}
             overlaps={overlapIds}
             globalKeyframes={project.layout.timeline?.keyframes ?? []}
             globalSlots={project.layout.timeline?.frameSlots ?? []}

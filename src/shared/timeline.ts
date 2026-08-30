@@ -13,7 +13,7 @@
 import type { ProjectLayout } from './layout'
 import { bounceIn, easeInOutQuad, easeOutCubic } from './fx'
 
-export type EasingName = 'linear' | 'easeInOutQuad' | 'easeOutCubic' | 'bounce'
+export type EasingName = 'linear' | 'easeInOutQuad' | 'easeOutCubic' | 'bounce' | 'hold'
 
 /** 关键帧值：数值（尺寸/位置/透明度/角度…）或颜色（#rrggbb） */
 export type KeyframeValue = number | string
@@ -42,6 +42,11 @@ export interface TimelineSegment {
   keyframes: PropertyTrack[]
   /** 段内空关键帧槽（裸创建；t 相对段起点） */
   frameSlots?: number[]
+  /**
+   * 边界过渡时长（秒，0=硬切，默认）：段起始处与上一锚点（前段结尾值 / 全局基线）软过渡；
+   * 段尾之后无生效段（空隙/歌曲结尾）时，同样用于段尾回全局基线的软过渡。
+   */
+  transitionSec?: number
 }
 
 export interface TimelineDocument {
@@ -65,7 +70,9 @@ export const EASINGS: Record<EasingName, (x: number) => number> = {
   linear: (x) => x,
   easeInOutQuad,
   easeOutCubic,
-  bounce: bounceIn
+  bounce: bounceIn,
+  /** 硬切：保持前值、到帧时刻突变（由 trackValueAt/applyTrackSet 分支处理，映射仅占位） */
+  hold: (x) => x
 }
 
 /** 点路径导航：读（不存在返回 undefined） */
@@ -133,6 +140,8 @@ export function trackValueAt(track: PropertyTrack, tSec: number): KeyframeValue 
     const f0 = frames[i]
     const f1 = frames[i + 1]
     if (tSec >= f0.t && tSec < f1.t) {
+      // hold：保持前值、f1 时刻突变（硬切）；其余按前帧过渡方式插值
+      if (f0.easing === 'hold') return f0.value
       const span = f1.t - f0.t
       const p = span <= 0 ? 1 : (tSec - f0.t) / span
       const eased = EASINGS[f0.easing]?.(p) ?? p
@@ -282,6 +291,21 @@ function applyTrackSet(
 ): ProjectLayout {
   const out = structuredClone(base)
   for (const track of tracks) {
+    const first = [...track.frames].sort((x, y) => x.t - y.t)[0]
+    // 「基准 → 首帧」过渡：t < 首帧 且非 hold → 基准与首帧值按首帧过渡方式渐变（段落到帧）
+    if (first && tSecRel < first.t && first.easing !== 'hold') {
+      const cur0 = getByPath(out, track.path)
+      // 首帧在段起点（t≈0）：进入过渡窗口的"段提前生效"态直接取首帧值（边界到达=帧值）；
+      // 否则按 [0, first.t] 渐变（基准 → 首帧：段落到帧）
+      const span0 = Math.max(0.001, first.t)
+      const p0 = first.t <= 0.001 ? 1 : Math.min(1, Math.max(0, tSecRel / span0))
+      const eased0 = EASINGS[first.easing]?.(p0) ?? p0
+      const v0 = interpolateValue(cur0 as number | string, first.value, eased0)
+      if (cur0 != null && typeof cur0 === typeof first.value) {
+        setByPath(out as unknown as Record<string, unknown>, track.path, v0)
+      }
+      continue
+    }
     const v = trackValueAt(track, tSecRel)
     if (v == null) continue
     const target = out as unknown as Record<string, unknown>
@@ -301,15 +325,44 @@ function applyTrackSet(
 /**
  * 解析 tSec 的完整布局：**全局基线轨道（整曲，绝对 t）→ 段布局/段轨道覆盖**（全局为底、段级为顶）。
  * 不修改输入（返回新对象）；path 命中失败/值类型不符 → 跳过该轨道（容错）。
+ *
+ * 1.0.0 关键帧编辑体验——锚点间过渡（段落到帧 / 段落到段落 / 段落到全局 / 全局到段落）：
+ * - 段落到帧：applyTrackSet 内「基准→首帧」按首帧过渡方式渐变（hold = 硬切）；
+ * - 边界过渡（transitionSec）：段起始 = 与上一锚点软过渡；段尾后无生效段 = 回全局基线软过渡。
+ * 解析优先级：进入窗口 → 离开窗口 → 常规段/全局；窗口递归嵌套（黑名单剥离已算段，防环）。
  */
 export function resolveLayoutAt(layout: ProjectLayout, tSec: number): ProjectLayout {
   const doc = layout.timeline ?? { segments: [] }
+  // 快路径：无边界过渡配置 → 原语义（零拷贝身份返回，WYSIWYG 引用稳定）
+  if (!doc.segments.some((s) => (s.transitionSec ?? 0) > 0)) {
+    return resolveCore(layout, doc, tSec)
+  }
+  return resolveTrans(layout, doc, tSec, new Set())
+}
+
+/** 常规解析（无边界过渡；black = 剥离段，供递归过渡的世界使用） */
+function resolveCore(
+  layout: ProjectLayout,
+  doc: TimelineDocument,
+  tSec: number,
+  black?: Set<string>
+): ProjectLayout {
   const globalTracks = doc.keyframes ?? []
-  const seg = segmentAt(doc, tSec)
-  // 无段命中：全局轨道存在 → 应用并返回（零拷贝快路径：无全局轨道直接返回 layout）
+  const seg = black ? segmentAtEx(doc, tSec, black) : segmentAt(doc, tSec)
   if (!seg) {
     return globalTracks.length > 0 ? applyTrackSet(layout, globalTracks, tSec) : layout
   }
+  return resolveSegActive(layout, doc, seg, tSec)
+}
+
+/** 段」生效状态」解析（核心段分支复用）：全局轨道（绝对 t）→ 段快照/段轨道（相对起点） */
+function resolveSegActive(
+  layout: ProjectLayout,
+  doc: TimelineDocument,
+  seg: TimelineSegment,
+  tSec: number
+): ProjectLayout {
+  const globalTracks = doc.keyframes ?? []
   // 段无关键帧：继承链 =（未物化 → 全局动画后的基线）或（已物化段快照=冻结）
   if ((seg.keyframes ?? []).length === 0) {
     if (!seg.layout) {
@@ -317,8 +370,102 @@ export function resolveLayoutAt(layout: ProjectLayout, tSec: number): ProjectLay
     }
     return seg.layout
   }
-  // 段级轨道：全局为底（全局轨道绝对 t）→ 段轨道（相对片段起点）覆盖
   const segBase = seg.layout ?? layout
   const withGlobal = globalTracks.length > 0 ? applyTrackSet(segBase, globalTracks, tSec) : segBase
   return applyTrackSet(withGlobal, seg.keyframes ?? [], tSec - seg.startSec)
+}
+
+/** 段查找（黑名单版）：忽略已剥离段（递归过渡的「无本段世界」）；防御性按 startSec 排序 */
+function segmentAtEx(
+  doc: TimelineDocument,
+  tSec: number,
+  black: Set<string>
+): TimelineSegment | null {
+  return (
+    [...doc.segments]
+      .sort((a, b) => a.startSec - b.startSec)
+      .find((s) => !black.has(s.id) && tSec >= s.startSec && tSec < s.endSec) ?? null
+  )
+}
+
+/** 边界过渡递归解析：black 每层剥离一个段（同段不重复、深度 ≤ 段数），嵌套混合（近边界优先） */
+function resolveTrans(
+  layout: ProjectLayout,
+  doc: TimelineDocument,
+  tSec: number,
+  black: Set<string>
+): ProjectLayout {
+  // 1) 进入窗口 [start-d, start)：上一锚点世界（前段生效值/全局基线）→ 本段预期世界
+  const inc = doc.segments
+    .filter((s) => !black.has(s.id) && (s.transitionSec ?? 0) > 0)
+    .filter((s) => s.startSec > tSec && tSec >= s.startSec - (s.transitionSec ?? 0))
+    .filter(
+      (s) =>
+        // 交接守卫：前段覆盖本段起始 → 本段实际不生效（重叠，排序靠前者胜）→ 无进入过渡
+        !doc.segments.some(
+          (q) =>
+            q.id !== s.id && !black.has(q.id) && q.startSec <= s.startSec && s.startSec < q.endSec
+        )
+    )
+    .sort((a, b) => a.startSec - b.startSec)[0]
+  if (inc) {
+    const d = Math.max(0.001, inc.transitionSec ?? 0)
+    const p = Math.min(1, Math.max(0, (tSec - (inc.startSec - d)) / d))
+    const next = new Set(black)
+    next.add(inc.id)
+    const from = resolveTrans(layout, doc, tSec, next)
+    const to = resolveSegActive(layout, doc, inc, tSec)
+    return lerpLayouts(from, to, p)
+  }
+  // 2) 离开窗口 [endSec, endSec+d)：无生效段（空隙/歌曲结尾）→ 段结尾值回全局基线
+  const active = segmentAtEx(doc, tSec, black)
+  if (!active) {
+    const out = doc.segments
+      .filter((s) => !black.has(s.id) && (s.transitionSec ?? 0) > 0)
+      .filter((s) => s.endSec <= tSec && tSec < s.endSec + (s.transitionSec ?? 0))
+      .sort((a, b) => b.endSec - a.endSec)[0]
+    if (out) {
+      const d = Math.max(0.001, out.transitionSec ?? 0)
+      const p = Math.min(1, Math.max(0, (tSec - out.endSec) / d))
+      const from = resolveSegActive(layout, doc, out, tSec)
+      const globalTracks = doc.keyframes ?? []
+      const to = globalTracks.length > 0 ? applyTrackSet(layout, globalTracks, tSec) : layout
+      return lerpLayouts(from, to, p)
+    }
+  }
+  // 3) 常规
+  return resolveCore(layout, doc, tSec, black)
+}
+
+/**
+ * 布局间插值混合（纯函数）：叶子数值 lerp / 颜色按通道插值 / 其他字符串中点切换；
+ * 数组按索引（长度一致时）、对象按键并集（以 b=目标态为骨架）；p<=0 → a，p>=1 → b。
+ */
+export function lerpLayouts(a: ProjectLayout, b: ProjectLayout, p: number): ProjectLayout {
+  if (p <= 0) return a
+  if (p >= 1) return b
+  return blendValue(a, b, p) as ProjectLayout
+}
+
+function blendValue(a: unknown, b: unknown, p: number): unknown {
+  if (typeof a === 'number' && typeof b === 'number') return a + (b - a) * p
+  if (typeof a === 'string' && typeof b === 'string') return interpolateValue(a, b, p)
+  if (a != null && b != null && typeof a === 'object' && typeof b === 'object') {
+    if (Array.isArray(a) !== Array.isArray(b)) return b
+    if (Array.isArray(a)) {
+      const at = a as unknown[]
+      const bt = b as unknown[]
+      if (at.length !== bt.length) return b
+      return bt.map((bv, i) => blendValue(at[i], bv, p))
+    }
+    const ao = a as Record<string, unknown>
+    const bo = b as Record<string, unknown>
+    const out: Record<string, unknown> = {}
+    for (const k of Object.keys(bo)) {
+      out[k] = k in ao ? blendValue(ao[k], bo[k], p) : bo[k]
+    }
+    return out
+  }
+  // 类型不匹配/特殊值 → 目标态
+  return b
 }

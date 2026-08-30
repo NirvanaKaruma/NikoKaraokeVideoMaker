@@ -14,6 +14,8 @@ export interface TimelineBarProps {
   onSplitAt: (t: number) => void
   onRemoveSegment: (id: string) => void
   onUpdateBounds: (id: string, startSec: number, endSec: number) => void
+  /** 段边界过渡时长（1.0.0 关键帧编辑体验：段落到段落/全局；0 = 硬切，0–3s） */
+  onUpdateTransition?: (id: string, sec: number) => void
   /** 重叠片段 id（T9 非破坏校验：标红 + 提示——重叠区间按排序靠前者生效） */
   overlaps?: string[]
   /** 点时间轴关键帧/槽：跳播 + 选中帧（段内传 segId；全局传 null）——与普通 seek（清帧）分离 */
@@ -93,6 +95,20 @@ export function TimelineBar(props: TimelineBarProps): React.JSX.Element {
             {t('timeline.remove')}
           </button>
         )}
+        {selected && (
+          <label className="timeline-transition" title={t('timeline.transitionHint')}>
+            {t('timeline.transition')}
+            <input
+              type="number"
+              min={0}
+              max={3}
+              step={0.1}
+              value={Math.round((selected.transitionSec ?? 0) * 10) / 10}
+              onChange={(e) => props.onUpdateTransition?.(selected.id, Number(e.target.value))}
+            />
+            s
+          </label>
+        )}
         <span className="panel-note">{t('timeline.hint')}</span>
         {(props.overlaps?.length ?? 0) > 0 && (
           <span className="timeline-overlap-note">{t('timeline.overlap')}</span>
@@ -126,6 +142,38 @@ export function TimelineBar(props: TimelineBarProps): React.JSX.Element {
             title={i + 's'}
           />
         ))}
+        {/* 边界过渡窗口可视化：段前方 = 进入（与上一锚点）；段尾后无下一段 = 回全局 */}
+        {props.segments.map((s) => {
+          const d = s.transitionSec ?? 0
+          if (d <= 0) return null
+          const next = props.segments
+            .filter((q) => q.id !== s.id && q.startSec >= s.endSec - 0.001)
+            .sort((a, b) => a.startSec - b.startSec)[0]
+          const contiguous = next != null && next.startSec <= s.endSec + 0.001
+          const a0 = Math.max(0, s.startSec - d)
+          return (
+            <div key={'tw' + s.id} className="timeline-trans-windows">
+              {s.startSec > a0 && (
+                <span
+                  className="timeline-trans-window"
+                  style={{
+                    left: ratio(a0) * 100 + '%',
+                    width: (ratio(s.startSec) - ratio(a0)) * 100 + '%'
+                  }}
+                />
+              )}
+              {!contiguous && (
+                <span
+                  className="timeline-trans-window"
+                  style={{
+                    left: ratio(s.endSec) * 100 + '%',
+                    width: (ratio(s.endSec + d) - ratio(s.endSec)) * 100 + '%'
+                  }}
+                />
+              )}
+            </div>
+          )
+        })}
         {/* 片段块 */}
         {props.segments.map((s) => (
           <div

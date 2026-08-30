@@ -305,6 +305,9 @@ export const en = {
     toggleTitle: 'Show/Hide timeline',
     split: '✂ Split here',
     remove: 'Remove segment',
+    transition: 'Transition',
+    transitionHint:
+      'Soft transition at segment start from the previous anchor (previous segment / global baseline); also eases back to the global baseline at segment end when no next segment follows. 0 = hard cut.',
     hint: 'Click/drag the track to position; split the song into segments and edit each one separately',
     segmentLabel: 'Seg {i}',
     inherit: 'follows global',
