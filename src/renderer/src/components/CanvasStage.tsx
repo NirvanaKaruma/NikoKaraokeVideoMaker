@@ -31,7 +31,8 @@ function CanvasFxOverlay({
   leadSec,
   scale,
   offX,
-  offY
+  offY,
+  beatsAt
 }: {
   canvasFx: CanvasFxConfig
   beat: BeatFxConfig
@@ -40,6 +41,8 @@ function CanvasFxOverlay({
   playTimeRef?: { current: number }
   /** 前导秒（0.7.0）：前导期间不叠加粒子/后期（与导出同口径） */
   leadSec?: number
+  /** 变 BPM 蓄积拍数（可选：跨段变速节拍相位连续） */
+  beatsAt?: (t: number) => number
   scale: number
   offX: number
   offY: number
@@ -114,13 +117,14 @@ function CanvasFxOverlay({
               bandEnergiesAt(analyzer, tt + offset, visualizer.barCount, visualizer.sensitivity)
           : undefined,
         beatPeriodSec: period,
+        beatsAt,
         leakSprite: undefined
       }
       drawCanvasFx(ctx, feed, c.width, c.height)
     }
     raf = requestAnimationFrame(draw)
     return () => cancelAnimationFrame(raf)
-  }, [enabled, canvasFx, beat, visualizer, analyzer, playTimeRef, leadSec])
+  }, [enabled, canvasFx, beat, visualizer, analyzer, playTimeRef, leadSec, beatsAt])
 
   return (
     <canvas
@@ -156,6 +160,8 @@ export interface CanvasStageProps {
   analyzer?: SpectrumAnalyzer | null
   /** 非可视化动效帧分发（背景/主图/文本每帧更新） */
   layerFxRef?: LayerFxRef
+  /** 变 BPM 蓄积拍数（timeline.beatTimeAt 包装；节拍源关键帧→跨段变速相位连续） */
+  beatsAt?: (t: number) => number
   /** 音频总时长秒（片尾时间轴用） */
   mediaDurationSec?: number
   /** 附加层图像元素（0.8.0）：layerId → 解码后元素 */
@@ -187,7 +193,8 @@ export function CanvasStage(props: CanvasStageProps): React.JSX.Element {
     overlayElements,
     onOverlayRectChange,
     playTimeRef,
-    onStageReady
+    onStageReady,
+    beatsAt
   } = props
   const containerRef = useRef<HTMLDivElement>(null)
   const stageRef = useRef<Konva.Stage>(null)
@@ -224,6 +231,7 @@ export function CanvasStage(props: CanvasStageProps): React.JSX.Element {
         scale={scale}
         offX={offX}
         offY={offY}
+        beatsAt={beatsAt}
       />
       <Stage
         ref={stageRef}
@@ -268,6 +276,7 @@ export function CanvasStage(props: CanvasStageProps): React.JSX.Element {
           mediaDurationSec={mediaDurationSec}
           overlayElements={overlayElements}
           onOverlayRectChange={onOverlayRectChange}
+          beatsAt={props.beatsAt}
         />
       </Stage>
     </div>

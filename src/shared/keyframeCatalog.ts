@@ -23,6 +23,8 @@ export interface KeyframeCatalogEntry {
   idx?: number
   /** 选项类条目（kind='choice'，如粒子预设）：下拉选项与标签 */
   options?: { value: string; labelKey: string }[]
+  /** 允许 null（如 visualizer.bpm 留空 = 关闭）：诊断跳过 null 类型检查 */
+  nullable?: boolean
 }
 
 const N = (
@@ -77,6 +79,9 @@ export const KEYFRAME_CATALOG: KeyframeCatalogEntry[] = [
   N('visualizer.rect.y', 'kf.vizY', 0, 1, 0.001, 100),
   N('visualizer.rect.h', 'kf.vizH', 0.02, 1, 0.001, 100),
   N('visualizer.heightRatio', 'kf.vizHeightRatio', 0.1, 1, 0.01, 100),
+  // 节拍源（变 BPM：关键帧后拍相位按 beatTimeAt 蓄积积分，跨段变速连续不跳拍；null = 关闭）
+  { ...N('visualizer.bpm', 'kf.beatBpm', 1, 300, 1), nullable: true },
+  { ...N('visualizer.beatIntervalSec', 'kf.beatInterval', 0.05, 10, 0.05), nullable: true },
   // 音乐响应（0.6.0 节拍特效：脉冲/粒子强度与预设——特效同样可按关键帧编排）
   N('beat.pulse', 'kf.beatPulse', 0, 1, 0.01, 100),
   N('beat.burst', 'kf.beatBurst', 0, 1, 0.01, 100),
@@ -113,7 +118,11 @@ export function catalogDiagnostics(): {
     const v = getByPath(DEFAULT_LAYOUT, c.path)
     const actual = typeof v
     // number 条目必须为 number；color/choice 条目必须为字符串（#rrggbb / 预设 id）
-    const ok = c.kind === 'number' ? actual === 'number' : actual === 'string'
+    // number 条目必须为 number（nullable 条目允许 null）；color/choice 条目必须为字符串
+    const ok =
+      c.kind === 'number'
+        ? actual === 'number' || (c.nullable === true && actual === 'object')
+        : actual === 'string'
     return { path: c.path, ok, kind: c.kind, actual }
   })
 }

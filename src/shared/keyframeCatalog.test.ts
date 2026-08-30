@@ -32,7 +32,14 @@ describe('keyframeCatalog', () => {
   })
 
   it('清单为 v1 完整清单（首版 24 条，后续版本向此扩展）', () => {
-    expect(KEYFRAME_CATALOG.length).toBe(28)
+    expect(KEYFRAME_CATALOG.length).toBe(30)
+  })
+
+  it('节拍源条目：bpm/周期为可空数值（null = 关闭，诊断跳过类型检查）', () => {
+    expect(catalogEntry('visualizer.bpm')?.kind).toBe('number')
+    expect(catalogEntry('visualizer.bpm')?.nullable).toBe(true)
+    expect(catalogEntry('visualizer.beatIntervalSec')?.nullable).toBe(true)
+    expect(currentValueAt(DEFAULT_LAYOUT, 'visualizer.bpm')).toBeUndefined() // null 不捕获为帧值
   })
 
   it('音乐响应条目：脉冲/爆发/密度为数值、预设为选项类（4 个预设选项）', () => {

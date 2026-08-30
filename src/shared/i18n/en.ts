@@ -354,6 +354,8 @@ export const en = {
     beatBurst: 'Particle burst',
     beatDensity: 'Particle density',
     beatPreset: 'Particle preset',
+    beatBpm: 'BPM (beats per minute)',
+    beatInterval: 'Period (sec per beat)',
     easingBounce: 'Bounce',
     songTitleFont: 'Title font size',
     artistFont: 'Artist font size',

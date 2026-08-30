@@ -6,9 +6,9 @@ import {
   type ProjectLayout,
   type ResolutionOption
 } from '@shared/layout'
-import { hasTimeline, resolveLayoutAt } from '@shared/timeline'
+import { beatTimeAt, hasTimeline, resolveLayoutAt } from '@shared/timeline'
 import { bandEnergiesAt, spectrumAt, type SpectrumAnalyzer } from '@shared/spectrum'
-import { beatEnvelope, beatPeriod, smoothBarsFx, type SmoothFxState } from '@shared/fx'
+import { beatEnvelopeCurve, beatPeriod, smoothBarsFx, type SmoothFxState } from '@shared/fx'
 import { drawCanvasFx } from '@shared/canvasfx'
 import { drawParticles, particlesAt } from '@shared/particles'
 import type { ExportStageHandle } from '../components/ExportStageHost'
@@ -384,7 +384,9 @@ export async function encodeVideo(opts: EncodeVideoOptions): Promise<ExportVideo
       // 0.7.0 lead：驱动时间 = 音频轴（audioT + offset）；音乐未开始（audioT<0）→ 不叠加（纯黑前导）。
       if (audioT >= 0) {
         const period = beatPeriod(vizCfg.bpm, vizCfg.beatIntervalSec)
-        const env = period != null ? beatEnvelope(audioT + tOffset, period) : 0
+        // 变 BPM：蓄积拍数（分段常量积分）→ 跨段变速/换节拍源时拍相位连续
+        const beatsAt = (u: number): number => beatTimeAt(layout, u)
+        const env = period != null ? beatEnvelopeCurve(audioT + tOffset, period, 0.18, beatsAt) : 0
         const beatCfg = layout.beat
         if (beatCfg.particleDensity > 0) {
           drawParticles(
@@ -411,7 +413,8 @@ export async function encodeVideo(opts: EncodeVideoOptions): Promise<ExportVideo
               beatFlash: cfxCfg.beatFlash,
               lightLeak: cfxCfg.lightLeak,
               energy: cfxEnergy,
-              beatPeriodSec: period
+              beatPeriodSec: period,
+              beatsAt
             },
             resolution.width,
             resolution.height

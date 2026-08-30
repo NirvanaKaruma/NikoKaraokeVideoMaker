@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  beatTimeAt,
   clampSegmentsToDuration,
   computeTransitionWindows,
   getByPath,
@@ -419,5 +420,39 @@ describe('段属性过渡（v5：过渡属于段落本身——目标跟随场�
     expect(m.nest.v).toBeCloseTo(0.2, 9)
     expect(a.x).toBe(0.4)
     expect(b.arr).toEqual([3, 4])
+  })
+
+  it('变 BPM 节拍蓄积：分段常量积分——跨段变速拍相位连续（不跳拍）', () => {
+    // 恒定 120 BPM（无时间轴快路径）
+    const l0 = structuredClone(DEFAULT_LAYOUT)
+    l0.visualizer.bpm = 120
+    expect(beatTimeAt(l0, 10)).toBeCloseTo(20, 9)
+    // 分段变速：段1 [0,10) 120BPM（period 0.5）；段2 [10,20) 60BPM（period 1）
+    const s1 = structuredClone(DEFAULT_LAYOUT)
+    s1.visualizer.bpm = 120
+    const s2 = structuredClone(DEFAULT_LAYOUT)
+    s2.visualizer.bpm = 60
+    const d: TimelineDocument = {
+      segments: [
+        seg({ id: 'a', startSec: 0, endSec: 10, layout: s1 }),
+        seg({ id: 'b', startSec: 10, endSec: 20, layout: s2 })
+      ]
+    }
+    const l = structuredClone(DEFAULT_LAYOUT)
+    const at = (t: number): number => beatTimeAt({ ...l, timeline: d }, t)
+    expect(at(5)).toBeCloseTo(10, 9) // 5s / 0.5
+    expect(at(15)).toBeCloseTo(25, 9) // 20 + 5s / 1
+    expect(at(20)).toBeCloseTo(30, 9) // 20 + 10
+    // 关段（bpm null）不推进；BPM 优先于周期
+    const s3 = structuredClone(DEFAULT_LAYOUT)
+    s3.visualizer.bpm = 120
+    s3.visualizer.beatIntervalSec = 1
+    const d2: TimelineDocument = {
+      segments: [seg({ id: 'a', startSec: 0, endSec: 5, layout: s3 })]
+    }
+    // 段前全局区（bpm null）= 不推进，段内 120BPM → beats(5) = 0 + 5/0.5 - 0（段从 0 起）
+    expect(beatTimeAt({ ...l, timeline: d2 }, 0.5)).toBeCloseTo(1, 9)
+    // 段后（> end）全局区不推进
+    expect(beatTimeAt({ ...l, timeline: d2 }, 6)).toBeCloseTo(10, 9)
   })
 })

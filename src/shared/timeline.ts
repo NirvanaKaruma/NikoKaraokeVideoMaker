@@ -11,7 +11,7 @@
  */
 
 import type { ProjectLayout } from './layout'
-import { bounceIn, easeInOutQuad, easeOutCubic } from './fx'
+import { beatPeriod, bounceIn, easeInOutQuad, easeOutCubic } from './fx'
 
 export type EasingName = 'linear' | 'easeInOutQuad' | 'easeOutCubic' | 'bounce' | 'hold'
 
@@ -482,6 +482,37 @@ function resolveAnchorWorld(
   if (id === GLOBAL_ANCHOR) return globalResolve(layout, doc, tSec)
   const seg = doc.segments.find((s) => s.id === id)
   return seg ? resolveSegActive(layout, doc, seg, tSec) : globalResolve(layout, doc, tSec)
+}
+
+/**
+ * 变 BPM 节拍蓄积（纯函数、确定性、O(区间数)）：拍数 = ∫du/periodAt(u)——跨段变速/换节拍源时**拍相位连续**（不跳拍），
+ * 匹配「很多歌是变 BPM」场景。「分段常量」近似：按段落边界切分区间（段外 = 全局区），每区间周期取其中心时刻的解析值；
+ * 无效周期区间不推进（节拍关闭）。快路径：完全无关键帧且段无物化 → 单次解析（周期恒定）。
+ */
+export function beatTimeAt(layout: ProjectLayout, tSec: number): number {
+  if (tSec <= 0) return 0
+  const doc = layout.timeline ?? { segments: [] }
+  const flat =
+    (doc.keyframes ?? []).length === 0 &&
+    doc.segments.every((s) => s.layout == null && (s.keyframes ?? []).length === 0)
+  if (flat) {
+    const p = beatPeriod(layout.visualizer.bpm, layout.visualizer.beatIntervalSec)
+    return p != null && p > 0 ? tSec / p : 0
+  }
+  const marks = [0, ...doc.segments.flatMap((s) => [s.startSec, s.endSec]), tSec]
+    .filter((m) => m >= 0)
+    .sort((a, b) => a - b)
+  const pts = [...new Set(marks.map((m) => Math.max(0, m)))]
+  let beats = 0
+  for (let i = 0; i < pts.length - 1; i++) {
+    const a = pts[i]
+    const b = Math.min(pts[i + 1], tSec)
+    if (b <= a) continue
+    const resolved = resolveLayoutAt(layout, (a + b) / 2)
+    const p = beatPeriod(resolved.visualizer.bpm, resolved.visualizer.beatIntervalSec)
+    if (p != null && p > 0 && Number.isFinite(p)) beats += (b - a) / p
+  }
+  return beats
 }
 
 /**

@@ -4,6 +4,7 @@ import {
   bandEnergiesFromBars,
   barGeometry,
   beatEnvelope,
+  beatEnvelopeCurve,
   beatPhase,
   beatPeriod,
   bounceIn,
@@ -281,6 +282,15 @@ describe('fx 时间函数库', () => {
     // 关闭态：period 无效 → 包络 0
     expect(beatEnvelope(1, 0, 0.18)).toBe(0)
     expect(beatPhase(1, 0)).toBe(0)
+    // 变 BPM 包络：拍相位 = frac(蓄积拍数)——常量速率下与 beatEnvelope 等价
+    const beatsAt = (u: number): number => u / 0.5 // 周期 0.5s
+    expect(beatEnvelopeCurve(0, 0.5, 0.18, beatsAt)).toBeCloseTo(beatEnvelope(0, 0.5, 0.18), 9)
+    expect(beatEnvelopeCurve(0.25, 0.5, 0.18, beatsAt)).toBeCloseTo(
+      beatEnvelope(0.25, 0.5, 0.18),
+      9
+    )
+    expect(beatEnvelopeCurve(0.5, 0.5, 0.18, beatsAt)).toBeCloseTo(beatEnvelope(0.5, 0.5, 0.18), 9)
+    expect(beatEnvelopeCurve(1, 0, 0.18, beatsAt)).toBe(0) // period 无效 → 0
   })
 
   it('kenBurns：往复摇摆——周期边界连续无突变、推拉对称、无露边', () => {

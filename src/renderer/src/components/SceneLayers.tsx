@@ -36,6 +36,7 @@ import {
   bandEnergySmoothed,
   barGeometry,
   beatEnvelope,
+  beatEnvelopeCurve,
   beatPeriod,
   bounceIn,
   easeOutCubic,
@@ -47,6 +48,7 @@ import {
   type BandEnergies
 } from '@shared/fx'
 import { bandEnergiesAt, type SpectrumAnalyzer } from '@shared/spectrum'
+import { beatTimeAt } from '@shared/timeline'
 import { snapPosition, type SnapLine, type SnapRect } from '@shared/snap'
 import { useLocale } from '../hooks/useLocale'
 import type { CanvasImageElement } from '../hooks/useProject'
@@ -123,6 +125,8 @@ export interface SceneLayersProps {
   overlayElements?: Record<string, CanvasImageElement | null>
   /** 附加层矩形变化（0.8.0，拖动/缩放提交） */
   onOverlayRectChange?: (id: string, rect: NormRect) => void
+  /** 变 BPM 蓄积拍数（节拍相位跨段变速连续；缺省按本布局推导） */
+  beatsAt?: ((t: number) => number) | null
 }
 
 const SELECT_BORDER = '#ff5f9e'
@@ -164,7 +168,8 @@ function BackgroundLayer({
   bgElement,
   analyzer,
   canvas,
-  layerFxSlotRef
+  layerFxSlotRef,
+  beatsAt
 }: {
   layout: ProjectLayout
   coverElement: CanvasImageElement | null
@@ -174,6 +179,8 @@ function BackgroundLayer({
   canvas: CanvasSize
   /** 每帧动效更新槽（SceneLayers 分发 frame(t, audioT)）；命名以 Ref 结尾（react-hooks 规范） */
   layerFxSlotRef?: { current: ((t: number, audioT: number) => void) | null }
+  /** 变 BPM 蓄积拍数（可选） */
+  beatsAt?: ((t: number) => number) | null
 }): React.JSX.Element {
   const background = layout.background
   const bgRef = useRef<Konva.Group>(null)
@@ -273,7 +280,12 @@ function BackgroundLayer({
       const wantBreath = background.fx.bassBrightness > 0 || background.fx.bassHue > 0
       const bassV = wantBreath && analyzer ? bandEnergySmoothed(sample, aVis, 'bass', 0.4) : 0
       const period = beatPeriod(layout.visualizer.bpm, layout.visualizer.beatIntervalSec)
-      const env = period != null ? beatEnvelope(aVis, period) : 0
+      const env =
+        period != null
+          ? beatsAt
+            ? beatEnvelopeCurve(aVis, period, 0.18, beatsAt)
+            : beatEnvelope(aVis, period)
+          : 0
       const bright = breatheBrightRef.current
       if (bright) {
         bright.opacity(
@@ -295,6 +307,7 @@ function BackgroundLayer({
     analyzer,
     canvas.width,
     canvas.height,
+    beatsAt,
     background.fx.kenBurns,
     background.fx.kenBurnsDuration,
     background.fx.bassBrightness,
@@ -655,6 +668,7 @@ function SharedImageFxLayer({
   opacity,
   beatPulse,
   beatPeriodSec,
+  beatsAt,
   entry,
   layerFxSlotRef
 }: {
@@ -670,6 +684,8 @@ function SharedImageFxLayer({
   beatPulse: number
   /** 手动节拍周期秒（null=节拍关） */
   beatPeriodSec: number | null
+  /** 变 BPM 蓄积拍数（可选：跨段变速节拍相位连续；缺省回退 beatEnvelope） */
+  beatsAt?: ((t: number) => number) | null
   /** 入场动画（0.8.0 附加层专用：fade/slide/bounce；主图不传 = 无） */
   entry?: OverlayEntryConfig | null
   /** 每帧动效槽（SceneLayers 分发 frame(t, audioT)） */
@@ -764,7 +780,12 @@ function SharedImageFxLayer({
       // 微旋转：±rotateDeg° 慢速往复（16s 周期）
       const rotDeg = fx.rotateDeg > 0 ? fx.rotateDeg * Math.sin((twoPi * tt) / 16) : 0
       // 手动节拍 Kick 缩放（beat 起点微弹）——音频驱动 → 音频时间轴（前导期间无 kick）
-      const env = beatPeriodSec != null ? beatEnvelope(audioT, beatPeriodSec) : 0
+      const env =
+        beatPeriodSec != null
+          ? beatsAt
+            ? beatEnvelopeCurve(audioT, beatPeriodSec, 0.18, beatsAt)
+            : beatEnvelope(audioT, beatPeriodSec)
+          : 0
       const kick = env * beatPulse * 0.04
       fg.scale({ x: breatheS + kick, y: breatheS + kick })
       fg.rotation(rotDeg)
@@ -819,6 +840,7 @@ function SharedImageFxLayer({
     imageElement,
     px.w,
     px.h,
+    beatsAt,
     fx.breathe,
     fx.breathePeriod,
     fx.rotateDeg,
@@ -848,6 +870,7 @@ function SharedImageLayer({
   opacity,
   beatPulse,
   beatPeriodSec,
+  beatsAt,
   entry,
   selected,
   locked,
@@ -865,6 +888,8 @@ function SharedImageLayer({
   opacity: number
   beatPulse: number
   beatPeriodSec: number | null
+  /** 变 BPM 蓄积拍数（可选：跨段变速节拍相位连续） */
+  beatsAt?: ((t: number) => number) | null
   /** 入场动画（附加层专用；主图不传 = 无） */
   entry?: OverlayEntryConfig | null
   selected: boolean
@@ -960,6 +985,7 @@ function SharedImageLayer({
             opacity={opacity}
             beatPulse={beatPulse}
             beatPeriodSec={beatPeriodSec}
+            beatsAt={beatsAt}
             entry={entry}
             layerFxSlotRef={layerFxSlotRef}
           />
@@ -1021,6 +1047,8 @@ interface MainImageLayerProps {
   selectedId: SelectableId
   onSelect: (id: SelectableId) => void
   onMainRectChange: (rect: NormRect) => void
+  /** 变 BPM 蓄积拍数（可选） */
+  beatsAt?: ((t: number) => number) | null
 }
 
 /** 主图层：继承共享图片层（拖动/缩放/选中 + 完整 fx 与占位），形态与 0.5.0/0.7.0 完全一致（薄壳）。 */
@@ -1033,7 +1061,8 @@ function MainImageLayer({
   snapCtxRef,
   onSelect,
   onMainRectChange,
-  layerFxSlotRef
+  layerFxSlotRef,
+  beatsAt
 }: MainImageLayerProps & {
   /** 每帧动效更新槽（SceneLayers 分发 frame(t, audioT)） */
   layerFxSlotRef?: { current: ((t: number, audioT: number) => void) | null }
@@ -1051,6 +1080,7 @@ function MainImageLayer({
       opacity={1}
       beatPulse={layout.beat.pulse}
       beatPeriodSec={beatPeriod(layout.visualizer.bpm, layout.visualizer.beatIntervalSec)}
+      beatsAt={beatsAt}
       selected={selectedId === 'mainImage'}
       locked={locked}
       snapCtxRef={snapCtxRef}
@@ -1075,7 +1105,8 @@ function OverlayLayer({
   onRectChange,
   slotRegistryRef,
   beatPulse,
-  beatPeriodSec
+  beatPeriodSec,
+  beatsAt
 }: {
   cfg: OverlayLayerConfig
   imageElement: CanvasImageElement | null
@@ -1093,6 +1124,8 @@ function OverlayLayer({
   }
   beatPulse: number
   beatPeriodSec: number | null
+  /** 变 BPM 蓄积拍数（可选：跨段变速节拍相位连续） */
+  beatsAt?: ((t: number) => number) | null
 }): React.JSX.Element {
   const localSlotRef = useRef<((t: number, audioT: number) => void) | null>(null)
   useEffect(() => {
@@ -1111,6 +1144,7 @@ function OverlayLayer({
       opacity={cfg.opacity}
       beatPulse={beatPulse}
       beatPeriodSec={beatPeriodSec}
+      beatsAt={beatsAt}
       entry={cfg.entry}
       selected={selected}
       locked={locked}
@@ -1577,8 +1611,15 @@ export function SceneLayers(props: SceneLayersProps): React.JSX.Element {
     audioLeadSec,
     mediaDurationSec,
     overlayElements,
-    onOverlayRectChange
+    onOverlayRectChange,
+    beatsAt
   } = props
+  /** 变 BPM 蓄积拍数（缺省按本布局推导：分段常量积分——含分段节拍源/轨道关键帧）；
+   * useMemo 稳定（预览由 App 传入（项目布局闭包）；导出缺省按本布局推导） */
+  const beatsAtFn = useMemo(
+    () => beatsAt ?? ((u: number): number => beatTimeAt(layout, u)),
+    [layout, beatsAt]
+  )
   const defaultCanvas = useMemo(() => ({ width: LOGICAL_WIDTH, height: LOGICAL_HEIGHT }), [])
   const canvas = canvasSize ?? defaultCanvas
   const show = (name: SceneLayerName): boolean => !layers || layers.includes(name)
@@ -1659,6 +1700,7 @@ export function SceneLayers(props: SceneLayersProps): React.JSX.Element {
                   analyzer={analyzer}
                   canvas={canvas}
                   layerFxSlotRef={bgFxSlot}
+                  beatsAt={beatsAtFn}
                 />
               </Layer>
             )
@@ -1675,6 +1717,7 @@ export function SceneLayers(props: SceneLayersProps): React.JSX.Element {
                   onSelect={onSelect}
                   onMainRectChange={onMainRectChange}
                   layerFxSlotRef={imgFxSlot}
+                  beatsAt={beatsAtFn}
                 />
               </Layer>
             )
@@ -1736,6 +1779,7 @@ export function SceneLayers(props: SceneLayersProps): React.JSX.Element {
                     layout.visualizer.bpm,
                     layout.visualizer.beatIntervalSec
                   )}
+                  beatsAt={beatsAtFn}
                 />
               </Layer>
             )

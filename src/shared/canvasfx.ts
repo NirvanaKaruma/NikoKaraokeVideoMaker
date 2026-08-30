@@ -5,7 +5,7 @@
  * 确定性：所有随机成分都是 (t, seed) 的纯函数（mulberry32 / 时刻哈希），
  * 同一 tSec 无论 30fps 还是 60fps 网格都得到相同画面。
  */
-import { beatEnvelope, energyAttack, seededRng, type BandEnergies } from './fx'
+import { beatEnvelope, beatEnvelopeCurve, energyAttack, seededRng, type BandEnergies } from './fx'
 
 /** 颗粒纹理种子（静态纹理只生成一次） */
 const GRAIN_TEX_SEED = 424242
@@ -42,6 +42,8 @@ export interface CanvasFxDrawOpts {
   energy?: (t: number) => BandEnergies
   /** 手动节拍源（0.6.0）：>0 时踩点闪光优先按 beat 包络（替代能量阶跃）；null/0 = 能量阶跃 */
   beatPeriodSec?: number | null
+  /** 变 BPM 蓄积拍数（beatsAt = ∫du/period(u)，见 timeline.beatTimeAt）：提供时拍相位跨变速连续 */
+  beatsAt?: (t: number) => number
   /** 漏光素材（内置生成一次并复用）；null = 首次调用时惰性生成 */
   leakSprite?: HTMLCanvasElement | null
 }
@@ -150,7 +152,12 @@ export function drawCanvasFx(
   const bp = o.beatPeriodSec
   const fi =
     bp != null && bp > 0
-      ? Math.min(1, beatEnvelope(o.t, bp) * o.beatFlash * 1.3)
+      ? Math.min(
+          1,
+          (o.beatsAt ? beatEnvelopeCurve(o.t, bp, 0.18, o.beatsAt) : beatEnvelope(o.t, bp)) *
+            o.beatFlash *
+            1.3
+        )
       : flashIntensity(o.energy, o.t, o.beatFlash)
   if (fi > 0.01) {
     ctx.fillStyle = FLASH_COLOR + (fi * 0.55).toFixed(3) + ')'

@@ -356,6 +356,8 @@ export const jp = {
     beatBurst: 'パーティクル噴出',
     beatDensity: 'パーティクル密度',
     beatPreset: 'パーティクルプリセット',
+    beatBpm: 'BPM（毎分拍数）',
+    beatInterval: '周期（秒/拍）',
     easingBounce: 'バウンス',
     songTitleFont: '曲名フォントサイズ',
     artistFont: 'アーティストフォントサイズ',

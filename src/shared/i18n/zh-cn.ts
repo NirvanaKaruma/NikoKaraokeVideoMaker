@@ -354,6 +354,8 @@ export const zhCn = {
     beatBurst: '粒子爆发',
     beatDensity: '粒子密度',
     beatPreset: '粒子预设',
+    beatBpm: 'BPM（每分钟拍数）',
+    beatInterval: '周期（秒/次）',
     easingBounce: '弹跳',
     songTitleFont: '歌名字号',
     artistFont: '作者字号',

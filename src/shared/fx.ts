@@ -139,6 +139,23 @@ export function beatEnvelope(t: number, period: number, tauSec = 0.18): number {
   return Math.exp(-((phase * period) / tau))
 }
 
+/**
+ * 变 BPM 节拍包络（0–1）：拍相位 = frac(蓄积拍数 beatsAt(t))——跨节拍源切换/变速时**拍相位连续**（不跳拍）；
+ * period 无效 → 恒 0（关闭）。beatsAt 由节拍引擎提供（segmented 积分，见 timeline.beatTimeAt）。
+ */
+export function beatEnvelopeCurve(
+  t: number,
+  period: number,
+  tauSec: number,
+  beatsAt: (u: number) => number
+): number {
+  if (!(period > 0) || !Number.isFinite(period)) return 0
+  const b = beatsAt(t)
+  const phase = ((b % 1) + 1) % 1
+  const tau = Math.max(0.002, tauSec)
+  return Math.exp(-((phase * period) / tau))
+}
+
 /** 分带能量按时间窗口平滑（确定性采样：5 点窗口均值；30/60fps 同 t 同值）。
  * sample = (t) => 分带能量（预览与导出都传「bandEnergiesAt 包装」——与帧率无关）。 */
 export function bandEnergySmoothed(

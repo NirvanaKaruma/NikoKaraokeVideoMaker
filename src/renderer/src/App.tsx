@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type Konva from 'konva'
 import { SUBTITLE_ZONE_Y, defaultLayerOrder, type ProjectLayout } from '@shared/layout'
-import { resolveLayoutAt, segmentOverlaps, setByPath } from '@shared/timeline'
+import { beatTimeAt, resolveLayoutAt, segmentOverlaps, setByPath } from '@shared/timeline'
 import { resolvedSnapshotKey } from '@shared/tlDiff'
 import { useLocale } from './hooks/useLocale'
 import { useEditableLayout } from './hooks/useEditableLayout'
@@ -1345,6 +1345,8 @@ function App(): React.JSX.Element {
     [project.layout.timeline]
   )
   /** 段属性过渡（v4）：字段在段落本身——KeyframePanel 直接读写 editSeg.transitionIn/Out */
+  /** 变 BPM 节拍蓄积（timeline.beatTimeAt 包装：其周期曲线基于原始项目布局——编辑时失效重算） */
+  const beatsAt = useMemo(() => (u: number) => beatTimeAt(project.layout, u), [project.layout])
   /** PR 式：面板改可关键帧属性 → 自动写播放头处关键帧（播放头 + 自动开关同步给 commit） */
   useEffect(() => {
     project.setKfCurT(pb.currentTime)
@@ -2410,6 +2412,7 @@ function App(): React.JSX.Element {
               frameTRef={frameTRef}
               analyzer={pb.analyzer}
               layerFxRef={layerFxRef}
+              beatsAt={beatsAt}
               mediaDurationSec={pb.duration}
               playTimeRef={playTimeRef}
               onStageReady={(s) => {
