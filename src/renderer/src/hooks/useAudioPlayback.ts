@@ -40,12 +40,14 @@ function parseWorkerResult(e: MessageEvent): WorkerDecodeResult | null {
   return null
 }
 
+const PCM_READ_CHUNK_BYTES = 4 * 1024 * 1024
+
 /**
- * 路径①：ffmpeg 子进程流式解码（main）→ PCM 4MB 块 transfer 直通 Worker，
- * 拼接/拆声道/混单声道全部在 Worker 内完成（纯数据操作，零 WebAudio——实测本环境
- * Worker 无 AudioBuffer/OfflineAudioContext）。主线程只剩 createBuffer+copyToChannel
- * （实测 0–11ms），消除了「preload 全量组装 + contextBridge 大块克隆 + 主线程混音」
- * 的 GC 卡顿源。cancel：终止 Worker + 取消 main 侧 ffmpeg 子进程。
+ * 路径①（P0 重构）：ffmpeg 解码（main）→ 临时 PCM 文件 → 渲染侧按 4MB 分块拉取
+ * （audioDecodeRead invoke → ArrayBuffer transfer）→ Worker 拼接/拆声道/混单声道
+ * （纯数据操作，零 WebAudio——实测本环境 Worker 无 AudioBuffer/OfflineAudioContext）。
+ * 手写池化/pause/resume 流控已删除——截断与块边界卡顿同源（race），由构造消灭。
+ * cancel：终止 Worker + main 侧 dispose（杀 ffmpeg 子进程 + 删临时文件）。
  */
 function startPcmStreamDecode(decodePath: string): {
   promise: Promise<StreamDecodeOutcome>
@@ -57,11 +59,13 @@ function startPcmStreamDecode(decodePath: string): {
   })
   let w: Worker | null = null
   let settled = false
+  let token = ''
   const done = (r: StreamDecodeOutcome): void => {
     if (settled) return
     settled = true
     w?.terminate()
     if (decodeWorkerInst === w) decodeWorkerInst = null
+    if (token) void window.api.project.audioDecodeDispose(token)
     settleFn?.(r)
   }
   try {
@@ -76,31 +80,52 @@ function startPcmStreamDecode(decodePath: string): {
       done(parsed ? { kind: 'ok', result: parsed } : { kind: 'fail', error: raw?.error ?? null })
     }
     w.onerror = (): void => done({ kind: 'fail', error: null })
-    const session = window.api.project.audioDecode(decodePath, (chunk: ArrayBuffer) => {
-      // 块 transfer 进 Worker（零拷贝）；Worker 已终止则忽略
-      try {
-        w?.postMessage({ type: 'chunk', data: chunk }, [chunk])
-      } catch {
-        done({ kind: 'fail', error: 'chunk-forward-failed' })
-      }
-    })
-    void session.result.then((res) => {
+    void (async () => {
+      const start = await window.api.project.audioDecodeStart(decodePath)
       if (settled) return
-      if (res.ok && res.channels > 0 && res.sampleRate > 0) {
-        try {
-          w?.postMessage({ type: 'finalize', channels: res.channels, sampleRate: res.sampleRate })
-        } catch {
-          done({ kind: 'fail', error: 'finalize-failed' })
-        }
-      } else {
-        done({ kind: 'fail', error: res.error })
+      if (!start.ok || !start.token) {
+        done({ kind: 'fail', error: start.error ?? 'start-failed' })
+        return
       }
+      token = start.token
+      let offset = 0
+      let eof = false
+      while (!eof && !settled) {
+        const r = await window.api.project.audioDecodeRead(token, offset, PCM_READ_CHUNK_BYTES)
+        if (settled) return
+        if (!r.ok || !r.bytes) {
+          done({ kind: 'fail', error: r.error ?? 'read-failed' })
+          return
+        }
+        offset += r.bytes.byteLength
+        eof = !!r.eof
+        try {
+          w?.postMessage({ type: 'chunk', data: r.bytes }, [r.bytes])
+        } catch {
+          done({ kind: 'fail', error: 'chunk-forward-failed' })
+          return
+        }
+        // 块间让出事件循环（UI 有响应窗口；与旧 4MB 推送节奏一致）
+        await new Promise((res) => setTimeout(res, 0))
+      }
+      if (settled) return
+      try {
+        w?.postMessage({
+          type: 'finalize',
+          channels: start.channels ?? 2,
+          sampleRate: start.sampleRate ?? 44100
+        })
+      } catch {
+        done({ kind: 'fail', error: 'finalize-failed' })
+      }
+    })().catch((err: unknown) => {
+      done({ kind: 'fail', error: err instanceof Error ? err.message : String(err) })
     })
     return {
       promise,
       cancel: (): void => {
         done({ kind: 'fail', error: 'cancelled' })
-        session.cancel()
+        if (token) void window.api.project.audioDecodeCancel(token)
       }
     }
   } catch {

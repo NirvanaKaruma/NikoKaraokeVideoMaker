@@ -47,19 +47,22 @@ declare global {
         }>
         readFile: (path: string) => Promise<{ ok: boolean; buffer?: ArrayBuffer; error?: string }>
         readBytes: (path: string) => Promise<Uint8Array>
-        /** 流式音频解码：PCM 分块直通 onChunk；result 在流结束/失败时 resolve */
-        audioDecode: (
-          path: string,
-          onChunk: (data: ArrayBuffer) => void
-        ) => {
-          result: Promise<{
-            ok: boolean
-            sampleRate: number
-            channels: number
-            error: string | null
-          }>
-          cancel: () => void
-        }
+        /** P0 音频解码（文件流式）：start → read 循环 → dispose；cancel 中止 */
+        audioDecodeStart: (path: string) => Promise<{
+          ok: boolean
+          token?: string
+          path?: string
+          sampleRate?: number
+          channels?: number
+          error?: string
+        }>
+        audioDecodeRead: (
+          token: string,
+          offset: number,
+          length: number
+        ) => Promise<{ ok: boolean; bytes?: ArrayBuffer; eof?: boolean; error?: string }>
+        audioDecodeDispose: (token: string) => Promise<void>
+        audioDecodeCancel: (token: string) => Promise<void>
       }
       /** 1.0.0 T7b 流式写盘 */
       muxer: {

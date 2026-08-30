@@ -257,3 +257,10 @@
 - **解析（非递归，窗口按构造不相交）**：`computeTransitionWindows` 列出全部过渡窗口（段首与前无相接段 → [start, start+inH)；段尾 → [end-outH, 后接锚点]——后段段首过渡并入同一窗口）；每侧 ≤ 段长一半 → 任意两窗口不相交（无打架）；命中 → 双锚点世界按曲线互溶（段侧=段生效态拉伸/提前，全局侧=全局轨道应用），未命中 → 常规段/全局。快路径：无任何段属性过渡 → 原零拷贝语义。
 - **混合（lerpLayouts）**：以目标态为骨架逐叶插值（数值 lerp、#rrggbb 通道插值、其他字符串中点切换；数组按索引长度一致时、对象按键并集）；p<=0 → a、p>=1 → b（零开销端点身份）。**过渡曲线（v3.1 用户需求）：切点规格 `{durationSec, easing}`——窗口内先线性进度再按曲线映射（复用 EASINGS 族）；easing=hold 视同硬切（无窗口）**；快路径：无任何切点配置时保持原零拷贝身份语义。
 - **UI/可观察性（v5 修订）**：过渡编辑在侧栏「关键帧」页顶部「过渡」小节——「段首过渡/段尾过渡」两行（时长 + 曲线下拉；提示说明锚点跟随语义：相接段直接互溶 / 全局基线）；时间轴以青色斜纹绘制过渡窗口（与引擎同一 computeTransitionWindows = 所见即所得）；数字输入全局无原生上下箭头。磁性吸附（±0.25s）+ 邻域钳制允许零缝 + CUT_ADJ_EPS=0.05 相接容差（拖边界仍可能改变相接对象，但过渡设置作为段属性永不失效）。i18n 三语同构。验收：vitest 114 例（直接互溶不经过全局/双侧合并连续/改长度不失效/曲线 mid=0.875/hold 退化/段长一半钳制/…）全绿 + smoke-time（引擎 0.435 + 预览像素）ok。
+
+## 27. P0 音频解码重构：手写流控 → 文件流（2026-02-15）
+> 现象：>4MB PCM（≈35s 音频）只解码第一块（35s→11.6s≈4MB）；修复流控后 23.3s（≈8MB）——残留在块边界/pause-resume 停止，属 race 而非背压。结论：不修 race，消灭 race。
+- **结构**：ffmpeg f32le stdout → Node `pipeline(proc.stdout, createWriteStream(tmpPcm))`（文档化背压），渲染侧 `audioDecodeStart`（await 解码完成，返回 token/路径/声道）→ `audioDecodeRead(token, offset, 4MB)` 分块拉取（文件句柄会话内缓存）→ `audioDecodeDispose`（删临时文件）→ `audioDecodeCancel`（kill+清理）。删除全部手写池化/pause/resume/在途泵收尾逻辑。
+- **收益**：截断消除（race 不再存在）+ 解码提前等待重排（start invoke 等待完整解码，UI 经 invoke 异步响应不受影响；播放 ready 由 worker finalize 门控，无早期播放收益）；临时文件 60min≈1.27GB、读毕即删，仍在 4.19GB 堆护栏内。
+- **代价**：磁盘 IO 一次顺序写 + 一次分块读（首次解码延迟窗口 ≈ 编码耗时，与旧推送流相同）；临时文件路径在 app.getPath('temp')，异常退出留残（dispose/cancel/error 三处清理 + 新请求 kill 旧请求）。
+- **验收**：smoke-export 1080p@35 全 fx → ffprobe 35.00s（此前 11.6s/23.3s）；smoke-time 8s 解码 + smoke-visual 音频链全绿；vitest 119 例全绿。

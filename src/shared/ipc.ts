@@ -24,6 +24,14 @@ export const IPC = {
   /** 音频时长探测（0.7.0 护栏）：ffmpeg -i 容器头（不解码）→ 秒或 null */
   audioProbeDuration: 'audio:probe-duration',
 
+  /** 流式解码（P0 重构：ffmpeg stdout → 临时 PCM 文件，Node pipeline 背压——删除手写流控）
+   * start=起子进程并 await 解码完成（返回临时文件路径/声道数）；read=渲染侧按偏移分块拉取；
+   * dispose=读毕清理（删临时文件）；cancel=中断（kill 子进程 + 删临时文件）。 */
+  audioDecodeStart: 'audio:decode-start',
+  audioDecodeRead: 'audio:decode-read',
+  audioDecodeDispose: 'audio:decode-dispose',
+  audioDecodeCancel: 'audio:decode-cancel',
+
   /** 项目保存/加载（T23） */
   projectSave: 'project:save',
   projectLoad: 'project:load',

@@ -64,93 +64,31 @@ const api = {
       ipcRenderer.invoke(IPC.projectReadFile, path),
     readBytes: (path: string): Promise<Uint8Array> => ipcRenderer.invoke('fs:read-bytes', path),
     /**
-     * 流式音频解码：main 的 4MB PCM 分块原样直通 onChunk（preload 不再全量组装复制，
-     * 渲染进程块间可响应 UI）；result 在流结束/失败时 resolve（声道数与采样率）。
-     * cancel：中止本次解码（渲染端换文件/新建项目时调用，杀掉 main 侧 ffmpeg 子进程）。
+     * P0 音频解码（文件流式）：main 用 ffmpeg 解码到临时 PCM 文件后，渲染侧按 4MB 分块
+     * 拉取（audioDecodeRead）→ transfer 进 Worker。start 返回 {token, path}；
+     * read(token, offset, len) → {bytes, eof}；dispose(token) 释放（读毕/失败/取消后调用）。
+     * cancel：中止（换文件/新建项目时调用，杀掉 main 侧 ffmpeg 子进程）。
      */
-    audioDecode: (
-      path: string,
-      onChunk: (data: ArrayBuffer) => void
-    ): {
-      result: Promise<{
-        ok: boolean
-        sampleRate: number
-        channels: number
-        error: string | null
-      }>
-      cancel: () => void
-    } => {
-      let settled = false
-      let token = ''
-      let resolveFn:
-        | ((r: { ok: boolean; sampleRate: number; channels: number; error: string | null }) => void)
-        | null = null
-      let onPcm: ((_e: IpcRendererEvent, m: Record<string, unknown>) => void) | null = null
-      const cleanup = (): void => {
-        if (onPcm) {
-          ipcRenderer.removeListener('audio:pcm', onPcm)
-          onPcm = null
-        }
-      }
-      const finish = (r: {
-        ok: boolean
-        sampleRate: number
-        channels: number
-        error: string | null
-      }): void => {
-        if (settled) return
-        settled = true
-        cleanup()
-        resolveFn?.(r)
-      }
-      const result = new Promise<{
-        ok: boolean
-        sampleRate: number
-        channels: number
-        error: string | null
-      }>((resolve) => {
-        resolveFn = resolve
-      })
-      void ipcRenderer
-        .invoke('audio:decode-start', path)
-        .then((tok: unknown) => {
-          if (settled) return
-          token = String(tok)
-          onPcm = (_e, m) => {
-            if (m.token !== token) return
-            if (m.type === 'chunk') {
-              try {
-                onChunk(m.data as ArrayBuffer)
-              } catch {
-                finish({ ok: false, sampleRate: 0, channels: 0, error: 'chunk-forward-failed' })
-              }
-            } else if (m.type === 'end') {
-              finish({
-                ok: true,
-                sampleRate: (m.sampleRate as number) ?? 0,
-                channels: (m.channels as number) ?? 0,
-                error: null
-              })
-            } else if (m.type === 'error') {
-              finish({
-                ok: false,
-                sampleRate: 0,
-                channels: 0,
-                error: (m.error as string) ?? 'decode-failed'
-              })
-            }
-          }
-          ipcRenderer.on('audio:pcm', onPcm)
-        })
-        .catch(() => finish({ ok: false, sampleRate: 0, channels: 0, error: 'start-failed' }))
-      return {
-        result,
-        cancel: () => {
-          finish({ ok: false, sampleRate: 0, channels: 0, error: 'cancelled' })
-          if (token) void ipcRenderer.invoke('audio:decode-cancel', token)
-        }
-      }
-    }
+    audioDecodeStart: (
+      path: string
+    ): Promise<{
+      ok: boolean
+      token?: string
+      path?: string
+      sampleRate?: number
+      channels?: number
+      error?: string
+    }> => ipcRenderer.invoke(IPC.audioDecodeStart, path),
+    audioDecodeRead: (
+      token: string,
+      offset: number,
+      length: number
+    ): Promise<{ ok: boolean; bytes?: ArrayBuffer; eof?: boolean; error?: string }> =>
+      ipcRenderer.invoke(IPC.audioDecodeRead, token, offset, length),
+    audioDecodeDispose: (token: string): Promise<void> =>
+      ipcRenderer.invoke(IPC.audioDecodeDispose, token),
+    audioDecodeCancel: (token: string): Promise<void> =>
+      ipcRenderer.invoke(IPC.audioDecodeCancel, token)
   },
 
   /** 1.0.0 T7b 流式写盘：invoke 分块写（ACK = fs write 回调；窗口 1 块；position=字节偏移定位写） */

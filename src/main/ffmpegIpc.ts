@@ -1,6 +1,8 @@
 import { BrowserWindow, app, dialog, ipcMain } from 'electron'
 import { spawn } from 'child_process'
+import { createWriteStream } from 'fs'
 import { promises as fs } from 'fs'
+import { pipeline } from 'stream/promises'
 import { join } from 'path'
 import { IPC } from '../shared/ipc'
 import { t } from '../shared/i18n'
@@ -30,31 +32,58 @@ interface MergeInvoke extends MergeRequest {
 /** 合并任务句柄（按 mergeId 取消） */
 const mergeHandles = new Map<string, { kill: () => void }>()
 
-/** 解码会话：token → 子进程（按 token 取消；新请求 kill 旧请求） */
-const audioDecodeSessions = new Map<string, { proc: import('child_process').ChildProcess }>()
-/** 单块 PCM 字节数：4MB 分块 → 渲染进程每次只 ~20ms 反序列化，块间让出事件循环（UI 有响应窗口） */
+/** 解码会话：token → 临时 PCM 文件（P0 重构后无子进程流控；dispose 清理） */
+interface AudioDecodeSession {
+  proc: import('child_process').ChildProcess | null
+  tmpPath: string
+  fh: import('fs/promises').FileHandle | null
+  size: number
+  sampleRate: number
+  channels: number
+  cancelled: boolean
+}
+const audioDecodeSessions = new Map<string, AudioDecodeSession>()
+/** 单块 PCM 字节数：4MB 分块拉取（渲染侧 transfer 进 Worker，块间让出事件循环） */
 const PCM_CHUNK_BYTES = 4 * 1024 * 1024
 
+const pcmTempPath = (token: string): string =>
+  join(app.getPath('temp'), 'niko-audio-' + token + '.pcmf32le')
+
 /**
- * 流式音频解码（预览用）：ffmpeg 子进程解码 stdout 边收边按 4MB 分块推送。
- * 不再全量 concat 驻留（省 main 侧 2×PCM 内存）；渲染进程零解码 CPU；
- * 新请求 kill 旧请求（重复导入不叠加内存）。
+ * P0 结构重构：ffmpeg f32le stdout → 临时 PCM 文件（Node pipeline 文档化背压——删除全部手写
+ * 池化/pause/resume 流控，截断与块边界卡顿由构造消灭）。start 异步等待解码完成（IPC invoke 等待，
+ * 渲染侧 UI 不受影响；60min ≈ 1.27GB 落盘、读毕即删）。新请求 kill 旧请求（重复导入不叠加）。
  */
-async function streamAudioDecode(
-  sender: Electron.WebContents,
-  token: string,
+async function startAudioDecode(
+  sender: Electron.IpcMainInvokeEvent,
   path: string
-): Promise<void> {
+): Promise<{
+  ok: boolean
+  token?: string
+  path?: string
+  sampleRate?: number
+  channels?: number
+  error?: string
+}> {
   const ff = await getFFmpegPath()
-  if (!ff) {
-    sender.send('audio:pcm', { token, type: 'error', error: 'no-ffmpeg' })
-    return
-  }
+  if (!ff) return { ok: false, error: 'no-ffmpeg' }
   // 新请求 kill 旧请求
   for (const [tok, s] of audioDecodeSessions) {
-    s.proc.kill()
+    if (s.proc) s.proc.kill()
     audioDecodeSessions.delete(tok)
   }
+  const token = sender.sender.id + '-' + Date.now()
+  const tmpPath = pcmTempPath(token)
+  const session: AudioDecodeSession = {
+    proc: null,
+    tmpPath,
+    fh: null,
+    size: 0,
+    sampleRate: 44100,
+    channels: 2,
+    cancelled: false
+  }
+  audioDecodeSessions.set(token, session)
   const proc = spawn(
     ff,
     [
@@ -75,107 +104,85 @@ async function streamAudioDecode(
     ],
     { windowsHide: true }
   )
-  audioDecodeSessions.set(token, { proc })
-  const sendChunk = (part: Buffer): void => {
-    if (sender.isDestroyed()) return
-    sender.send('audio:pcm', {
-      token,
-      type: 'chunk',
-      data: part.buffer.slice(part.byteOffset, part.byteOffset + part.byteLength)
-    })
-  }
+  session.proc = proc
   let errTail = ''
-  let totalBytes = 0
-  let exitCode: number | null = null
-  let finished = false
-  /**
-   * 背压修复（60min 验收实测：主进程 OOM Buffer.concat）：
-   * 原实现每 64KB data 事件做一次 Buffer.concat([pending, d]) 且无 socket 背压——
-   * 渲染进程消费慢时 4MB 消息在 main 内排队至 GB 级；1.27GB(2ch f32) 流叠加 concat 拷贝 → 主进程 OOM。
-   * 修复：① 池化批拼接（每 4MB 才 concat 一次）；② stdout.pause() 真背压（池超 2×块暂停，
-   * ffmpeg 阻塞在着 OS 管道，消费追上再 resume）——main 侧常驻上限 ≈ 8MB。
-   */
-  let pool: Buffer[] = []
-  let poolLen = 0
-  let sending = false
-  /** 收尾：必须等所有在途泵完成（否则在途块晚于 end 到达 → worker 截断，曾致音频 60s→24.9s） */
-  const finish = async (): Promise<void> => {
-    if (finished) return
-    while (sending) await new Promise((r) => setImmediate(r))
-    if (finished) return
-    finished = true
-    audioDecodeSessions.delete(token)
-    if (poolLen > 0) {
-      totalBytes += poolLen
-      sendChunk(Buffer.concat(pool))
-      pool = []
-      poolLen = 0
-    }
-    if (exitCode === 0 && totalBytes > 0) {
-      sender.send('audio:pcm', { token, type: 'end', sampleRate: 44100, channels: 2 })
-    } else {
-      sender.send('audio:pcm', { token, type: 'error', error: errTail || 'decode-failed' })
-    }
-  }
-  const pump = async (): Promise<void> => {
-    if (sending || finished) return
-    sending = true
-    try {
-      while (!finished && poolLen >= PCM_CHUNK_BYTES) {
-        proc.stdout.pause()
-        const joined = poolLen === PCM_CHUNK_BYTES ? pool[0] : Buffer.concat(pool)
-        pool = []
-        poolLen = 0
-        let off = 0
-        while (off < joined.length) {
-          const part = joined.subarray(off, off + PCM_CHUNK_BYTES)
-          off += part.byteLength
-          totalBytes += part.byteLength
-          sendChunk(part)
-          await new Promise((r) => setImmediate(r))
-        }
-      }
-    } finally {
-      sending = false
-      // 背压死锁修复（实测：>4MB 音频只解出第一块 ≈11.6s）：暂停生效前列队的数据可能又攒满一块，
-      // 原逻辑 poolLen≥4MB 时既不 resume 也不再触发 pump → ffmpeg 阻塞在管道、流停在此处。
-      // 修复：残留满块立即再泵（循环），否则才 resume——任何状态都保持流动直至 EOF。
-      if (!finished) {
-        if (poolLen >= PCM_CHUNK_BYTES) {
-          void pump()
-        } else {
-          proc.stdout.resume()
-        }
-      }
-    }
-  }
-  proc.stdout.on('data', (d: Buffer) => {
-    pool.push(d)
-    poolLen += d.length
-    // 未到 4MB 上限前保持流动；pump 内部对 ffmpeg 施加 pause/resume（超过阈值的真背压）
-    if (poolLen >= PCM_CHUNK_BYTES) void pump()
-  })
   proc.stderr.on('data', (d: Buffer) => {
     errTail = String(d).slice(-500)
   })
-  proc.on('error', () => {
-    exitCode = 1
-    void finish()
+  const closeP = new Promise<number | null>((res) => {
+    proc.on('close', res)
   })
-  proc.on('close', (code) => {
-    exitCode = code ?? 1
-    void finish()
-  })
+  try {
+    await pipeline(proc.stdout, createWriteStream(tmpPath, { flags: 'w' }))
+    const code = await closeP
+    if (session.cancelled) {
+      await fs.unlink(tmpPath).catch(() => undefined)
+      audioDecodeSessions.delete(token)
+      return { ok: false, error: 'cancelled' }
+    }
+    if (code !== 0) {
+      await fs.unlink(tmpPath).catch(() => undefined)
+      audioDecodeSessions.delete(token)
+      return { ok: false, error: errTail || 'decode-failed' }
+    }
+    const st = await fs.stat(tmpPath)
+    session.size = st.size
+    return {
+      ok: true,
+      token,
+      path: tmpPath,
+      sampleRate: session.sampleRate,
+      channels: session.channels
+    }
+  } catch (err) {
+    session.cancelled = true
+    await fs.unlink(tmpPath).catch(() => undefined)
+    audioDecodeSessions.delete(token)
+    return { ok: false, error: err instanceof Error ? err.message : String(err) }
+  }
 }
 
-/** 流式解码开始（invoke）：返回 token；结果经 'audio:pcm' 事件推给该 sender */
-async function startAudioDecodeStream(
-  e: Electron.IpcMainInvokeEvent,
-  path: string
-): Promise<string> {
-  const token = e.sender.id + '-' + Date.now()
-  void streamAudioDecode(e.sender, token, path)
-  return token
+/** 按偏移分块读取已解码 PCM（文件句柄会话内缓存；EOF 由 offset+bytesRead ≥ size 判定） */
+async function readPcmChunk(
+  token: string,
+  offset: number,
+  length: number
+): Promise<{ ok: boolean; bytes?: ArrayBuffer; eof?: boolean; error?: string }> {
+  const s = audioDecodeSessions.get(token)
+  if (!s) return { ok: false, error: 'gone' }
+  try {
+    const fh = s.fh ?? (s.fh = await fs.open(s.tmpPath, 'r'))
+    const want = Math.max(0, Math.min(PCM_CHUNK_BYTES, length, s.size - offset))
+    if (want <= 0) return { ok: true, bytes: new ArrayBuffer(0), eof: true }
+    const buf = Buffer.allocUnsafe(want)
+    const { bytesRead } = await fh.read(buf, 0, want, offset)
+    return {
+      ok: true,
+      bytes: buf.buffer.slice(buf.byteOffset, buf.byteOffset + bytesRead),
+      eof: offset + bytesRead >= s.size
+    }
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) }
+  }
+}
+
+/** 读毕/中断清理：关句柄、删临时文件、移除会话（幂等） */
+async function disposeAudioDecode(token: string): Promise<void> {
+  const s = audioDecodeSessions.get(token)
+  if (!s) return
+  await s.fh?.close().catch(() => undefined)
+  s.fh = null
+  await fs.unlink(s.tmpPath).catch(() => undefined)
+  audioDecodeSessions.delete(token)
+}
+
+/** 解码中断：kill 子进程 + 清会话（渲染侧切换音频/新建项目时调用） */
+async function cancelAudioDecode(token: string): Promise<void> {
+  const s = audioDecodeSessions.get(token)
+  if (!s) return
+  s.cancelled = true
+  s.proc?.kill()
+  await disposeAudioDecode(token)
 }
 
 /** 注册 ffmpeg 三源管理 + 导出合并的全部 IPC（规格 §3.4/§3.3） */
@@ -226,20 +233,18 @@ export function registerFfmpegIpc(): void {
     return true
   })
 
-  ipcMain.handle('audio:decode-start', async (e, path: string) => {
-    if (typeof path !== 'string' || !path) return 'bad-path'
-    return startAudioDecodeStream(e, path)
+  ipcMain.handle(IPC.audioDecodeStart, async (e, path: string) => {
+    if (typeof path !== 'string' || !path) return { ok: false, error: 'bad-path' }
+    return startAudioDecode(e, path)
   })
 
-  ipcMain.handle('audio:decode-cancel', (_e, token: string) => {
-    const tok = String(token)
-    const s = audioDecodeSessions.get(tok)
-    if (s) {
-      s.proc.kill()
-      audioDecodeSessions.delete(tok)
-    }
-    return true
-  })
+  ipcMain.handle(IPC.audioDecodeRead, (_e, token: string, offset: number, length: number) =>
+    readPcmChunk(String(token), Number(offset) || 0, Number(length) || PCM_CHUNK_BYTES)
+  )
+
+  ipcMain.handle(IPC.audioDecodeDispose, (_e, token: string) => disposeAudioDecode(String(token)))
+
+  ipcMain.handle(IPC.audioDecodeCancel, (_e, token: string) => cancelAudioDecode(String(token)))
 
   // 0.7.0 超长音频护栏：导入前探测容器头时长（不解码；ffmpeg 不可用/解析失败 → null 由调用方走原路径）
   ipcMain.handle(IPC.audioProbeDuration, async (_e, path: string): Promise<number | null> => {
