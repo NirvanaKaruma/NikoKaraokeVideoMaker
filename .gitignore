@@ -13,11 +13,10 @@ smoke-*-report.json
 TEST-ARTIFACTS/
 .plan/
 
-# Local-only docs (not uploaded to the public repo)
-README-dev.md
-TEST.md
-nikokaraoke.md
-CLAUDE.md
-docs/
+# 版本化过程文件（里程碑任务清单快照——历史过程，不入库）
+nikokaraoke-0*.md
 lint-*.txt
 vislog*.txt
+
+# 本地专用（不随公开仓库）
+CLAUDE.md
