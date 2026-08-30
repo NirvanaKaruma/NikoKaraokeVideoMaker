@@ -309,19 +309,18 @@ export const zhCn = {
     cutCurve: '过渡曲线',
     cutHead: '段首过渡',
     cutTail: '段尾过渡',
-    cutPair: '与段落 {i} 的过渡',
-    cutHeadHint: '「全局基线 → 本段」过渡：时长（居中互溶，两侧各半）+ 曲线。0 = 硬切。',
-    cutTailHint: '「本段 → 下一锚点（后段起始值 / 全局基线）」过渡：时长 + 曲线。0 = 硬切。',
-    cutPairHint: '本段与段落 {i} 的共用过渡（两端点相接）：时长居中互溶 + 曲线。0 = 硬切。',
-    cutPairInactive: '与段落 {i} 的过渡已保留 {d}s——重新相接后生效',
+    cutHeadHint:
+      '段首过渡：本段开头与上一锚点互溶——上一锚点 = 相接的前段（直接互溶）或全局基线。0 = 硬切。',
+    cutTailHint:
+      '段尾过渡：本段结尾与下一锚点互溶——下一锚点 = 相接的后段（直接互溶）或全局基线。0 = 硬切。',
     hint: '点击/拖动轨道试听定位；剪切出段落后可分别编辑。',
     segmentLabel: '段落 {i}',
     inherit: '跟随全局',
     editTarget: '当前编辑对象',
-    editGlobal: '全局基线',
+    editGlobal: '全局',
     editSegment: '段落 {i}',
     editKf: '段落 {i} · 关键帧 t={t}s',
-    editKfGlobal: '全局基线 · 关键帧 t={t}s',
+    editKfGlobal: '全局 · 关键帧 t={t}s',
     overlap: '⚠ 段落有重叠——重叠区间按排序靠前者生效'
   },
   kf: {

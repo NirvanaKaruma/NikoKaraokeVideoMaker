@@ -21,10 +21,8 @@ import {
   clampSegmentBoundsToNeighbors,
   clampSegmentsToDuration,
   getByPath,
-  remapTransitionsAfterSplit,
   splitTimelineAt,
   type CutTransitionSpec,
-  type EasingName,
   type Keyframe,
   type PropertyTrack
 } from '@shared/timeline'
@@ -165,8 +163,12 @@ export function useProject(): {
   removeSegment: (segId: string) => void
   splitSegment: (atSec: number, durationSec?: number) => void
   updateSegmentBounds: (segId: string, startSec: number, endSec: number) => void
-  /** 切点过渡（NLE 式：过渡属于编辑点/切点；cutKey = 左锚点|右锚点，'g' = 全局基线；patch = 时长/曲线，0–3s 钳制） */
-  updateCutTransition: (cutKey: string, patch: Partial<CutTransitionSpec>) => void
+  /** 段属性过渡（v4：过渡属于段落本身；boundary='in' 段首淡入 | 'out' 段尾淡出；patch = 时长/曲线，0–3s 钳制） */
+  updateSegmentTransition: (
+    segId: string,
+    boundary: 'in' | 'out',
+    patch: Partial<CutTransitionSpec>
+  ) => void
   /** 段关键帧整体替换（T5；t 相对片段起点） */
   updateSegmentTracks: (segId: string, tracks: PropertyTrack[]) => void
   /** 全局基线关键帧整体替换（1.1.0 #3；t 绝对秒） */
@@ -772,22 +774,9 @@ export function useProject(): {
     (segId: string) => {
       pushHistory()
       const cur = layoutRef.current
-      // 切点过渡（NLE 式）：删除段时一并清除其所有切点配置（左/右锚点命中即删）
-      const trans = Object.fromEntries(
-        Object.entries(cur.timeline?.transitions ?? {}).filter(([k]) => {
-          const i = k.indexOf('|')
-          const L = k.slice(0, i)
-          const R = k.slice(i + 1)
-          return L !== segId && R !== segId
-        })
-      )
       applyLayout({
         ...cur,
-        timeline: {
-          ...(cur.timeline ?? { segments: [] }),
-          segments: (cur.timeline?.segments ?? []).filter((s) => s.id !== segId),
-          transitions: trans
-        }
+        timeline: { segments: (cur.timeline?.segments ?? []).filter((s) => s.id !== segId) }
       })
     },
     [applyLayout, pushHistory]
@@ -804,26 +793,22 @@ export function useProject(): {
       // 纯函数（含无片段=整首切两段；连续多次分割无重叠——单测覆盖）
       const res = splitTimelineAt({ segments: cur.timeline?.segments ?? [] }, atSec, durationSec)
       if (!res.changed) return
-      // 切点过渡（NLE 式）按分段结果重映射：左锚点=原段 id 的切点归右半段（新段）；
-      // 右锚点=原段 id 的切点（段首）留在左半段；新内边界默认硬切（无配置）。
+      // 段属性过渡（v4）：属于段落本身 → 分割时左半段保留 transitionIn、右半段保留 transitionOut
+      // （与「进入随左、离开随右」的自然直觉一致；新内边界默认硬切）
       const origId = (cur.timeline?.segments ?? []).find(
         (s) => atSec > s.startSec && atSec < s.endSec
       )?.id
-      const newId = origId
-        ? res.segments.find((s) => s.id !== origId && s.startSec >= atSec)?.id
-        : null
-      const trans =
-        origId && newId
-          ? remapTransitionsAfterSplit(cur.timeline?.transitions ?? {}, origId, newId)
-          : { ...(cur.timeline?.transitions ?? {}) }
+      const segments = res.segments.map((s) =>
+        s.id === origId
+          ? { ...s, transitionOut: undefined }
+          : s.startSec >= atSec
+            ? { ...s, transitionIn: undefined }
+            : s
+      )
       pushHistory()
       applyLayout({
         ...cur,
-        timeline: {
-          ...(cur.timeline ?? { segments: [] }),
-          segments: res.segments,
-          transitions: trans
-        }
+        timeline: { ...(cur.timeline ?? { segments: [] }), segments }
       })
     },
     [applyLayout, pushHistory]
@@ -844,27 +829,30 @@ export function useProject(): {
     [applyLayout, pushHistory]
   )
 
-  /** 切点过渡（NLE 式，过渡属于编辑点）：
-   * cutKey = 「左锚点|右锚点」（'g' = 全局基线）；patch = 时长/曲线部分更新；
+  /** 段属性过渡（v4，过渡属于段落本身——改长度/增删相邻段都不失效）：
+   * boundary='in' 段首淡入（全局→段）| 'out' 段尾淡出（段→全局）；patch = 时长/曲线；
    * 时长 0–3s，<0.05 视为未配置 → 删除（快路径/序列化干净）；easing 默认 linear */
-  const updateCutTransition = useCallback(
-    (cutKey: string, patch: Partial<CutTransitionSpec>) => {
+  const updateSegmentTransition = useCallback(
+    (segId: string, boundary: 'in' | 'out', patch: Partial<CutTransitionSpec>) => {
       pushHistory()
       const cur = layoutRef.current
-      const trans = { ...(cur.timeline?.transitions ?? {}) }
-      const prev = trans[cutKey] ?? { durationSec: 0, easing: 'linear' as EasingName }
-      const spec: CutTransitionSpec = {
-        durationSec: Number.isFinite(patch.durationSec)
-          ? Math.min(3, Math.max(0, patch.durationSec as number))
-          : prev.durationSec,
-        easing: patch.easing ?? prev.easing
-      }
-      if (spec.durationSec >= 0.05) trans[cutKey] = spec
-      else delete trans[cutKey]
-      applyLayout({
-        ...cur,
-        timeline: { ...(cur.timeline ?? { segments: [] }), transitions: trans }
+      const segments = (cur.timeline?.segments ?? []).map((s) => {
+        if (s.id !== segId) return s
+        const prev = boundary === 'in' ? s.transitionIn : s.transitionOut
+        const spec: CutTransitionSpec = {
+          durationSec: Number.isFinite(patch.durationSec)
+            ? Math.min(3, Math.max(0, patch.durationSec as number))
+            : (prev?.durationSec ?? 0),
+          easing: patch.easing ?? prev?.easing ?? 'linear'
+        }
+        if (spec.durationSec >= 0.05) {
+          return boundary === 'in' ? { ...s, transitionIn: spec } : { ...s, transitionOut: spec }
+        }
+        return boundary === 'in'
+          ? { ...s, transitionIn: undefined }
+          : { ...s, transitionOut: undefined }
       })
+      applyLayout({ ...cur, timeline: { ...(cur.timeline ?? { segments: [] }), segments } })
     },
     [applyLayout, pushHistory]
   )
@@ -1350,7 +1338,7 @@ export function useProject(): {
     removeSegment,
     splitSegment,
     updateSegmentBounds,
-    updateCutTransition,
+    updateSegmentTransition,
     updateSegmentTracks,
     updateDocKeyframes,
     addEmptyFrame,

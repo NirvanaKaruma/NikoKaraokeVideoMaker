@@ -42,6 +42,22 @@ export interface TimelineSegment {
   keyframes: PropertyTrack[]
   /** 段内空关键帧槽（裸创建；t 相对段起点） */
   frameSlots?: number[]
+  /**
+   * 段属性过渡（v4，用户确认：**过渡属于段落本身**——改长度/增删相邻段都不会失效）：
+   * - transitionIn：段首过渡——本段开头 durationSec 秒**从全局基线淡入**（曲线 easing；0/hold = 硬切）；
+   * - transitionOut：段尾过渡——本段结尾 durationSec 秒**向全局基线淡出**。
+   * 两个窗口各在段头/段尾、各 ≤ 段长一半 → 天然不重叠、无归属歧义；相接处 = 段尾淡出 + 下一段首淡入（都过全局基线，连续）。
+   */
+  transitionIn?: CutTransitionSpec
+  transitionOut?: CutTransitionSpec
+}
+
+/** 过渡规格（时长 + 曲线；durationSec 0 = 硬切；easing hold = 硬切退化） */
+export interface CutTransitionSpec {
+  /** 时长（秒，0 = 硬切） */
+  durationSec: number
+  /** 过渡曲线（默认 linear） */
+  easing: EasingName
 }
 
 export interface TimelineDocument {
@@ -53,22 +69,6 @@ export interface TimelineDocument {
   keyframes?: PropertyTrack[]
   /** 空关键帧槽（裸创建的关键帧：无任何属性，可点开后逐属性添加；绝对秒） */
   frameSlots?: number[]
-  /**
-   * 切点过渡（NLE 式：**过渡属于编辑点/切点，不属于段落**——对标 Premiere/DaVinci）：
-   * 键 =「左锚点|右锚点」（'g' = 全局基线；段 id = 相接处），值 = 时长 + 过渡曲线。
-   * 解释：段间相接 = 一条切点 A|B（居中互溶）；空隙/段首/段尾 = 各自切点（A|g / g|B）。
-   * 切点身份 = 锚点对 → 拖动分离再回拖，原切点设置保留并重新生效（跟编辑点走，不跟几何走）。
-   * 相接判定 = CUT_ADJ_EPS 容差（磁性吸附后精确相接；微小拖动不再丢失过渡）。
-   */
-  transitions?: Record<string, CutTransitionSpec>
-}
-
-/** 切点过渡规格（键 = 锚点对；durationSec 0 = 硬切；easing hold = 硬切退化） */
-export interface CutTransitionSpec {
-  /** 时长（秒，0 = 硬切） */
-  durationSec: number
-  /** 过渡曲线（默认 linear） */
-  easing: EasingName
 }
 
 /** 时间轴存在判定（导出/预览接入用：有片段 → 逐帧 resolve） */
@@ -341,148 +341,95 @@ function applyTrackSet(
  * 解析 tSec 的完整布局：**全局基线轨道（整曲，绝对 t）→ 段布局/段轨道覆盖**（全局为底、段级为顶）。
  * 不修改输入（返回新对象）；path 命中失败/值类型不符 → 跳过该轨道（容错）。
  *
- * 锚点间过渡（NLE 式：**过渡属于切点/编辑点，不属于段落**——对标 Premiere/DaVinci）：
+ * 锚点间过渡（v5 段属性 + 目标跟随模型，用户确认：**过渡属于段落本身**——改长度/增删相邻段都不失效；
+ * 相接的两段应**直接互溶**，不经过背景层）：
  * - 段落到帧：applyTrackSet 内「基准→首帧」按首帧过渡方式渐变（hold = 硬切）；
- * - 切点过渡（doc.transitions）：键 = 「左锚点|右锚点」（'g' = 全局基线），值 = 秒（0/缺失 = 硬切）。
- *   段间相接 = 一条切点 A|B（居中互溶）；空隙/段首/段尾 = 各自切点（A|g / g|B 居中、半隙钳制）。
- *   窗口按相邻切点距离钳制（每侧 ≤ 半个净距）→ 任意两条窗口在构造上不相交（无嵌套混合/打架）；
- *   被截断的外侧盈余转给内侧（段首/段尾与全局的切点得到完整时长）。无过渡配置 → 原零拷贝语义。
+ * - 段属性过渡：transitionIn（段首 d 秒与**上一锚点**（相接前段或全局基线）互溶）/ transitionOut（段尾 d 秒
+ *   与**下一锚点**（相接后段或全局基线）互溶）——设置属于段落、目标跟随场景；
+ * - 相接处两段都设过渡 → 合并为**一条连续互溶窗**（A↔B 直接互溶，时长 = 两侧之和；曲线取段尾侧）；
+ * - 每侧窗口 ≤ 段长一半 → 任意两窗口不相交（无嵌套混合/打架）。无过渡配置 → 原零拷贝语义。
  */
-export const GLOBAL_ANCHOR = 'g'
 
-/** 切点键（编辑点身份 = 锚点对；段 id 或 'g' = 全局基线） */
-export function headCutKey(segId: string): string {
-  return GLOBAL_ANCHOR + '|' + segId
-}
-export function tailCutKey(segId: string): string {
-  return segId + '|' + GLOBAL_ANCHOR
-}
-export function pairCutKey(aId: string, bId: string): string {
-  return aId + '|' + bId
-}
-
-/**
- * 分割后切点重映射（NLE 式切点身份 = 锚点对）：
- * 左锚点 = 原段（段尾切点 / 与后段的切点）→ 归右半段（newId）；
- * 右锚点 = 原段（段首切点 / 与前段的切点）留在左半段（保持 origId）。
- */
-export function remapTransitionsAfterSplit(
-  transitions: Record<string, CutTransitionSpec>,
-  origId: string,
-  newId: string
-): Record<string, CutTransitionSpec> {
-  const out: Record<string, CutTransitionSpec> = {}
-  for (const [k, v] of Object.entries(transitions)) {
-    const i = k.indexOf('|')
-    const L = k.slice(0, i)
-    out[(L === origId ? newId : L) + '|' + k.slice(i + 1)] = v
-  }
-  return out
-}
-
-/** 切点过渡窗口（计算产物）：窗口 = [pos - hL, pos + hR)；leftId/rightId = 左右锚点段 id 或 'g' */
-export interface CutWindow {
-  key: string
-  pos: number
-  hL: number
-  hR: number
-  leftId: string
-  rightId: string
-  /** 过渡曲线（线性默认） */
+/** 过渡窗口（引擎与时间轴可视化共用的计算产物）：[w0, w1) 内 from↔to 按曲线互溶；'g' = 全局基线 */
+export interface TransitionWindow {
+  fromId: string
+  toId: string
+  w0: number
+  w1: number
   easing: EasingName
 }
 
+/** 全局基线锚点标识 */
+export const GLOBAL_ANCHOR = 'g'
+
 /**
- * 计算全部生效切点窗口（纯函数；引擎解析与时间轴可视化共用 = 所见即所得）。
- * 切点清单：每段起点（左锚点 = 相接前段或 g）与终点（右锚点 = 相接后段或 g），按位置排序去重；
- * 每侧时长 d/2 并按相邻切点「半个净距」钳制（任意两窗口在构造上不相交）；
- * 外侧规则：歌曲起点/尾的切点外侧无内容 → 0，内侧承接完整时长 d（NLE 淡入/淡出语义）。
- * 相接判定容差 = CUT_ADJ_EPS（磁性吸附后微小拖动不丢配对）；hold 曲线 = 硬切退化。
+ * 计算全部生效过渡窗口（纯函数 = 所见即所得）：
+ * 段首（前面无相接段）→ [start, start+inH)；段尾 → 与后接锚点（相接段或全局）互溶；
+ * 后段也设段首过渡时二者合并（[end-outH, nextStart+inH)，曲线取段尾侧）；每侧 ≤ 段长一半。
  */
-export function computeCutWindows(
-  doc: TimelineDocument,
-  transitions: Record<string, CutTransitionSpec>
-): CutWindow[] {
+export function computeTransitionWindows(doc: TimelineDocument): TransitionWindow[] {
   const segs = [...doc.segments].sort((a, b) => a.startSec - b.startSec)
-  const raw: { key: string; pos: number }[] = []
-  const seen = new Set<string>()
+  const hOf = (spec: CutTransitionSpec | undefined, dur: number): number =>
+    spec && spec.durationSec > 0 && spec.easing !== 'hold' ? Math.min(spec.durationSec, dur / 2) : 0
+  const out: TransitionWindow[] = []
   for (const s of segs) {
+    const dur = Math.max(0.1, s.endSec - s.startSec)
+    const inH = hOf(s.transitionIn, dur)
+    const outH = hOf(s.transitionOut, dur)
     const prev = segs
       .filter((q) => q.id !== s.id && q.endSec <= s.startSec + CUT_ADJ_EPS)
       .sort((a, b) => b.endSec - a.endSec)[0]
+    const prevAdj = prev && Math.abs(prev.endSec - s.startSec) <= CUT_ADJ_EPS ? prev : null
     const next = segs
       .filter((q) => q.id !== s.id && q.startSec >= s.endSec - CUT_ADJ_EPS)
       .sort((a, b) => a.startSec - b.startSec)[0]
-    const hKey =
-      prev && Math.abs(prev.endSec - s.startSec) <= CUT_ADJ_EPS
-        ? pairCutKey(prev.id, s.id)
-        : headCutKey(s.id)
-    const tKey =
-      next && Math.abs(next.startSec - s.endSec) <= CUT_ADJ_EPS
-        ? pairCutKey(s.id, next.id)
-        : tailCutKey(s.id)
-    if (!seen.has(hKey)) {
-      seen.add(hKey)
-      raw.push({ key: hKey, pos: s.startSec })
+    const nextAdj = next && Math.abs(next.startSec - s.endSec) <= CUT_ADJ_EPS ? next : null
+    // 段首：前面无相接段 → 从全局基线互溶（相接时由前段的段尾窗口统一覆盖）
+    if (!prevAdj && inH > 0) {
+      out.push({
+        fromId: GLOBAL_ANCHOR,
+        toId: s.id,
+        w0: s.startSec,
+        w1: s.startSec + inH,
+        easing: s.transitionIn?.easing ?? 'linear'
+      })
     }
-    if (!seen.has(tKey)) {
-      seen.add(tKey)
-      raw.push({ key: tKey, pos: s.endSec })
+    // 段尾：与后接锚点互溶（GLOBAL 或相接段）；后段段首过渡并入同一窗口（A↔B 直接互溶）
+    const nInH = nextAdj
+      ? hOf(nextAdj.transitionIn, Math.max(0.1, nextAdj.endSec - nextAdj.startSec))
+      : 0
+    if (outH > 0 || nInH > 0) {
+      out.push({
+        fromId: s.id,
+        toId: nextAdj ? nextAdj.id : GLOBAL_ANCHOR,
+        w0: s.endSec - outH,
+        w1: (nextAdj ? nextAdj.startSec : s.endSec) + nInH,
+        easing: s.transitionOut?.easing ?? nextAdj?.transitionIn?.easing ?? 'linear'
+      })
     }
-  }
-  raw.sort((a, b) => a.pos - b.pos)
-  const out: CutWindow[] = []
-  for (let i = 0; i < raw.length; i++) {
-    const spec = transitions[raw[i].key]
-    // 缺失 / 0 时长 / hold（硬切退化）→ 无过渡窗口
-    if (!spec || spec.durationSec <= 0 || spec.easing === 'hold') continue
-    const d = spec.durationSec
-    const prevPos = i > 0 ? raw[i - 1].pos : 0
-    const nextPos = i < raw.length - 1 ? raw[i + 1].pos : Number.POSITIVE_INFINITY
-    const dl = d / 2
-    const capL = (raw[i].pos - prevPos) / 2
-    const capR = (nextPos - raw[i].pos) / 2
-    // 外侧规则：歌曲起点（pos≈0）左侧无内容 → 0，右侧承接完整时长 d；
-    // 歌曲尾切点同理（右侧无内容 → 0，左侧承接 d）；其余居中 d/2×2；全部受邻居半距钳制。
-    const outerL = raw[i].pos <= 0.001
-    const outerR = i >= raw.length - 1
-    const hL = outerL ? 0 : outerR ? Math.min(d, capL) : Math.min(dl, capL)
-    const hR = outerR ? 0 : outerL ? Math.min(d, capR) : Math.min(dl, capR)
-    const [L, R] = raw[i].key.split('|')
-    if (hL + hR <= 0) continue
-    out.push({
-      key: raw[i].key,
-      pos: raw[i].pos,
-      hL,
-      hR,
-      leftId: L,
-      rightId: R,
-      easing: spec.easing
-    })
   }
   return out
 }
 
-/**
- * 解析 tSec 的完整布局（公开入口）：快路径（无切点过渡）→ 原零拷贝语义；
- * 否则按生效切点窗口解析（命中 → 双锚点世界互溶；未命中 → 常规段/全局）。
- */
+/** 全局基线解析（基准层：全局轨道绝对 t 应用） */
+function globalResolve(layout: ProjectLayout, doc: TimelineDocument, tSec: number): ProjectLayout {
+  const globalTracks = doc.keyframes ?? []
+  return globalTracks.length > 0 ? applyTrackSet(layout, globalTracks, tSec) : layout
+}
+
+/** 解析 tSec 的完整布局（公开入口）：快路径（无段属性过渡）→ 原零拷贝语义 */
 export function resolveLayoutAt(layout: ProjectLayout, tSec: number): ProjectLayout {
   const doc = layout.timeline ?? { segments: [] }
-  const transitions = doc.transitions ?? {}
-  if (Object.keys(transitions).length === 0) {
+  if (!doc.segments.some((s) => s.transitionIn || s.transitionOut)) {
     return resolveCore(layout, doc, tSec)
   }
-  return resolveTrans(layout, doc, tSec, transitions)
+  return resolveTransitioned(layout, doc, tSec)
 }
 
 /** 常规解析（无过渡窗口命中）：生效段或全局 */
 function resolveCore(layout: ProjectLayout, doc: TimelineDocument, tSec: number): ProjectLayout {
-  const globalTracks = doc.keyframes ?? []
   const seg = segmentAt(doc, tSec)
-  if (!seg) {
-    return globalTracks.length > 0 ? applyTrackSet(layout, globalTracks, tSec) : layout
-  }
+  if (!seg) return globalResolve(layout, doc, tSec)
   return resolveSegActive(layout, doc, seg, tSec)
 }
 
@@ -506,39 +453,35 @@ function resolveSegActive(
   return applyTrackSet(withGlobal, seg.keyframes ?? [], tSec - seg.startSec)
 }
 
-/** 切点过渡解析（非递归）：命中生效窗口 → 双锚点世界按曲线互溶；未命中 → 常规 */
-function resolveTrans(
+/** 段属性过渡解析：命中过渡窗口 → 双锚点世界按曲线互溶（段侧可拉伸/提前，全局侧=基线）；未命中 → 常规 */
+function resolveTransitioned(
   layout: ProjectLayout,
   doc: TimelineDocument,
-  tSec: number,
-  transitions: Record<string, CutTransitionSpec>
+  tSec: number
 ): ProjectLayout {
-  const wins = computeCutWindows(doc, transitions)
-  if (wins.length === 0) return resolveCore(layout, doc, tSec)
-  const w = wins.find((x) => tSec >= x.pos - x.hL && tSec < x.pos + x.hR)
-  if (!w) return resolveCore(layout, doc, tSec)
-  const p = Math.min(1, Math.max(0, (tSec - (w.pos - w.hL)) / Math.max(0.001, w.hL + w.hR)))
-  // 过渡曲线：先线性进度 → 曲线映射（与帧轨道同族；hold 已在窗口计算处硬切退化）
-  const eased = EASINGS[w.easing]?.(p) ?? p
-  const from = resolveAnchor(layout, doc, w.leftId, tSec)
-  const to = resolveAnchor(layout, doc, w.rightId, tSec)
-  return lerpLayouts(from, to, eased)
+  for (const w of computeTransitionWindows(doc)) {
+    if (tSec < w.w0 || tSec >= w.w1) continue
+    const p = Math.min(1, Math.max(0, (tSec - w.w0) / Math.max(0.001, w.w1 - w.w0)))
+    const eased = EASINGS[w.easing]?.(p) ?? p
+    return lerpLayouts(
+      resolveAnchorWorld(layout, doc, w.fromId, tSec),
+      resolveAnchorWorld(layout, doc, w.toId, tSec),
+      eased
+    )
+  }
+  return resolveCore(layout, doc, tSec)
 }
 
-/** 锚点解析：'g' = 全局基线（轨道应用）；段 id = 段生效态（拉伸/提前语义由 resolveSegActive 处理） */
-function resolveAnchor(
+/** 锚点世界解析：'g' = 全局基线；段 id = 段生效态（拉伸/提前由 resolveSegActive 处理） */
+function resolveAnchorWorld(
   layout: ProjectLayout,
   doc: TimelineDocument,
   id: string,
   tSec: number
 ): ProjectLayout {
-  if (id === GLOBAL_ANCHOR || id === '') {
-    const globalTracks = doc.keyframes ?? []
-    return globalTracks.length > 0 ? applyTrackSet(layout, globalTracks, tSec) : layout
-  }
+  if (id === GLOBAL_ANCHOR) return globalResolve(layout, doc, tSec)
   const seg = doc.segments.find((s) => s.id === id)
-  if (!seg) return resolveAnchor(layout, doc, GLOBAL_ANCHOR, tSec)
-  return resolveSegActive(layout, doc, seg, tSec)
+  return seg ? resolveSegActive(layout, doc, seg, tSec) : globalResolve(layout, doc, tSec)
 }
 
 /**

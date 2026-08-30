@@ -1,8 +1,7 @@
 import { useRef } from 'react'
 import {
   CUT_ADJ_EPS,
-  computeCutWindows,
-  type CutTransitionSpec,
+  computeTransitionWindows,
   type PropertyTrack,
   type TimelineSegment
 } from '@shared/timeline'
@@ -20,8 +19,7 @@ export interface TimelineBarProps {
   onSplitAt: (t: number) => void
   onRemoveSegment: (id: string) => void
   onUpdateBounds: (id: string, startSec: number, endSec: number) => void
-  /** 切点过渡配置（doc.transitions 映射：锚点对 -> {时长,曲线}；编辑入口在侧栏「关键帧」页） */
-  transitions?: Record<string, CutTransitionSpec>
+  /** 段属性过渡编辑入口在侧栏「关键帧」页；本组件仅绘制过渡窗口可视化（segmentTransitionWindows） */
   /** 重叠片段 id（T9 非破坏校验：标红 + 提示——重叠区间按排序靠前者生效） */
   overlaps?: string[]
   /** 点时间轴关键帧/槽：跳播 + 选中帧（段内传 segId；全局传 null）——与普通 seek（清帧）分离 */
@@ -156,14 +154,15 @@ export function TimelineBar(props: TimelineBarProps): React.JSX.Element {
             title={i + 's'}
           />
         ))}
-        {/* 切点过渡窗口可视化（与引擎 computeCutWindows 同一来源 = 所见即所得）：居中、侧向钳制 */}
-        {computeCutWindows({ segments: props.segments }, props.transitions ?? {}).map((w) => (
-          <div key={'tw' + w.key} className="timeline-trans-windows">
+        {/* 段属性过渡窗口可视化（与引擎 computeTransitionWindows 同一来源 = 所见即所得）：
+            段首与上一锚点互溶 [start, start+inH)；段尾与下一锚点（相接段或全局）互溶，合并窗口 */}
+        {computeTransitionWindows({ segments: props.segments }).map((w) => (
+          <div key={'tw' + w.fromId + w.toId} className="timeline-trans-windows">
             <span
               className="timeline-trans-window"
               style={{
-                left: ratio(w.pos - w.hL) * 100 + '%',
-                width: (ratio(w.pos + w.hR) - ratio(w.pos - w.hL)) * 100 + '%'
+                left: ratio(w.w0) * 100 + '%',
+                width: (ratio(w.w1) - ratio(w.w0)) * 100 + '%'
               }}
             />
           </div>

@@ -309,14 +309,10 @@ export const en = {
     cutCurve: 'Transition curve',
     cutHead: 'Head transition',
     cutTail: 'Tail transition',
-    cutPair: 'Transition with seg {i}',
     cutHeadHint:
-      'Global baseline -> this segment: duration (centered cross-dissolve, half each side) + curve. 0 = hard cut.',
+      'Head transition: blends in over d seconds from the previous anchor - the adjacent previous segment (direct dissolve) or the global baseline. 0 = hard cut.',
     cutTailHint:
-      'This segment -> next anchor (next segment start value / global baseline): duration + curve. 0 = hard cut.',
-    cutPairHint:
-      'Shared transition with segment {i} (adjacent endpoints): centered cross-dissolve + curve. 0 = hard cut.',
-    cutPairInactive: 'Transition with seg {i} kept {d}s - becomes active again when re-joined',
+      'Tail transition: blends out over d seconds toward the next anchor - the adjacent next segment (direct dissolve) or the global baseline. 0 = hard cut.',
     hint: 'Click/drag the track to position; split the song into segments and edit each one separately',
     segmentLabel: 'Seg {i}',
     inherit: 'follows global',
