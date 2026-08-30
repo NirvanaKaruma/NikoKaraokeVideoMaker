@@ -227,7 +227,7 @@ export function useProject(): {
     kfCurTRef.current = t
   }, [])
   /** 自动创建：面板改任何可关键帧属性 → 立即建/写帧（默认开；关=先打帧才接管） */
-  const kfAutoRef = useRef(true)
+  const kfAutoRef = useRef(false)
   const setKfAuto = useCallback((on: boolean) => {
     kfAutoRef.current = on
   }, [])

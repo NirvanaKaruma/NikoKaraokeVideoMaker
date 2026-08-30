@@ -1185,12 +1185,12 @@ function App(): React.JSX.Element {
   const edit = useEditableLayout(project)
   /** 编辑对象条：段落/全局 + 选中关键帧显式标注（PR 式联动） */
   const [kfSelT, setKfSelT] = useState<number | null>(null)
-  /** 面板修改自动创建关键帧（默认开；localStorage 持久化） */
+  /** 面板修改自动创建关键帧（默认关=PR 严格语义：先手动打第一帧；localStorage 持久化） */
   const [kfAuto, setKfAutoState] = useState<boolean>(() => {
     try {
-      return localStorage.getItem('niko.kfAuto') !== '0'
+      return localStorage.getItem('niko.kfAuto') === '1'
     } catch {
-      return true
+      return false
     }
   })
   const setKfAuto = (on: boolean): void => {
