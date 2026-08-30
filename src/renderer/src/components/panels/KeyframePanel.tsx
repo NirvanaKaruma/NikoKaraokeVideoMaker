@@ -270,8 +270,8 @@ export function KeyframePanel(props: KeyframePanelProps): React.JSX.Element {
 
   return (
     <div className="kf-panel">
-      {/* 切点过渡（NLE 式）：段编辑页上下文——段首/段尾或与相邻段的共用切点 */}
-      {props.segId && (props.transitionIn || props.transitionOut) && (
+      {/* 段过渡（常驻显示：选中段落后即可设置/查看段首、段尾过渡） */}
+      {props.segId && (
         <div className="kf-cuts">
           <div className="kf-cuts-title">{t('timeline.cutSection')}</div>
           {(

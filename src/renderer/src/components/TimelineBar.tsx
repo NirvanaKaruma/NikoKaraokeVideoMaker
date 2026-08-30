@@ -155,7 +155,7 @@ export function TimelineBar(props: TimelineBarProps): React.JSX.Element {
           />
         ))}
         {/* 段属性过渡窗口可视化（与引擎 computeTransitionWindows 同一来源 = 所见即所得）：
-            段首与上一锚点互溶 [start, start+inH)；段尾与下一锚点（相接段或全局）互溶，合并窗口 */}
+            段首过渡窗口 [start, start+inH)；段尾过渡窗口（与后段或全局画面的过渡）合并窗口 */}
         {computeTransitionWindows({ segments: props.segments }).map((w) => (
           <div key={'tw' + w.fromId + w.toId} className="timeline-trans-windows">
             <span

@@ -1753,7 +1753,7 @@ function App(): React.JSX.Element {
           ') 差异像素 ' +
           dSeg
       )
-      // 4) 段属性过渡（v5）：s2 段首过渡 = 与相接前段 s1 直接互溶，窗口 [4, 4+2) = [4,6)
+      // 4) 段属性过渡（v5）：s2 段首过渡 = 与相接前段 s1 直接过渡，窗口 [4, 4+2) = [4,6)
       pj.updateSegmentTransition(s2, 'in', { durationSec: 2, easing: 'linear' })
       // 状态往返等待（React 提交完成后 projectRef 刷新）
       const tTr0 = Date.now()
@@ -1766,11 +1766,11 @@ function App(): React.JSX.Element {
       // t=5：p=0.5；from=s1 结尾值 0.7，to=s2 插值 0.06+0.44*(1/4)=0.17 → (0.7+0.17)/2=0.435
       const xt = resolveLayoutAt(projectRef.current.layout, 5).mainImage.rect.x
       add(
-        '引擎·段落到段落互溶',
+        '引擎·段落到段落过渡',
         Math.abs(xt - (0.7 + (0.17 - 0.7) * 0.5)) < 0.02,
         't=5 x=' + xt.toFixed(4) + '（期望≈0.435）'
       )
-      // 捕获顺序：E（窗口内 t=4.2，p=0.1）→ F（t=5.8，p=0.9）——同一互溶窗内两时刻差异
+      // 捕获顺序：E（窗口内 t=4.2，p=0.1）→ F（t=5.8，p=0.9）——同一过渡窗口内两时刻差异
       const curE = await seekAndSettle(4.2)
       const resolvedE = resolveLayoutAt(projectRef.current.layout, curE).mainImage.rect.x
       const capE = captureRegion(st, ...region)

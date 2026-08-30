@@ -1250,7 +1250,7 @@ input[type='number'] {
   appearance: textfield;
 }
 
-/* 切点过渡小节（KeyframePanel 顶部：段首/段尾过渡 + 曲线） */
+/* 段过渡小节（KeyframePanel 顶部：段首/段尾过渡 + 曲线） */
 .kf-cuts {
   display: flex;
   flex-direction: column;

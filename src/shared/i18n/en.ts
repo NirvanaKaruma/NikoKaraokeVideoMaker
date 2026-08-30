@@ -310,9 +310,9 @@ export const en = {
     cutHead: 'Head transition',
     cutTail: 'Tail transition',
     cutHeadHint:
-      'Head transition: blends in over d seconds from the previous anchor - the adjacent previous segment (direct dissolve) or the global baseline. 0 = hard cut.',
+      'Head transition: blends into this segment from the previous segment (when adjacent) or the global view. 0 = none (direct cut).',
     cutTailHint:
-      'Tail transition: blends out over d seconds toward the next anchor - the adjacent next segment (direct dissolve) or the global baseline. 0 = hard cut.',
+      'Tail transition: blends from this segment to the next segment (when adjacent) or the global view. 0 = none (direct cut).',
     hint: 'Click/drag the track to position; split the song into segments and edit each one separately',
     segmentLabel: 'Seg {i}',
     inherit: 'follows global',
