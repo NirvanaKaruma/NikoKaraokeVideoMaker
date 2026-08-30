@@ -455,4 +455,23 @@ describe('段属性过渡（v5：过渡属于段落本身——目标跟随场�
     // 段后（> end）全局区不推进
     expect(beatTimeAt({ ...l, timeline: d2 }, 6)).toBeCloseTo(10, 9)
   })
+
+  it('段落属性变 BPM：选中段落改 BPM = 该段快照自带值（无需关键帧），跨段变速生效', () => {
+    const s1 = structuredClone(DEFAULT_LAYOUT)
+    s1.visualizer.bpm = 120
+    const s2 = structuredClone(DEFAULT_LAYOUT)
+    s2.visualizer.bpm = 60
+    const d: TimelineDocument = {
+      segments: [
+        seg({ id: 'a', startSec: 0, endSec: 10, layout: s1 }),
+        seg({ id: 'b', startSec: 10, endSec: 20, layout: s2 })
+      ]
+    }
+    const base = structuredClone(DEFAULT_LAYOUT)
+    // 逐帧解析：段内取段自己的 BPM（段落属性）；段外 = 全局（null）
+    expect(resolveLayoutAt({ ...base, timeline: d }, 5).visualizer.bpm).toBe(120)
+    expect(resolveLayoutAt({ ...base, timeline: d }, 15).visualizer.bpm).toBe(60)
+    expect(resolveLayoutAt({ ...base, timeline: d }, 25).visualizer.bpm).toBeNull()
+    expect(resolveLayoutAt({ ...base, timeline: d }, 25).visualizer.beatIntervalSec).toBeNull()
+  })
 })
