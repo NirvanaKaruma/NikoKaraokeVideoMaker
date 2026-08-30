@@ -1,7 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type Konva from 'konva'
 import { SUBTITLE_ZONE_Y, defaultLayerOrder, type ProjectLayout } from '@shared/layout'
-import { pairCutKey, resolveLayoutAt, segmentOverlaps, setByPath } from '@shared/timeline'
+import {
+  CUT_ADJ_EPS,
+  GLOBAL_ANCHOR,
+  pairCutKey,
+  resolveLayoutAt,
+  segmentOverlaps,
+  setByPath,
+  type TimelineSegment
+} from '@shared/timeline'
+import type { CutRow } from './components/panels/KeyframePanel'
 import { resolvedSnapshotKey } from '@shared/tlDiff'
 import { useLocale } from './hooks/useLocale'
 import { useEditableLayout } from './hooks/useEditableLayout'
@@ -1344,6 +1353,55 @@ function App(): React.JSX.Element {
     () => segmentOverlaps({ segments: project.layout.timeline?.segments ?? [] }).flat(),
     [project.layout.timeline]
   )
+  /** 切点过渡（NLE 式）：当前编辑段落的段首/段尾切点行（键、标签、规格、断开保留提示）——
+   * 由 App 计算（切点身份 = 锚点对 + CUT_ADJ_EPS 相接容差），KeyframePanel 展示/编辑。 */
+  const cutRows = useMemo(() => {
+    const segs = project.layout.timeline?.segments ?? []
+    if (!edit.segId) return null
+    const self = segs.find((s) => s.id === edit.segId)
+    if (!self) return null
+    const transitions = project.layout.timeline?.transitions ?? {}
+    const idxOf = (s: TimelineSegment): number => segs.indexOf(s) + 1
+    const prevAdj = segs
+      .filter((q) => q.id !== self.id && q.endSec <= self.startSec + CUT_ADJ_EPS)
+      .sort((a, b) => b.endSec - a.endSec)[0]
+    const nextAdj = segs
+      .filter((q) => q.id !== self.id && q.startSec >= self.endSec - CUT_ADJ_EPS)
+      .sort((a, b) => a.startSec - b.startSec)[0]
+    const headKey = prevAdj ? pairCutKey(prevAdj.id, self.id) : GLOBAL_ANCHOR + '|' + self.id
+    const tailKey = nextAdj ? pairCutKey(self.id, nextAdj.id) : self.id + '|' + GLOBAL_ANCHOR
+    // 断开保留提示：按序后段存在 + 空隙 + (本段|后段) 配置保留 → 重新相接后生效
+    const nOrder = segs
+      .filter((q) => q.id !== self.id && q.startSec >= self.endSec - CUT_ADJ_EPS)
+      .sort((a, b) => a.startSec - b.startSec)[0]
+    const keptSpec = nOrder && !nextAdj ? transitions[pairCutKey(self.id, nOrder.id)] : null
+    const mk = (key: string, label: string, title: string, note: string | null): CutRow => ({
+      key,
+      label,
+      title,
+      spec: transitions[key] ?? null,
+      note
+    })
+    return [
+      mk(
+        headKey,
+        prevAdj ? t('timeline.cutPair', { i: idxOf(prevAdj) }) : t('timeline.cutHead'),
+        prevAdj ? t('timeline.cutPairHint', { i: idxOf(prevAdj) }) : t('timeline.cutHeadHint'),
+        null
+      ),
+      mk(
+        tailKey,
+        nextAdj ? t('timeline.cutPair', { i: idxOf(nextAdj) }) : t('timeline.cutTail'),
+        nextAdj ? t('timeline.cutPairHint', { i: idxOf(nextAdj) }) : t('timeline.cutTailHint'),
+        keptSpec && keptSpec.durationSec > 0
+          ? t('timeline.cutPairInactive', {
+              i: idxOf(nOrder as TimelineSegment),
+              d: String(keptSpec.durationSec)
+            })
+          : null
+      )
+    ]
+  }, [project.layout, edit.segId, t])
   /** PR 式：面板改可关键帧属性 → 自动写播放头处关键帧（播放头 + 自动开关同步给 commit） */
   useEffect(() => {
     project.setKfCurT(pb.currentTime)
@@ -1753,7 +1811,7 @@ function App(): React.JSX.Element {
           dSeg
       )
       // 4) 切点过渡（NLE 式）：段间接点 P|N（s1|s2）：居中互溶，窗口 [4-1, 4+1) = [3,5)
-      pj.updateCutTransition(pairCutKey(s1, s2), 2)
+      pj.updateCutTransition(pairCutKey(s1, s2), { durationSec: 2, easing: 'linear' })
       // 状态往返等待（React 提交完成后 projectRef 刷新）
       const tTr0 = Date.now()
       while (
@@ -2385,6 +2443,8 @@ function App(): React.JSX.Element {
               else project.updateFrameSlots(null, slots)
             }}
             onKfAddEmptyFrame={(tAbs) => project.addEmptyFrame(edit.segId, tAbs)}
+            kfCutRows={cutRows}
+            onKfCutChange={project.updateCutTransition}
           />
           <main className="canvas-wrap">
             <CanvasStage
@@ -2427,7 +2487,6 @@ function App(): React.JSX.Element {
               if (project.editSegId === id) project.setEditSegment(null)
             }}
             onUpdateBounds={project.updateSegmentBounds}
-            onUpdateCut={project.updateCutTransition}
             transitions={project.layout.timeline?.transitions ?? {}}
             overlaps={overlapIds}
             globalKeyframes={project.layout.timeline?.keyframes ?? []}

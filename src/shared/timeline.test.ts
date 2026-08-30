@@ -15,6 +15,7 @@ import {
   setByPath,
   tailCutKey,
   trackValueAt,
+  type CutTransitionSpec,
   type TimelineDocument,
   type TimelineSegment
 } from './timeline'
@@ -203,7 +204,7 @@ describe('切点过渡（NLE 式：过渡属于编辑点/切点；段落到帧 /
   /** 带切点过渡配置的时间轴文档 */
   const dT = (
     timeline: TimelineDocument,
-    transitions: Record<string, number>
+    transitions: Record<string, CutTransitionSpec>
   ): TimelineDocument => ({
     ...timeline,
     transitions
@@ -267,7 +268,7 @@ describe('切点过渡（NLE 式：过渡属于编辑点/切点；段落到帧 /
     const snap = structuredClone(DEFAULT_LAYOUT)
     snap.texts.songTitle.style.fontSize = 0.3
     const tl = doc([seg({ id: 's1', startSec: 5, endSec: 15, layout: snap })])
-    const d = dT(tl, { [headCutKey('s1')]: 1 })
+    const d = dT(tl, { [headCutKey('s1')]: { durationSec: 1, easing: 'linear' } })
     const base = structuredClone(DEFAULT_LAYOUT)
     const at = (t: number): number => sz(resolveLayoutAt({ ...base, timeline: d }, t))
     // 窗口 [4.5,5.5)：d=1 两侧各半
@@ -287,7 +288,9 @@ describe('切点过渡（NLE 式：过渡属于编辑点/切点；段落到帧 /
       startSec: 5,
       endSec: 15
     })
-    const d = dT(doc([s1, s2]), { [pairCutKey('a', 'b')]: 2 })
+    const d = dT(doc([s1, s2]), {
+      [pairCutKey('a', 'b')]: { durationSec: 2, easing: 'linear' }
+    })
     const at = (t: number): number => sz(resolveLayoutAt({ ...base, timeline: d }, t))
     // 窗口 [4,6)：d=2 切点两侧各半
     expect(at(3)).toBeCloseTo(0.05, 9)
@@ -306,7 +309,9 @@ describe('切点过渡（NLE 式：过渡属于编辑点/切点；段落到帧 /
     const snap = structuredClone(DEFAULT_LAYOUT)
     snap.texts.songTitle.style.fontSize = 0.3
     const tl = doc([seg({ id: 's1', startSec: 0, endSec: 10, layout: snap })])
-    const d = dT(tl, { [tailCutKey('s1')]: 2 })
+    const d = dT(tl, {
+      [tailCutKey('s1')]: { durationSec: 2, easing: 'linear' }
+    })
     const base = structuredClone(DEFAULT_LAYOUT)
     const at = (t: number): number => sz(resolveLayoutAt({ ...base, timeline: d }, t))
     // 歌曲尾切点：右侧无内容 → 淡出在段内完整 d=2s：[8,10)
@@ -323,7 +328,10 @@ describe('切点过渡（NLE 式：过渡属于编辑点/切点；段落到帧 /
       startSec: 5.5,
       endSec: 10
     })
-    const trans = { [tailCutKey('a')]: 1, [headCutKey('b')]: 1 }
+    const trans = {
+      [tailCutKey('a')]: { durationSec: 1, easing: 'linear' },
+      [headCutKey('b')]: { durationSec: 1, easing: 'linear' }
+    }
     const d = dT(doc([s1, s2]), trans)
     const wins = computeCutWindows({ segments: d.segments }, trans)
     expect(wins).toHaveLength(2)
@@ -347,7 +355,9 @@ describe('切点过渡（NLE 式：过渡属于编辑点/切点；段落到帧 /
       startSec: 5,
       endSec: 10
     })
-    const trans = { [pairCutKey('a', 'b')]: 1 }
+    const trans = {
+      [pairCutKey('a', 'b')]: { durationSec: 1, easing: 'linear' }
+    }
     const d = dT(doc([s1, s2]), trans)
     const at = (t: number): number => sz(resolveLayoutAt({ ...base, timeline: d }, t))
     expect(at(5)).toBeCloseTo(0.15, 9) // 相接：居中互溶
@@ -355,7 +365,7 @@ describe('切点过渡（NLE 式：过渡属于编辑点/切点；段落到帧 /
     const dGap = dT(doc([s1, { ...s2, startSec: 5.4 }]), trans)
     const wins = computeCutWindows({ segments: dGap.segments }, trans)
     expect(wins.some((w) => w.key === pairCutKey('a', 'b'))).toBe(false)
-    expect(trans[pairCutKey('a', 'b')]).toBe(1) // 配置保留
+    expect(trans[pairCutKey('a', 'b')]?.durationSec).toBe(1) // 配置保留
     const atG = (t: number): number => sz(resolveLayoutAt({ ...base, timeline: dGap }, t))
     expect(atG(4.9)).toBeCloseTo(0.05, 6)
     expect(atG(5.2)).toBeCloseTo(BASE, 9) // 空隙 = 全局基线（两端硬切）
@@ -369,7 +379,9 @@ describe('切点过渡（NLE 式：过渡属于编辑点/切点；段落到帧 /
     const snap = structuredClone(DEFAULT_LAYOUT)
     snap.texts.songTitle.style.fontSize = 0.3
     const tl = doc([seg({ id: 's1', startSec: 0, endSec: 10, layout: snap })])
-    const d = dT(tl, { [headCutKey('s1')]: 2 })
+    const d = dT(tl, {
+      [headCutKey('s1')]: { durationSec: 2, easing: 'linear' }
+    })
     const wins = computeCutWindows({ segments: d.segments }, d.transitions ?? {})
     expect(wins[0].hL).toBe(0)
     expect(wins[0].hR).toBe(2) // 完整 2s 淡入（[0,2)）
@@ -395,7 +407,7 @@ describe('切点过渡（NLE 式：过渡属于编辑点/切点；段落到帧 /
         }
       ]
     }
-    const d = dT(tl, { [headCutKey('s1')]: 1 })
+    const d = dT(tl, { [headCutKey('s1')]: { durationSec: 1, easing: 'linear' } })
     const base = structuredClone(DEFAULT_LAYOUT)
     // 切点 t=5：p=0.5；from=全局动画值 0.10 → lerp(0.10, 0.3, 0.5)=0.2
     expect(sz(resolveLayoutAt({ ...base, timeline: d }, 5))).toBeCloseTo(0.2, 9)
@@ -403,17 +415,17 @@ describe('切点过渡（NLE 式：过渡属于编辑点/切点；段落到帧 /
   })
 
   it('分割重映射：左锚点 = 原段 → 右半段；段首（右锚点 = 原段）留在左半段', () => {
-    const trans: Record<string, number> = {
-      [headCutKey('a')]: 1, // 段首 → 留左半段（a）
-      [tailCutKey('a')]: 0.5, // 段尾 → 右半段（a2）
-      [pairCutKey('a', 'b')]: 2, // 与后段切点 → (a2|b)
-      [pairCutKey('p', 'a')]: 3 // 与前段切点 → 留 (p|a)
+    const trans: Record<string, CutTransitionSpec> = {
+      [headCutKey('a')]: { durationSec: 1, easing: 'linear' }, // 段首 → 留左半段（a）
+      [tailCutKey('a')]: { durationSec: 0.5, easing: 'linear' }, // 段尾 → 右半段（a2）
+      [pairCutKey('a', 'b')]: { durationSec: 2, easing: 'linear' }, // 与后段切点 → (a2|b)
+      [pairCutKey('p', 'a')]: { durationSec: 3, easing: 'linear' } // 与前段切点 → 留 (p|a)
     }
     const r = remapTransitionsAfterSplit(trans, 'a', 'a2')
-    expect(r[headCutKey('a')]).toBe(1)
-    expect(r[tailCutKey('a2')]).toBe(0.5)
-    expect(r[pairCutKey('a2', 'b')]).toBe(2)
-    expect(r[pairCutKey('p', 'a')]).toBe(3)
+    expect(r[headCutKey('a')]?.durationSec).toBe(1)
+    expect(r[tailCutKey('a2')]?.durationSec).toBe(0.5)
+    expect(r[pairCutKey('a2', 'b')]?.durationSec).toBe(2)
+    expect(r[pairCutKey('p', 'a')]?.durationSec).toBe(3)
     expect(r[pairCutKey('a', 'b')]).toBeUndefined()
     expect(r[tailCutKey('a')]).toBeUndefined()
   })
@@ -440,5 +452,54 @@ describe('切点过渡（NLE 式：过渡属于编辑点/切点；段落到帧 /
   it('未配置过渡：resolveLayoutAt 身份快路径不变（段外返回原布局）', () => {
     const base = structuredClone(DEFAULT_LAYOUT)
     expect(resolveLayoutAt(base, 99)).toBe(base)
+  })
+
+  it('过渡曲线：窗口内先线性进度、再按曲线映射（easeOutCubic 中点 = 0.875）', () => {
+    const base = structuredClone(DEFAULT_LAYOUT)
+    const s1 = kfSeg([{ t: 0, value: 0.05, easing: 'linear' }], { id: 'a', startSec: 0, endSec: 5 })
+    const s2 = kfSeg([{ t: 0, value: 0.25, easing: 'linear' }], {
+      id: 'b',
+      startSec: 5,
+      endSec: 15
+    })
+    const d = dT(doc([s1, s2]), {
+      [pairCutKey('a', 'b')]: { durationSec: 2, easing: 'easeOutCubic' }
+    })
+    // 窗口 [4,6)，切点 t=5：p=0.5 → easeOutCubic(0.5)=0.875
+    expect(sz(resolveLayoutAt({ ...base, timeline: d }, 5))).toBeCloseTo(0.05 + 0.2 * 0.875, 9)
+    // 窗口起点/终点仍为端点值
+    expect(sz(resolveLayoutAt({ ...base, timeline: d }, 4))).toBeCloseTo(0.05, 9)
+    expect(sz(resolveLayoutAt({ ...base, timeline: d }, 6))).toBe(0.25)
+  })
+
+  it('hold 曲线 = 硬切退化（相当于未配置）', () => {
+    const base = structuredClone(DEFAULT_LAYOUT)
+    const s1 = kfSeg([{ t: 0, value: 0.05, easing: 'linear' }], { id: 'a', startSec: 0, endSec: 5 })
+    const s2 = kfSeg([{ t: 0, value: 0.25, easing: 'linear' }], {
+      id: 'b',
+      startSec: 5,
+      endSec: 15
+    })
+    const d = dT(doc([s1, s2]), {
+      [pairCutKey('a', 'b')]: { durationSec: 2, easing: 'hold' }
+    })
+    const wins = computeCutWindows({ segments: d.segments }, d.transitions ?? {})
+    expect(wins).toHaveLength(0)
+    expect(sz(resolveLayoutAt({ ...base, timeline: d }, 5.1))).toBe(0.25) // 硬切
+  })
+
+  it('相接容差 CUT_ADJ_EPS：微小空隙不影响配对切点（用户反馈：轻微改动边界不再丢过渡）', () => {
+    const s1 = kfSeg([{ t: 0, value: 0.05, easing: 'linear' }], { id: 'a', startSec: 0, endSec: 5 })
+    const s2 = kfSeg([{ t: 0, value: 0.25, easing: 'linear' }], {
+      id: 'b',
+      startSec: 5.04,
+      endSec: 15
+    })
+    const trans = {
+      [pairCutKey('a', 'b')]: { durationSec: 1, easing: 'linear' }
+    }
+    const d = dT(doc([s1, s2]), trans)
+    const wins = computeCutWindows({ segments: d.segments }, trans)
+    expect(wins.some((w) => w.key === pairCutKey('a', 'b'))).toBe(true)
   })
 })

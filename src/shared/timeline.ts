@@ -55,11 +55,20 @@ export interface TimelineDocument {
   frameSlots?: number[]
   /**
    * 切点过渡（NLE 式：**过渡属于编辑点/切点，不属于段落**——对标 Premiere/DaVinci）：
-   * 键 =「左锚点|右锚点」（'g' = 全局基线；段 id = 相接处），值 = 秒（0/缺失 = 硬切）。
+   * 键 =「左锚点|右锚点」（'g' = 全局基线；段 id = 相接处），值 = 时长 + 过渡曲线。
    * 解释：段间相接 = 一条切点 A|B（居中互溶）；空隙/段首/段尾 = 各自切点（A|g / g|B）。
    * 切点身份 = 锚点对 → 拖动分离再回拖，原切点设置保留并重新生效（跟编辑点走，不跟几何走）。
+   * 相接判定 = CUT_ADJ_EPS 容差（磁性吸附后精确相接；微小拖动不再丢失过渡）。
    */
-  transitions?: Record<string, number>
+  transitions?: Record<string, CutTransitionSpec>
+}
+
+/** 切点过渡规格（键 = 锚点对；durationSec 0 = 硬切；easing hold = 硬切退化） */
+export interface CutTransitionSpec {
+  /** 时长（秒，0 = 硬切） */
+  durationSec: number
+  /** 过渡曲线（默认 linear） */
+  easing: EasingName
 }
 
 /** 时间轴存在判定（导出/预览接入用：有片段 → 逐帧 resolve） */
@@ -200,9 +209,11 @@ export function clampSegmentsToDuration(
   return { segments, changed }
 }
 
-/** 相邻段边界钳制（用户反馈"段间重叠"根因：手柄拖拽可侵入相邻段——修复为不允许）：
- * 返回钳制后的 [startSec, endSec]；与相邻段保持 MIN_EDGE_GAP 间隙；不修改输入。 */
-export const EDGE_GAP = 0.05
+/** 相邻段边界钳制（用户反馈"段间重叠"根因：手柄拖拽可侵入相邻段）：
+ * 返回钳制后的 [startSec, endSec]——允许与相邻段**精确相接**（半开区间不重叠），
+ * 配合磁性吸附保持切点过渡存在（微小拖动不再丢失配对）。
+ * 相接判定容差（切点/UI 共用）。 */
+export const CUT_ADJ_EPS = 0.05
 export function clampSegmentBoundsToNeighbors(
   segments: TimelineSegment[],
   id: string,
@@ -215,11 +226,11 @@ export function clampSegmentBoundsToNeighbors(
   // 首段左界钳回 0（时间轴起点）；末段右界不设上界（可拖出再钳回时长）
   const prevEnd = idx > 0 ? sorted[idx - 1].endSec : null
   const nextStart = idx < sorted.length - 1 ? sorted[idx + 1].startSec : null
-  const a = prevEnd == null ? Math.max(0, startSec) : Math.max(startSec, prevEnd + EDGE_GAP)
+  const a = prevEnd == null ? Math.max(0, startSec) : Math.max(startSec, prevEnd)
   let b =
     nextStart == null
       ? Math.max(startSec + 0.1, endSec)
-      : Math.min(Math.max(startSec + 0.1, endSec), nextStart - EDGE_GAP)
+      : Math.min(Math.max(startSec + 0.1, endSec), nextStart)
   if (b <= a + 0.1) b = a + 0.1
   return [a, b]
 }
@@ -356,11 +367,11 @@ export function pairCutKey(aId: string, bId: string): string {
  * 右锚点 = 原段（段首切点 / 与前段的切点）留在左半段（保持 origId）。
  */
 export function remapTransitionsAfterSplit(
-  transitions: Record<string, number>,
+  transitions: Record<string, CutTransitionSpec>,
   origId: string,
   newId: string
-): Record<string, number> {
-  const out: Record<string, number> = {}
+): Record<string, CutTransitionSpec> {
+  const out: Record<string, CutTransitionSpec> = {}
   for (const [k, v] of Object.entries(transitions)) {
     const i = k.indexOf('|')
     const L = k.slice(0, i)
@@ -377,34 +388,37 @@ export interface CutWindow {
   hR: number
   leftId: string
   rightId: string
+  /** 过渡曲线（线性默认） */
+  easing: EasingName
 }
 
 /**
  * 计算全部生效切点窗口（纯函数；引擎解析与时间轴可视化共用 = 所见即所得）。
  * 切点清单：每段起点（左锚点 = 相接前段或 g）与终点（右锚点 = 相接后段或 g），按位置排序去重；
  * 每侧时长 d/2 并按相邻切点「半个净距」钳制（任意两窗口在构造上不相交）；
- * 某侧空间不足（如 0 时刻段首、歌曲尾段）→ 缺额补给另一侧（受邻居半距约束）。
+ * 外侧规则：歌曲起点/尾的切点外侧无内容 → 0，内侧承接完整时长 d（NLE 淡入/淡出语义）。
+ * 相接判定容差 = CUT_ADJ_EPS（磁性吸附后微小拖动不丢配对）；hold 曲线 = 硬切退化。
  */
 export function computeCutWindows(
   doc: TimelineDocument,
-  transitions: Record<string, number>
+  transitions: Record<string, CutTransitionSpec>
 ): CutWindow[] {
   const segs = [...doc.segments].sort((a, b) => a.startSec - b.startSec)
   const raw: { key: string; pos: number }[] = []
   const seen = new Set<string>()
   for (const s of segs) {
     const prev = segs
-      .filter((q) => q.id !== s.id && q.endSec <= s.startSec + 0.001)
+      .filter((q) => q.id !== s.id && q.endSec <= s.startSec + CUT_ADJ_EPS)
       .sort((a, b) => b.endSec - a.endSec)[0]
     const next = segs
-      .filter((q) => q.id !== s.id && q.startSec >= s.endSec - 0.001)
+      .filter((q) => q.id !== s.id && q.startSec >= s.endSec - CUT_ADJ_EPS)
       .sort((a, b) => a.startSec - b.startSec)[0]
     const hKey =
-      prev && Math.abs(prev.endSec - s.startSec) <= 0.001
+      prev && Math.abs(prev.endSec - s.startSec) <= CUT_ADJ_EPS
         ? pairCutKey(prev.id, s.id)
         : headCutKey(s.id)
     const tKey =
-      next && Math.abs(next.startSec - s.endSec) <= 0.001
+      next && Math.abs(next.startSec - s.endSec) <= CUT_ADJ_EPS
         ? pairCutKey(s.id, next.id)
         : tailCutKey(s.id)
     if (!seen.has(hKey)) {
@@ -419,8 +433,10 @@ export function computeCutWindows(
   raw.sort((a, b) => a.pos - b.pos)
   const out: CutWindow[] = []
   for (let i = 0; i < raw.length; i++) {
-    const d = transitions[raw[i].key]
-    if (d == null || d <= 0) continue
+    const spec = transitions[raw[i].key]
+    // 缺失 / 0 时长 / hold（硬切退化）→ 无过渡窗口
+    if (!spec || spec.durationSec <= 0 || spec.easing === 'hold') continue
+    const d = spec.durationSec
     const prevPos = i > 0 ? raw[i - 1].pos : 0
     const nextPos = i < raw.length - 1 ? raw[i + 1].pos : Number.POSITIVE_INFINITY
     const dl = d / 2
@@ -434,7 +450,15 @@ export function computeCutWindows(
     const hR = outerR ? 0 : outerL ? Math.min(d, capR) : Math.min(dl, capR)
     const [L, R] = raw[i].key.split('|')
     if (hL + hR <= 0) continue
-    out.push({ key: raw[i].key, pos: raw[i].pos, hL, hR, leftId: L, rightId: R })
+    out.push({
+      key: raw[i].key,
+      pos: raw[i].pos,
+      hL,
+      hR,
+      leftId: L,
+      rightId: R,
+      easing: spec.easing
+    })
   }
   return out
 }
@@ -482,21 +506,23 @@ function resolveSegActive(
   return applyTrackSet(withGlobal, seg.keyframes ?? [], tSec - seg.startSec)
 }
 
-/** 切点过渡解析（非递归）：命中生效窗口 → 双锚点世界互溶；未命中 → 常规 */
+/** 切点过渡解析（非递归）：命中生效窗口 → 双锚点世界按曲线互溶；未命中 → 常规 */
 function resolveTrans(
   layout: ProjectLayout,
   doc: TimelineDocument,
   tSec: number,
-  transitions: Record<string, number>
+  transitions: Record<string, CutTransitionSpec>
 ): ProjectLayout {
   const wins = computeCutWindows(doc, transitions)
   if (wins.length === 0) return resolveCore(layout, doc, tSec)
   const w = wins.find((x) => tSec >= x.pos - x.hL && tSec < x.pos + x.hR)
   if (!w) return resolveCore(layout, doc, tSec)
   const p = Math.min(1, Math.max(0, (tSec - (w.pos - w.hL)) / Math.max(0.001, w.hL + w.hR)))
+  // 过渡曲线：先线性进度 → 曲线映射（与帧轨道同族；hold 已在窗口计算处硬切退化）
+  const eased = EASINGS[w.easing]?.(p) ?? p
   const from = resolveAnchor(layout, doc, w.leftId, tSec)
   const to = resolveAnchor(layout, doc, w.rightId, tSec)
-  return lerpLayouts(from, to, p)
+  return lerpLayouts(from, to, eased)
 }
 
 /** 锚点解析：'g' = 全局基线（轨道应用）；段 id = 段生效态（拉伸/提前语义由 resolveSegActive 处理） */

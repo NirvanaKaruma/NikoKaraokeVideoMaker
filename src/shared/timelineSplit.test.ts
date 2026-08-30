@@ -44,21 +44,21 @@ describe('timelineSplit（纯函数）', () => {
     expect(s[s.length - 1].endSec).toBe(221)
   })
 
-  it('边界钳制：拖拽不侵入相邻段（保留 0.05s 缝）', () => {
+  it('边界钳制：拖拽不侵入相邻段（允许精确相接——微小拖动不丢配对切点）', () => {
     const segs = docOf([
       { id: 'A', a: 0, b: 30 },
       { id: 'B', a: 30, b: 60 },
       { id: 'C', a: 60, b: 90 }
     ])
-    // B 左边界拖到 10 → 被钳到 30.05；右边界拖到 85 → 被钳到 59.95
+    // B 左边界拖到 10 → 钳到 30；右边界拖到 85 → 钳到 60（半开区间不重叠）
     const [a, b] = clampSegmentBoundsToNeighbors(segs.segments, 'B', 10, 85)
-    expect(a).toBeGreaterThanOrEqual(30.05)
-    expect(b).toBeLessThanOrEqual(59.95)
+    expect(a).toBe(30)
+    expect(b).toBe(60)
     const [a2, b2] = clampSegmentBoundsToNeighbors(segs.segments, 'A', -5, 25)
     expect(a2).toBe(0)
     expect(b2).toBe(25)
     const [a3, b3] = clampSegmentBoundsToNeighbors(segs.segments, 'C', 60, 200)
-    expect(a3).toBe(60.05)
+    expect(a3).toBe(60)
     expect(b3).toBe(200)
   })
 

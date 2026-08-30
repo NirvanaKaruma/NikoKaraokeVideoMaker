@@ -5,7 +5,7 @@ import {
   currentValueAt,
   type KeyframeCatalogEntry
 } from '@shared/keyframeCatalog'
-import type { EasingName, Keyframe, PropertyTrack } from '@shared/timeline'
+import type { CutTransitionSpec, EasingName, Keyframe, PropertyTrack } from '@shared/timeline'
 import { useLocale } from '../../hooks/useLocale'
 
 export interface KeyframePanelProps {
@@ -33,6 +33,20 @@ export interface KeyframePanelProps {
   onFrameSlotsChange: (slots: number[]) => void
   /** 裸建关键帧（绝对秒；App 路由段/全局） */
   onAddEmptyFrame: (tAbs: number) => void
+  /** 切点过渡（NLE 式；段编辑页小节；segId 非空时显示；App 计算切点键/标签） */
+  cutRows?: CutRow[] | null
+  /** 更新某个切点过渡（patch = 时长/曲线部分更新） */
+  onCutChange?: (cutKey: string, patch: Partial<CutTransitionSpec>) => void
+}
+
+/** 切点过渡行（UI 计算产物）：label 含相接语境（段首/段尾/与段落N）；spec null = 未配置 */
+export interface CutRow {
+  key: string
+  label: string
+  title: string
+  spec: CutTransitionSpec | null
+  /** 断开保留提示（切点对配置保留但当前不生效；重新相接后生效） */
+  note?: string | null
 }
 
 const EASING_OPTIONS: EasingName[] = ['linear', 'easeInOutQuad', 'easeOutCubic', 'bounce']
@@ -266,6 +280,54 @@ export function KeyframePanel(props: KeyframePanelProps): React.JSX.Element {
 
   return (
     <div className="kf-panel">
+      {/* 切点过渡（NLE 式）：段编辑页上下文——段首/段尾或与相邻段的共用切点 */}
+      {props.segId && props.cutRows && props.cutRows.length > 0 && (
+        <div className="kf-cuts">
+          <div className="kf-cuts-title">{t('timeline.cutSection')}</div>
+          {props.cutRows.map((row) => {
+            const spec = row.spec ?? { durationSec: 0, easing: 'linear' as EasingName }
+            return (
+              <div key={row.key} className="kf-cut-row" title={row.title}>
+                <span className="kf-cut-label">{row.label}</span>
+                <input
+                  className="kf-num"
+                  type="number"
+                  min={0}
+                  max={3}
+                  step={0.1}
+                  value={Math.round(spec.durationSec * 10) / 10}
+                  onChange={(e) =>
+                    props.onCutChange?.(row.key, { durationSec: Number(e.target.value) })
+                  }
+                />
+                <span className="kf-cut-unit">s</span>
+                <select
+                  className="kf-select"
+                  title={t('timeline.cutCurve')}
+                  value={spec.easing}
+                  onChange={(ev) =>
+                    props.onCutChange?.(row.key, { easing: ev.target.value as EasingName })
+                  }
+                >
+                  {EASING_OPTIONS.map((k) => (
+                    <option key={k} value={k}>
+                      {t('kf.easing' + capitalize(k))}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )
+          })}
+          {props.cutRows.some((row) => row.note) && (
+            <div className="kf-cut-note">
+              {props.cutRows
+                .filter((row) => row.note)
+                .map((row) => row.note)
+                .join('；')}
+            </div>
+          )}
+        </div>
+      )}
       {/* 顶部动作区：直接暴露打帧入口（用户：不要藏在二级/三级里） */}
       <div className="kf-topbar">
         <span className="kf-time">t={relT.toFixed(2)}s</span>

@@ -1,8 +1,8 @@
 import { useRef } from 'react'
 import {
+  CUT_ADJ_EPS,
   computeCutWindows,
-  GLOBAL_ANCHOR,
-  pairCutKey,
+  type CutTransitionSpec,
   type PropertyTrack,
   type TimelineSegment
 } from '@shared/timeline'
@@ -20,10 +20,8 @@ export interface TimelineBarProps {
   onSplitAt: (t: number) => void
   onRemoveSegment: (id: string) => void
   onUpdateBounds: (id: string, startSec: number, endSec: number) => void
-  /** 切点过渡（NLE 式：过渡属于编辑点/切点；cutKey = 左锚点|右锚点，'g' = 全局基线；0 = 硬切，0–3s） */
-  onUpdateCut?: (cutKey: string, sec: number) => void
-  /** 切点过渡配置（doc.transitions 映射：锚点对 -> 秒） */
-  transitions?: Record<string, number>
+  /** 切点过渡配置（doc.transitions 映射：锚点对 -> {时长,曲线}；编辑入口在侧栏「关键帧」页） */
+  transitions?: Record<string, CutTransitionSpec>
   /** 重叠片段 id（T9 非破坏校验：标红 + 提示——重叠区间按排序靠前者生效） */
   overlaps?: string[]
   /** 点时间轴关键帧/槽：跳播 + 选中帧（段内传 segId；全局传 null）——与普通 seek（清帧）分离 */
@@ -59,25 +57,19 @@ export function TimelineBar(props: TimelineBarProps): React.JSX.Element {
 
   const selected = props.segments.find((s) => s.id === props.selectedSegmentId) ?? null
 
-  /** 相邻段（按端点相接；±0.001 容差） */
+  /** 相邻段（按端点相接；CUT_ADJ_EPS 容差——磁性吸附后微小拖动不丢配对） */
   const prevAdj = (s: TimelineSegment): TimelineSegment | null => {
     const p = props.segments
-      .filter((q) => q.id !== s.id && q.endSec <= s.startSec + 0.001)
+      .filter((q) => q.id !== s.id && q.endSec <= s.startSec + CUT_ADJ_EPS)
       .sort((a, b) => b.endSec - a.endSec)[0]
-    return p && Math.abs(p.endSec - s.startSec) <= 0.001 ? p : null
+    return p && Math.abs(p.endSec - s.startSec) <= CUT_ADJ_EPS ? p : null
   }
   const nextAdj = (s: TimelineSegment): TimelineSegment | null => {
     const n = props.segments
-      .filter((q) => q.id !== s.id && q.startSec >= s.endSec - 0.001)
+      .filter((q) => q.id !== s.id && q.startSec >= s.endSec - CUT_ADJ_EPS)
       .sort((a, b) => a.startSec - b.startSec)[0]
-    return n && Math.abs(n.startSec - s.endSec) <= 0.001 ? n : null
+    return n && Math.abs(n.startSec - s.endSec) <= CUT_ADJ_EPS ? n : null
   }
-  /** 按分段顺序的后继（含空隙；用于「断开保留」提示） */
-  const nextByOrder = (s: TimelineSegment): TimelineSegment | null =>
-    props.segments
-      .filter((q) => q.id !== s.id && q.startSec >= s.endSec - 0.001)
-      .sort((a, b) => a.startSec - b.startSec)[0] ?? null
-  const segIndex = (s: TimelineSegment): number => props.segments.indexOf(s) + 1
 
   const resize = (e: React.PointerEvent, id: string, edge: 'l' | 'r'): void => {
     e.preventDefault()
@@ -92,6 +84,14 @@ export function TimelineBar(props: TimelineBarProps): React.JSX.Element {
       let [a, b] = [seg.startSec, seg.endSec]
       if (edge === 'l') a = Math.min(t, b - 0.1)
       else b = Math.max(t, a + 0.1)
+      // 磁性吸附：拖到相邻段端点 ±0.25s 内 → 精确相接（保证切点过渡不因微小拖动消失）
+      if (edge === 'r') {
+        const nSeg = nextAdj(seg)
+        if (nSeg && Math.abs(b - nSeg.startSec) <= 0.25) b = nSeg.startSec
+      } else {
+        const pSeg = prevAdj(seg)
+        if (pSeg && Math.abs(a - pSeg.endSec) <= 0.25) a = pSeg.endSec
+      }
       props.onUpdateBounds(id, a, b)
     }
     const up = (): void => {
@@ -123,73 +123,6 @@ export function TimelineBar(props: TimelineBarProps): React.JSX.Element {
             {t('timeline.remove')}
           </button>
         )}
-        {selected &&
-          (() => {
-            const tns = props.transitions ?? {}
-            const pSeg = prevAdj(selected)
-            const nSeg = nextAdj(selected)
-            const headKey = pSeg
-              ? pairCutKey(pSeg.id, selected.id)
-              : GLOBAL_ANCHOR + '|' + selected.id
-            const tailKey = nSeg
-              ? pairCutKey(selected.id, nSeg.id)
-              : selected.id + '|' + GLOBAL_ANCHOR
-            const headD = tns[headKey] ?? 0
-            const tailD = tns[tailKey] ?? 0
-            // 断开保留提示：按序后段存在且有 (本段|后段) 非零配置——空隙状态下不生效、重接后生效
-            const nOrder = nextByOrder(selected)
-            const kept = nOrder && !nSeg ? (tns[pairCutKey(selected.id, nOrder.id)] ?? 0) : 0
-            return (
-              <>
-                <label
-                  className="timeline-transition"
-                  title={
-                    pSeg
-                      ? t('timeline.cutPairHint', { i: segIndex(pSeg) })
-                      : t('timeline.cutHeadHint')
-                  }
-                >
-                  {pSeg ? t('timeline.cutPair', { i: segIndex(pSeg) }) : t('timeline.cutHead')}
-                  <input
-                    type="number"
-                    min={0}
-                    max={3}
-                    step={0.1}
-                    value={Math.round(headD * 10) / 10}
-                    onChange={(e) => props.onUpdateCut?.(headKey, Number(e.target.value))}
-                  />
-                  s
-                </label>
-                <label
-                  className="timeline-transition"
-                  title={
-                    nSeg
-                      ? t('timeline.cutPairHint', { i: segIndex(nSeg) })
-                      : t('timeline.cutTailHint')
-                  }
-                >
-                  {nSeg ? t('timeline.cutPair', { i: segIndex(nSeg) }) : t('timeline.cutTail')}
-                  <input
-                    type="number"
-                    min={0}
-                    max={3}
-                    step={0.1}
-                    value={Math.round(tailD * 10) / 10}
-                    onChange={(e) => props.onUpdateCut?.(tailKey, Number(e.target.value))}
-                  />
-                  s
-                </label>
-                {kept > 0 && (
-                  <span className="timeline-transition-na">
-                    {t('timeline.cutPairInactive', {
-                      i: segIndex(nOrder as TimelineSegment),
-                      d: String(kept)
-                    })}
-                  </span>
-                )}
-              </>
-            )
-          })()}
         <span className="panel-note">{t('timeline.hint')}</span>
         {(props.overlaps?.length ?? 0) > 0 && (
           <span className="timeline-overlap-note">{t('timeline.overlap')}</span>

@@ -23,6 +23,8 @@ import {
   getByPath,
   remapTransitionsAfterSplit,
   splitTimelineAt,
+  type CutTransitionSpec,
+  type EasingName,
   type Keyframe,
   type PropertyTrack
 } from '@shared/timeline'
@@ -163,8 +165,8 @@ export function useProject(): {
   removeSegment: (segId: string) => void
   splitSegment: (atSec: number, durationSec?: number) => void
   updateSegmentBounds: (segId: string, startSec: number, endSec: number) => void
-  /** 切点过渡（NLE 式：过渡属于编辑点/切点；cutKey = 左锚点|右锚点，'g' = 全局基线；0 = 硬切，0–3s 钳制） */
-  updateCutTransition: (cutKey: string, sec: number) => void
+  /** 切点过渡（NLE 式：过渡属于编辑点/切点；cutKey = 左锚点|右锚点，'g' = 全局基线；patch = 时长/曲线，0–3s 钳制） */
+  updateCutTransition: (cutKey: string, patch: Partial<CutTransitionSpec>) => void
   /** 段关键帧整体替换（T5；t 相对片段起点） */
   updateSegmentTracks: (segId: string, tracks: PropertyTrack[]) => void
   /** 全局基线关键帧整体替换（1.1.0 #3；t 绝对秒） */
@@ -843,14 +845,21 @@ export function useProject(): {
   )
 
   /** 切点过渡（NLE 式，过渡属于编辑点）：
-   * cutKey = 「左锚点|右锚点」（'g' = 全局基线）；0=硬切；0–3s；<0.05 删除配置（快路径/序列化干净） */
+   * cutKey = 「左锚点|右锚点」（'g' = 全局基线）；patch = 时长/曲线部分更新；
+   * 时长 0–3s，<0.05 视为未配置 → 删除（快路径/序列化干净）；easing 默认 linear */
   const updateCutTransition = useCallback(
-    (cutKey: string, sec: number) => {
+    (cutKey: string, patch: Partial<CutTransitionSpec>) => {
       pushHistory()
       const cur = layoutRef.current
-      const v = Number.isFinite(sec) ? Math.min(3, Math.max(0, sec)) : 0
       const trans = { ...(cur.timeline?.transitions ?? {}) }
-      if (v >= 0.05) trans[cutKey] = v
+      const prev = trans[cutKey] ?? { durationSec: 0, easing: 'linear' as EasingName }
+      const spec: CutTransitionSpec = {
+        durationSec: Number.isFinite(patch.durationSec)
+          ? Math.min(3, Math.max(0, patch.durationSec as number))
+          : prev.durationSec,
+        easing: patch.easing ?? prev.easing
+      }
+      if (spec.durationSec >= 0.05) trans[cutKey] = spec
       else delete trans[cutKey]
       applyLayout({
         ...cur,

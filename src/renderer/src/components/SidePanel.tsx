@@ -16,7 +16,7 @@ import { BackgroundPanel } from './panels/BackgroundPanel'
 import { TextPanel } from './panels/TextPanel'
 import { VisualizerPanel } from './panels/VisualizerPanel'
 import { FxPanel } from './panels/FxPanel'
-import { KeyframePanel } from './panels/KeyframePanel'
+import { KeyframePanel, type CutRow } from './panels/KeyframePanel'
 import type {
   AudioEngineConfig,
   BeatFxConfig,
@@ -25,7 +25,7 @@ import type {
   OverlayLayerConfig,
   ProjectLayout
 } from '@shared/layout'
-import type { PropertyTrack } from '@shared/timeline'
+import type { CutTransitionSpec, PropertyTrack } from '@shared/timeline'
 import type { SelectableId } from './SceneLayers'
 
 export type SideTab = 'assets' | 'layers' | 'text' | 'visualizer' | 'fx' | 'keyframes'
@@ -140,6 +140,9 @@ export interface SidePanelProps {
   onKfFrameSlotsChange: (slots: number[]) => void
   /** 裸建关键帧（绝对秒；App 路由段/全局） */
   onKfAddEmptyFrame: (tAbs: number) => void
+  /** 切点过渡（NLE 式）：段落编辑页小节（App 计算切点键/标签） */
+  kfCutRows?: CutRow[] | null
+  onKfCutChange?: (cutKey: string, patch: Partial<CutTransitionSpec>) => void
 }
 
 const TABS: { id: SideTab; labelKey: string }[] = [
@@ -300,6 +303,8 @@ export function SidePanel(props: SidePanelProps): React.JSX.Element {
             frameSlots={props.kfFrameSlots}
             onFrameSlotsChange={props.onKfFrameSlotsChange}
             onAddEmptyFrame={props.onKfAddEmptyFrame}
+            cutRows={props.kfCutRows}
+            onCutChange={props.onKfCutChange}
           />
         )}
       </div>
