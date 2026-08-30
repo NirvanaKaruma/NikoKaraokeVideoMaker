@@ -321,7 +321,7 @@ export const zhCn = {
     batchAdd: '批量定格',
     noPoint: '该属性尚无关键帧——点击轨道条空白处或「在此添加关键帧」',
     value: '值',
-    easing: '缓动',
+    easing: '过渡方式',
     remove: '删除',
     easingLinear: '线性',
     easingEaseInOutQuad: '缓入缓出',

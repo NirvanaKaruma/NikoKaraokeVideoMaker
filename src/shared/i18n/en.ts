@@ -321,7 +321,7 @@ export const en = {
     batchAdd: 'Batch keyframe',
     noPoint: 'No keyframes yet - click the strip or "Add keyframe here"',
     value: 'Value',
-    easing: 'Easing',
+    easing: 'Transition',
     remove: 'Remove',
     easingLinear: 'Linear',
     easingEaseInOutQuad: 'Ease in/out',

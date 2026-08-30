@@ -323,7 +323,7 @@ export const jp = {
     batchAdd: '一括キーフレーム',
     noPoint: 'キーフレーム未設定——ストリップをクリックするか「ここにキーフレーム追加」',
     value: '値',
-    easing: 'イージング',
+    easing: 'トランジション',
     remove: '削除',
     easingLinear: 'リニア',
     easingEaseInOutQuad: 'イーズイン/アウト',
