@@ -318,6 +318,7 @@ export const zhCn = {
     hintNoSegment: '在时间轴上选择片段后编辑该段的关键帧',
     currentValue: '捕获值',
     addAt: '在此添加关键帧',
+    batchAdd: '批量定格',
     noPoint: '该属性尚无关键帧——点击轨道条空白处或「在此添加关键帧」',
     value: '值',
     easing: '缓动',

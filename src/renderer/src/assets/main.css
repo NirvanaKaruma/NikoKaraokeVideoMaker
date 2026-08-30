@@ -1014,6 +1014,23 @@ body {
   gap: 6px;
 }
 
+/* ===== P1: 裸按钮统一主题（图层/附加层行操作等——曾为浏览器默认白底） ===== */
+button {
+  font-family: inherit;
+}
+
+button:not(.mini-btn):not(.btn-sm):not(.kf-track):not(.tab):not(.banner-btn):not(.tab-bar) {
+  background: var(--btn-bg);
+  color: var(--btn-text);
+  border: 1px solid var(--btn-border);
+  border-radius: 6px;
+  transition: background 120ms;
+}
+
+button:not(.mini-btn):not(.btn-sm):not(.kf-track):not(.tab):not(.banner-btn):not(.tab-bar):hover {
+  background: var(--btn-bg-hover);
+}
+
 .kf-select {
   padding: 4px 6px;
   border: 1px solid var(--ev-c-gray-2);

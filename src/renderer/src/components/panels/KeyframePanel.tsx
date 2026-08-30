@@ -17,6 +17,8 @@ export interface KeyframePanelProps {
   tracks: PropertyTrack[]
   /** 当前播放头（绝对秒；「添加关键帧」落在播放头） */
   currentT: number
+  /** 总时长（全局轨道打帧边界；片段模式取段长） */
+  durationSec: number
   /** 当前编辑视图（捕获「添加关键帧」的当前属性值——T4 面板联动） */
   view: ProjectLayout
   onTracksChange: (tracks: PropertyTrack[]) => void
@@ -43,7 +45,11 @@ export function KeyframePanel(props: KeyframePanelProps): React.JSX.Element {
   const [selPoint, setSelPoint] = useState<number>(0)
   const stripRef = useRef<HTMLDivElement>(null)
 
-  const segLen = Math.max(0.1, props.segEndSec - props.segStartSec)
+  /** 片段模式 = 段长；全局模式（未选段）= 整曲时长（1.1.0 #3） */
+  const segLen = Math.max(
+    0.1,
+    props.segId ? props.segEndSec - props.segStartSec : props.durationSec
+  )
   /**
    * 附加图层（overlay）动态关键帧条目（用户需求：新加的图/元素也能单独打关键帧）：
    * 路径按数组索引定位（overlayLayers.<i>.rect.x …），i18n 标签 = 图层 {i} · 字段。
@@ -89,7 +95,10 @@ export function KeyframePanel(props: KeyframePanelProps): React.JSX.Element {
   const frames = track?.frames ?? []
 
   /** 相对播放头（裁剪到片段内） */
-  const relT = Math.min(segLen, Math.max(0, props.currentT - props.segStartSec))
+  const relT = Math.min(
+    segLen,
+    Math.max(0, props.segId ? props.currentT - props.segStartSec : props.currentT)
+  )
 
   /** 写帧（轨道不存在时自动创建——修复「添加关键帧」静默失效） */
   const setFrames = (next: Keyframe[]): void => {
@@ -114,6 +123,23 @@ export function KeyframePanel(props: KeyframePanelProps): React.JSX.Element {
     )
     setFrames(next)
     setSelPoint(next.findIndex((f) => f === nf))
+  }
+
+  /** 批量打帧（1.1.0 用户 #1）：当前播放头处为**全部已参与动画的属性**各写一帧（改完多个属性 → 一次定格） */
+  const batchAdd = (): void => {
+    const tt = +relT.toFixed(3)
+    const nextTracks = props.tracks.map((tr): PropertyTrack => {
+      const v = currentValueAt(props.view, tr.path)
+      if (v == null) return tr
+      const filtered = tr.frames.filter((f) => Math.abs(f.t - tt) > 0.01)
+      return {
+        ...tr,
+        frames: [...filtered, { t: tt, value: v, easing: 'linear' as EasingName }].sort(
+          (a, b) => a.t - b.t
+        )
+      }
+    })
+    props.onTracksChange(nextTracks)
   }
 
   const movePoint = (e: React.PointerEvent, i: number): void => {
@@ -187,6 +213,11 @@ export function KeyframePanel(props: KeyframePanelProps): React.JSX.Element {
                 <button type="button" className="btn-sm" onClick={addFrame}>
                   {t('kf.addAt')}
                 </button>
+                {props.tracks.length > 0 && (
+                  <button type="button" className="btn-sm" onClick={batchAdd}>
+                    {t('kf.batchAdd')}
+                  </button>
+                )}
               </div>
               {/* 关键帧点条 */}
               {frames.length > 0 ? (

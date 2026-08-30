@@ -157,6 +157,8 @@ export function useProject(): {
   updateSegmentBounds: (segId: string, startSec: number, endSec: number) => void
   /** 段关键帧整体替换（T5；t 相对片段起点） */
   updateSegmentTracks: (segId: string, tracks: PropertyTrack[]) => void
+  /** 全局基线关键帧整体替换（1.1.0 #3；t 绝对秒） */
+  updateDocKeyframes: (tracks: PropertyTrack[]) => void
   /** 音频长度变化边界修正（T9；无改动时 no-op 不入历史） */
   clampTimelineToDuration: (durationSec: number) => void
   applySegmentToAll: (segId: string) => void
@@ -514,17 +516,40 @@ export function useProject(): {
     return out
   }, [])
 
+  /**
+   * P1 结构操作全局化（用户 #5）：图层的增/删/排序 = 全局结构（各段快照同步镜像），
+   * 不再随段级编辑目标路由——删除不再"只删本段"导致跨段残留/资产泄漏。
+   * 隐藏/锁定/参数值仍保持段级可差异化。
+   */
+  const mirrorSegments = (
+    fn: (l: ProjectLayout) => ProjectLayout
+  ): ProjectLayout['timeline'] | undefined => {
+    const cur = layoutRef.current
+    if (!cur.timeline?.segments?.length) return undefined
+    const hasMat = cur.timeline.segments.some((s) => s.layout != null)
+    if (!hasMat) return undefined
+    return {
+      ...cur.timeline,
+      segments: cur.timeline.segments.map((s) => (s.layout ? { ...s, layout: fn(s.layout) } : s))
+    }
+  }
+
   const addOverlayLayer = useCallback((): string => {
     const layer = overlayDefaults()
-    commit((cur) => ({
-      ...cur,
-      overlayLayers: [...cur.overlayLayers, layer],
-      layers: cur.layers
-        ? materializeLayers({ ...cur, overlayLayers: [...cur.overlayLayers, layer] })
+    pushHistory()
+    const cur = layoutRef.current
+    const addTo = (l: ProjectLayout): ProjectLayout => ({
+      ...l,
+      overlayLayers: [...l.overlayLayers, layer],
+      layers: l.layers
+        ? materializeLayers({ ...l, overlayLayers: [...l.overlayLayers, layer] })
         : null
-    }))
+    })
+    const next = addTo(cur)
+    const tl = mirrorSegments(addTo)
+    applyLayout(tl ? { ...next, timeline: tl } : next)
     return layer.id
-  }, [commit, materializeLayers, overlayDefaults])
+  }, [applyLayout, materializeLayers, overlayDefaults, pushHistory])
 
   const updateOverlayLayer = useCallback(
     (id: string, patch: Partial<OverlayLayerConfig>) => {
@@ -538,25 +563,30 @@ export function useProject(): {
 
   const removeOverlayLayer = useCallback(
     (id: string) => {
-      commit((cur) => ({
-        ...cur,
-        overlayLayers: cur.overlayLayers.filter((o) => o.id !== id),
-        layers: cur.layers ? cur.layers.filter((x) => x.id !== 'overlay:' + id) : null
-      }))
+      pushHistory()
+      const cur = layoutRef.current
+      const strip = (l: ProjectLayout): ProjectLayout => ({
+        ...l,
+        overlayLayers: l.overlayLayers.filter((o) => o.id !== id),
+        layers: l.layers ? l.layers.filter((x) => x.id !== 'overlay:' + id) : null
+      })
+      const next = strip(cur)
+      const tl = mirrorSegments(strip)
+      applyLayout(tl ? { ...next, timeline: tl } : next)
       setAssets((prev) => {
         const old = prev.overlayImages?.[id]
         if (old?.url) URL.revokeObjectURL(old.url)
-        const next = { ...(prev.overlayImages ?? {}) }
-        delete next[id]
-        return { ...prev, overlayImages: next }
+        const n2 = { ...(prev.overlayImages ?? {}) }
+        delete n2[id]
+        return { ...prev, overlayImages: n2 }
       })
     },
-    [commit]
+    [applyLayout, pushHistory]
   )
 
   const moveOverlayLayer = useCallback(
     (id: string, dir: -1 | 1) => {
-      commit((cur) => {
+      const mover = (cur: ProjectLayout): ProjectLayout => {
         const arr = [...cur.overlayLayers]
         const i = arr.findIndex((o) => o.id === id)
         const j = i + dir
@@ -571,16 +601,21 @@ export function useProject(): {
           const lb = layers.findIndex((x) => x.id === 'overlay:' + arr[j].id)
           if (la >= 0 && lb >= 0) {
             const out = [...layers]
-            const t = out[la]
+            const tt = out[la]
             out[la] = out[lb]
-            out[lb] = t
+            out[lb] = tt
             layers = out
           }
         }
         return { ...cur, overlayLayers: arr, layers }
-      })
+      }
+      pushHistory()
+      const cur = layoutRef.current
+      const next = mover(cur)
+      const tl = mirrorSegments(mover)
+      applyLayout(tl ? { ...next, timeline: tl } : next)
     },
-    [commit]
+    [applyLayout, pushHistory]
   )
 
   /** 0.9.0：图层隐藏/锁定（首次编辑物化清单） */
@@ -686,7 +721,10 @@ export function useProject(): {
       const res = splitTimelineAt({ segments: cur.timeline?.segments ?? [] }, atSec, durationSec)
       if (!res.changed) return
       pushHistory()
-      applyLayout({ ...cur, timeline: { segments: res.segments } })
+      applyLayout({
+        ...cur,
+        timeline: { ...(cur.timeline ?? { segments: [] }), segments: res.segments }
+      })
     },
     [applyLayout, pushHistory]
   )
@@ -714,6 +752,19 @@ export function useProject(): {
       if (!r.changed) return
       pushHistory()
       applyLayout({ ...cur, timeline: { segments: r.segments } })
+    },
+    [applyLayout, pushHistory]
+  )
+
+  /** 全局基线关键帧整体替换（1.1.0 用户 #3：不分割时间轴也能打帧；t 为绝对秒） */
+  const updateDocKeyframes = useCallback(
+    (tracks: PropertyTrack[]) => {
+      pushHistory()
+      const cur = layoutRef.current
+      applyLayout({
+        ...cur,
+        timeline: { ...(cur.timeline ?? { segments: [] }), keyframes: tracks }
+      })
     },
     [applyLayout, pushHistory]
   )
@@ -1129,6 +1180,7 @@ export function useProject(): {
     splitSegment,
     updateSegmentBounds,
     updateSegmentTracks,
+    updateDocKeyframes,
     clampTimelineToDuration,
     applySegmentToAll,
     saveProject,

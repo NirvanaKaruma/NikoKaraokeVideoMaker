@@ -2272,10 +2272,13 @@ function App(): React.JSX.Element {
             kfSegId={edit.segId}
             kfSegStartSec={editKfSeg?.startSec ?? 0}
             kfSegEndSec={editKfSeg?.endSec ?? 0}
-            kfTracks={editKfSeg?.keyframes ?? []}
+            kfDurationSec={pb.duration}
+            kfTracks={editKfSeg?.keyframes ?? project.layout.timeline?.keyframes ?? []}
             kfView={edit.view}
             onKfTracksChange={(tracks) => {
+              // 1.1.0 #3：未选段 = 全局基线轨道（整曲绝对 t）；选段 = 段级轨道
               if (edit.segId) project.updateSegmentTracks(edit.segId, tracks)
+              else project.updateDocKeyframes(tracks)
             }}
           />
           <main className="canvas-wrap">

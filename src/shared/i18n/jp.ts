@@ -320,6 +320,7 @@ export const jp = {
     hintNoSegment: 'タイムラインでセグメントを選択するとキーフレームを編集できます',
     currentValue: '取得値',
     addAt: 'ここにキーフレーム追加',
+    batchAdd: '一括キーフレーム',
     noPoint: 'キーフレーム未設定——ストリップをクリックするか「ここにキーフレーム追加」',
     value: '値',
     easing: 'イージング',

@@ -44,6 +44,11 @@ export interface TimelineSegment {
 
 export interface TimelineDocument {
   segments: TimelineSegment[]
+  /**
+   * 全局基线关键帧（1.1.0 用户 #3）：文档级轨道——**不分割时间轴也能打关键帧**；
+   * 作用于整曲（t 为绝对时间），段级布局/轨道在其上覆盖（全局为底、段级为顶）。
+   */
+  keyframes?: PropertyTrack[]
 }
 
 /** 时间轴存在判定（导出/预览接入用：有片段 → 逐帧 resolve） */
@@ -258,21 +263,17 @@ export function splitTimelineAt(
   }
 }
 
-/**
- * 解析 tSec 的完整布局：段布局（或全局基线）→ 关键帧轨道覆盖。
- * 不修改输入（返回新对象）；path 命中失败/值类型不符 → 跳过该轨道（容错）。
- */
-export function resolveLayoutAt(layout: ProjectLayout, tSec: number): ProjectLayout {
-  const doc = layout.timeline ?? { segments: [] }
-  const seg = segmentAt(doc, tSec)
-  if (!seg) return layout
-  // 无关键帧：段视图即为最终布局（直接返回同一对象——预览逐帧调用零拷贝）
-  if ((seg.keyframes ?? []).length === 0) return seg.layout ?? layout
-  const base = structuredClone(seg.layout ?? layout)
-  for (const track of seg.keyframes ?? []) {
-    const v = trackValueAt(track, tSec - seg.startSec)
+/** 轨道集应用（纯函数）：base 布局 + 轨道（t 为轨道内相对秒）→ 新布局；不修改输入 */
+function applyTrackSet(
+  base: ProjectLayout,
+  tracks: PropertyTrack[],
+  tSecRel: number
+): ProjectLayout {
+  const out = structuredClone(base)
+  for (const track of tracks) {
+    const v = trackValueAt(track, tSecRel)
     if (v == null) continue
-    const target = base as unknown as Record<string, unknown>
+    const target = out as unknown as Record<string, unknown>
     const cur = getByPath(target, track.path)
     // 类型守卫：数值路径目标须为 number；颜色路径目标须为 string（键碰撞容错）
     if (
@@ -283,5 +284,30 @@ export function resolveLayoutAt(layout: ProjectLayout, tSec: number): ProjectLay
     }
     setByPath(target, track.path, v)
   }
-  return base
+  return out
+}
+
+/**
+ * 解析 tSec 的完整布局：**全局基线轨道（整曲，绝对 t）→ 段布局/段轨道覆盖**（全局为底、段级为顶）。
+ * 不修改输入（返回新对象）；path 命中失败/值类型不符 → 跳过该轨道（容错）。
+ */
+export function resolveLayoutAt(layout: ProjectLayout, tSec: number): ProjectLayout {
+  const doc = layout.timeline ?? { segments: [] }
+  const globalTracks = doc.keyframes ?? []
+  const seg = segmentAt(doc, tSec)
+  // 无段命中：全局轨道存在 → 应用并返回（零拷贝快路径：无全局轨道直接返回 layout）
+  if (!seg) {
+    return globalTracks.length > 0 ? applyTrackSet(layout, globalTracks, tSec) : layout
+  }
+  // 段无关键帧：继承链 =（未物化 → 全局动画后的基线）或（已物化段快照=冻结）
+  if ((seg.keyframes ?? []).length === 0) {
+    if (!seg.layout) {
+      return globalTracks.length > 0 ? applyTrackSet(layout, globalTracks, tSec) : layout
+    }
+    return seg.layout
+  }
+  // 段级轨道：全局为底（全局轨道绝对 t）→ 段轨道（相对片段起点）覆盖
+  const segBase = seg.layout ?? layout
+  const withGlobal = globalTracks.length > 0 ? applyTrackSet(segBase, globalTracks, tSec) : segBase
+  return applyTrackSet(withGlobal, seg.keyframes ?? [], tSec - seg.startSec)
 }

@@ -318,6 +318,7 @@ export const en = {
     hintNoSegment: 'Select a segment on the timeline to edit its keyframes',
     currentValue: 'Capture',
     addAt: 'Add keyframe here',
+    batchAdd: 'Batch keyframe',
     noPoint: 'No keyframes yet - click the strip or "Add keyframe here"',
     value: 'Value',
     easing: 'Easing',

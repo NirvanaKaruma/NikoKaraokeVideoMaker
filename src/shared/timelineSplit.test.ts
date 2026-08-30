@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import {
   clampSegmentBoundsToNeighbors,
+  resolveLayoutAt,
   segmentOverlaps,
   splitTimelineAt,
   type TimelineDocument
 } from './timeline'
+import { DEFAULT_LAYOUT } from './layout'
 
 function docOf(list: { id: string; a: number; b: number }[]): TimelineDocument {
   return {
@@ -68,5 +70,64 @@ describe('timelineSplit（纯函数）', () => {
         ])
       )
     ).toEqual([])
+  })
+
+  it('全局基线可动画（用户 #3）：无分割也能打帧，绝对 t 插值', () => {
+    const base = structuredClone(DEFAULT_LAYOUT)
+    const doc: TimelineDocument = {
+      segments: [],
+      keyframes: [
+        {
+          path: 'mainImage.rect.x',
+          frames: [
+            { t: 0, value: 0.1, easing: 'linear' },
+            { t: 10, value: 0.5, easing: 'linear' }
+          ]
+        }
+      ]
+    }
+    const l = { ...base, timeline: doc }
+    expect(resolveLayoutAt(l, 5).mainImage.rect.x).toBeCloseTo(0.3, 5)
+    expect(resolveLayoutAt(l, 0).mainImage.rect.x).toBeCloseTo(0.1, 5)
+    expect(resolveLayoutAt(l, 10).mainImage.rect.x).toBeCloseTo(0.5, 5)
+  })
+
+  it('全局为底、段级为顶：段内轨道覆盖全局轨道', () => {
+    const base = structuredClone(DEFAULT_LAYOUT)
+    const l = {
+      ...base,
+      timeline: {
+        segments: [
+          {
+            id: 'S',
+            startSec: 0,
+            endSec: 10,
+            layout: null,
+            keyframes: [
+              {
+                path: 'mainImage.rect.x',
+                frames: [
+                  { t: 2, value: 0.9, easing: 'linear' },
+                  { t: 4, value: 0.8, easing: 'linear' }
+                ]
+              }
+            ]
+          }
+        ],
+        keyframes: [
+          {
+            path: 'mainImage.rect.x',
+            frames: [
+              { t: 0, value: 0.1, easing: 'linear' },
+              { t: 10, value: 0.5, easing: 'linear' }
+            ]
+          }
+        ]
+      }
+    }
+    // t=3：段轨道插值 0.85 覆盖全局 0.22
+    expect(resolveLayoutAt(l, 3).mainImage.rect.x).toBeCloseTo(0.85, 5)
+    // t=5：段轨超出末帧=0.8（clamp）覆盖全局 0.3
+    expect(resolveLayoutAt(l, 5).mainImage.rect.x).toBeCloseTo(0.8, 5)
   })
 })

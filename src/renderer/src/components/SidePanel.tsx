@@ -123,6 +123,7 @@ export interface SidePanelProps {
   kfSegId: string | null
   kfSegStartSec: number
   kfSegEndSec: number
+  kfDurationSec: number
   kfTracks: PropertyTrack[]
   kfView: ProjectLayout
   onKfTracksChange: (tracks: PropertyTrack[]) => void
@@ -274,6 +275,7 @@ export function SidePanel(props: SidePanelProps): React.JSX.Element {
             segId={props.kfSegId}
             segStartSec={props.kfSegStartSec}
             segEndSec={props.kfSegEndSec}
+            durationSec={props.kfDurationSec}
             tracks={props.kfTracks}
             currentT={props.currentTime}
             view={props.kfView}
