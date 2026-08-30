@@ -42,7 +42,8 @@ function rawOf(v: number, c: KeyframeCatalogEntry): number {
 export function KeyframePanel(props: KeyframePanelProps): React.JSX.Element {
   const { t } = useLocale()
   const [selPath, setSelPath] = useState<string | null>(null)
-  const [selPoint, setSelPoint] = useState<number>(0)
+  /** 选中的关键帧时间（帧级编辑器；同时间的属性帧合并为一个关键帧） */
+  const [selT, setSelT] = useState<number | null>(null)
   /** P3a 目录分组折叠：默认收起无帧的组，有帧的组展开 */
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({})
   const stripRef = useRef<HTMLDivElement>(null)
@@ -115,6 +116,86 @@ export function KeyframePanel(props: KeyframePanelProps): React.JSX.Element {
     }
   }
 
+  /** —— 帧级编辑辅助（统一编辑器） —— */
+  const near = (a: number, b: number): boolean => Math.abs(a - b) < 0.01
+  const allFrameTs: number[] = [
+    ...new Set(props.tracks.flatMap((tr) => tr.frames.map((f) => +f.t.toFixed(3))))
+  ].sort((a, b) => a - b)
+  const frameEntriesAt = (
+    tt: number
+  ): { path: string; frame: Keyframe; entry: KeyframeCatalogEntry }[] => {
+    const out: { path: string; frame: Keyframe; entry: KeyframeCatalogEntry }[] = []
+    for (const tr of props.tracks) {
+      const fr = tr.frames.find((f) => near(f.t, tt))
+      if (!fr) continue
+      const en = allEntries.find((c) => c.path === tr.path)
+      if (!en) continue
+      out.push({ path: tr.path, frame: fr, entry: en })
+    }
+    return out
+  }
+  const framePropLabel = (path: string): string => {
+    const c = allEntries.find((x) => x.path === path)
+    if (!c) return path
+    const dyn = c as KeyframeCatalogEntry & { dynamic?: boolean; idx?: number }
+    return dyn.dynamic
+      ? t('overlay.layerI', { i: (dyn.idx ?? 0) + 1 }) + ' · ' + t(c.labelKey)
+      : t(c.labelKey)
+  }
+  const updateAll = (next: PropertyTrack[]): void => props.onTracksChange(next)
+  const setFrameValueAt = (path: string, tt: number, v: number | string): void =>
+    updateAll(
+      props.tracks.map((tr) =>
+        tr.path !== path
+          ? tr
+          : { ...tr, frames: tr.frames.map((f) => (near(f.t, tt) ? { ...f, value: v } : f)) }
+      )
+    )
+  const setFrameEasingAt = (path: string, tt: number, easing: EasingName): void =>
+    updateAll(
+      props.tracks.map((tr) =>
+        tr.path !== path
+          ? tr
+          : { ...tr, frames: tr.frames.map((f) => (near(f.t, tt) ? { ...f, easing } : f)) }
+      )
+    )
+  const setFramePropRemove = (path: string, tt: number): void =>
+    updateAll(
+      props.tracks
+        .map((tr) =>
+          tr.path !== path ? tr : { ...tr, frames: tr.frames.filter((f) => !near(f.t, tt)) }
+        )
+        .filter((tr) => tr.frames.length > 0)
+    )
+  const removeFrameAt = (tt: number): void =>
+    updateAll(
+      props.tracks
+        .map((tr) => ({ ...tr, frames: tr.frames.filter((f) => !near(f.t, tt)) }))
+        .filter((tr) => tr.frames.length > 0)
+    )
+  const addPropAt = (path: string, tt: number): void => {
+    const raw = currentValueAt(props.view, path)
+    if (raw == null) return
+    const frame: Keyframe = { t: tt, value: raw, easing: 'linear' }
+    const existing = props.tracks.find((tr) => tr.path === path)
+    if (existing) {
+      updateAll(
+        props.tracks.map((tr) =>
+          tr.path !== path
+            ? tr
+            : {
+                ...tr,
+                frames: [...tr.frames.filter((f) => !near(f.t, tt)), frame].sort(
+                  (a, b) => a.t - b.t
+                )
+              }
+        )
+      )
+    } else {
+      updateAll([...props.tracks, { path, frames: [frame] }])
+    }
+  }
+
   const addFrame = (): void => {
     if (!entry) return
     const v = currentValueAt(props.view, entry.path)
@@ -124,7 +205,7 @@ export function KeyframePanel(props: KeyframePanelProps): React.JSX.Element {
       (a, b) => a.t - b.t
     )
     setFrames(next)
-    setSelPoint(next.findIndex((f) => f === nf))
+    setSelT(nf.t)
   }
 
   /** 批量打帧（1.1.0 用户 #1）：当前播放头处为**全部已参与动画的属性**各写一帧（改完多个属性 → 一次定格） */
@@ -143,35 +224,6 @@ export function KeyframePanel(props: KeyframePanelProps): React.JSX.Element {
     })
     props.onTracksChange(nextTracks)
   }
-
-  const movePoint = (e: React.PointerEvent, i: number): void => {
-    e.preventDefault()
-    e.stopPropagation()
-    const el = stripRef.current
-    if (!el) return
-    const rect = el.getBoundingClientRect()
-    const move = (ev: PointerEvent): void => {
-      const t = ((ev.clientX - rect.left) / Math.max(1, rect.width)) * segLen
-      const next = frames.map((f, j) =>
-        j === i ? { ...f, t: +Math.min(segLen, Math.max(0, t)).toFixed(3) } : f
-      )
-      setFrames(next)
-    }
-    const up = (): void => {
-      window.removeEventListener('pointermove', move)
-      window.removeEventListener('pointerup', up)
-    }
-    window.addEventListener('pointermove', move)
-    window.addEventListener('pointerup', up)
-  }
-
-  const setPointValue = (v: number | string): void => {
-    const cur = frames[selPoint]
-    if (!cur) return
-    setFrames(frames.map((f, j) => (j === selPoint ? { ...f, value: v } : f)))
-  }
-
-  const sel = frames[selPoint]
 
   /** P3a 目录分组：折叠展示（有帧组默认展开；未选段 = 全局基线模式，同样可打帧） */
   const GROUPS: { id: string; labelKey: string; test: (p: string) => boolean }[] = [
@@ -220,7 +272,8 @@ export function KeyframePanel(props: KeyframePanelProps): React.JSX.Element {
                       className={'kf-track' + (selPath === c.path ? ' active' : '')}
                       onClick={() => {
                         setSelPath(c.path)
-                        setSelPoint(Math.max(0, framesOf(props.tracks, c.path).length - 1))
+                        const fs = framesOf(props.tracks, c.path)
+                        if (fs.length > 0) setSelT(fs[fs.length - 1].t)
                       }}
                     >
                       <span>{label}</span>
@@ -250,8 +303,8 @@ export function KeyframePanel(props: KeyframePanelProps): React.JSX.Element {
               </button>
             )}
           </div>
-          {/* 关键帧点条 */}
-          {frames.length > 0 ? (
+          {/* 关键帧点条（全帧聚合：同时间的属性帧显示为一个点——动画软件式） */}
+          {allFrameTs.length > 0 ? (
             <div
               ref={stripRef}
               className="kf-strip"
@@ -263,86 +316,116 @@ export function KeyframePanel(props: KeyframePanelProps): React.JSX.Element {
                 addFrameAt(t)
               }}
             >
-              {frames.map((f, i) => (
+              {allFrameTs.map((tt, i) => (
                 <div
                   key={i}
                   className={
-                    'kf-point' + (selPoint === i && selPath === track?.path ? ' active' : '')
+                    'kf-point' + (selT != null && Math.abs(selT - tt) < 0.01 ? ' active' : '')
                   }
-                  style={{ left: (f.t / segLen) * 100 + '%' }}
-                  onPointerDown={(e) => {
+                  style={{ left: (tt / segLen) * 100 + '%' }}
+                  onClick={(e) => {
                     e.stopPropagation()
-                    setSelPoint(i)
-                    movePoint(e, i)
+                    setSelT(tt)
                   }}
-                  title={JSON.stringify(f.value)}
+                  title={t('kf.frameTitle', { t: tt.toFixed(2), n: frameEntriesAt(tt).length })}
                 />
               ))}
             </div>
           ) : (
             <div className="kf-strip empty">{t('kf.noPoint')}</div>
           )}
-          {/* 选中点编辑：值 + 缓动 + 删除 */}
-          {sel && (
-            <div className="kf-editor">
-              <span className="kf-editor-label">{t('kf.value')}</span>
-              {entry.kind === 'number' ? (
-                <input
-                  className="kf-num"
-                  type="number"
-                  step={entry.step * (entry.displayScale ?? 1)}
-                  value={displayOf(sel.value as number, entry)}
-                  onChange={(e) => {
-                    const n = Number(e.target.value)
-                    if (Number.isFinite(n)) setPointValue(rawOf(n, entry))
-                  }}
-                />
-              ) : (
-                <span className="kf-color">
-                  <input
-                    type="color"
-                    value={
-                      /^#[0-9a-fA-F]{6}$/.test(String(sel.value)) ? String(sel.value) : '#000000'
-                    }
-                    onChange={(e) => setPointValue(e.target.value)}
-                  />
-                  <input
-                    className="kf-num"
-                    type="text"
-                    value={String(sel.value)}
-                    onChange={(e) => setPointValue(e.target.value)}
-                  />
+          {/* 帧级编辑器：点选关键帧 → 该时刻全部属性的统一查看/修改/删除（用户方向） */}
+          {selT != null && (
+            <div className="kf-frame-editor">
+              <div className="kf-frame-head">
+                <span className="kf-time">
+                  t={selT.toFixed(2)}s · {frameEntriesAt(selT).length} {t('kf.props')}
                 </span>
-              )}
-              <span className="kf-editor-label">{t('kf.easing')}</span>
-              <select
-                className="kf-select"
-                value={sel.easing}
-                onChange={(e) =>
-                  setFrames(
-                    frames.map((f, j) =>
-                      j === selPoint ? { ...f, easing: e.target.value as EasingName } : f
-                    )
-                  )
-                }
-              >
-                {EASING_OPTIONS.map((k) => (
-                  <option key={k} value={k}>
-                    {t('kf.easing' + capitalize(k))}
-                  </option>
-                ))}
-              </select>
-              <button
-                type="button"
-                className="btn-sm danger"
-                onClick={() => {
-                  const next = frames.filter((_, j) => j !== selPoint)
-                  setFrames(next)
-                  setSelPoint(Math.max(0, selPoint - 1))
-                }}
-              >
-                {t('kf.remove')}
-              </button>
+                <button
+                  type="button"
+                  className="btn-sm danger"
+                  onClick={() => {
+                    removeFrameAt(selT)
+                    setSelT(null)
+                  }}
+                >
+                  {t('kf.removeFrame')}
+                </button>
+              </div>
+              {frameEntriesAt(selT).map(({ path, frame: fr, entry: en }, i) => (
+                <div className="kf-frame-row" key={i}>
+                  <span className="kf-frame-name">{framePropLabel(path)}</span>
+                  {en.kind === 'number' ? (
+                    <input
+                      className="kf-num"
+                      type="number"
+                      step={en.step * (en.displayScale ?? 1)}
+                      value={displayOf(fr.value as number, en)}
+                      onChange={(ev) => {
+                        const n2 = Number(ev.target.value)
+                        if (Number.isFinite(n2)) setFrameValueAt(path, selT, rawOf(n2, en))
+                      }}
+                    />
+                  ) : (
+                    <span className="kf-color">
+                      <input
+                        type="color"
+                        value={
+                          /^#[0-9a-fA-F]{6}$/.test(String(fr.value)) ? String(fr.value) : '#000000'
+                        }
+                        onChange={(ev) => setFrameValueAt(path, selT, ev.target.value)}
+                      />
+                      <input
+                        className="kf-num"
+                        type="text"
+                        value={String(fr.value)}
+                        onChange={(ev) => setFrameValueAt(path, selT, ev.target.value)}
+                      />
+                    </span>
+                  )}
+                  <select
+                    className="kf-select"
+                    value={fr.easing}
+                    onChange={(ev) => setFrameEasingAt(path, selT, ev.target.value as EasingName)}
+                  >
+                    {EASING_OPTIONS.map((k) => (
+                      <option key={k} value={k}>
+                        {t('kf.easing' + capitalize(k))}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    className="btn-sm danger"
+                    title={t('kf.removeProp')}
+                    onClick={() => setFramePropRemove(path, selT)}
+                  >
+                    ✕
+                  </button>
+                </div>
+              ))}
+              <div className="kf-frame-add">
+                <select
+                  className="kf-select"
+                  value=""
+                  onChange={(ev) => {
+                    const p = ev.target.value
+                    if (p) {
+                      addPropAt(p, selT)
+                      ev.target.value = ''
+                    }
+                  }}
+                >
+                  <option value="">{t('kf.addProp')}</option>
+                  {allEntries
+                    .filter((c) => !frameEntriesAt(selT).some((x) => x.path === c.path))
+                    .map((c) => (
+                      <option key={c.path} value={c.path}>
+                        {framePropLabel(c.path)}
+                      </option>
+                    ))}
+                </select>
+              </div>
             </div>
           )}
         </>
@@ -371,6 +454,6 @@ export function KeyframePanel(props: KeyframePanelProps): React.JSX.Element {
       (a, b) => a.t - b.t
     )
     setFrames(next)
-    setSelPoint(next.findIndex((f) => f.t === nf.t && f.value === nf.value))
+    setSelT(nf.t)
   }
 }

@@ -127,11 +127,6 @@ export interface SidePanelProps {
   kfTracks: PropertyTrack[]
   kfView: ProjectLayout
   onKfTracksChange: (tracks: PropertyTrack[]) => void
-  /** P3b 参数行菱形打帧入口（传给 FxPanel 等） */
-  kfOps?: {
-    hasKeyframe: (path: string) => boolean
-    addKeyframeAt: (path: string) => void
-  }
 }
 
 const TABS: { id: SideTab; labelKey: string }[] = [
@@ -218,14 +213,12 @@ export function SidePanel(props: SidePanelProps): React.JSX.Element {
               onUpdate={props.onOverlayUpdate}
               onRemove={props.onOverlayRemove}
               onMove={props.onOverlayMove}
-              kfOps={props.kfOps}
             />
             <BackgroundPanel
               background={props.background}
               bgUrl={props.bgUrl}
               bgFile={props.bgFile}
               onChange={props.onBackgroundChange}
-              kfOps={props.kfOps}
               onBgFile={props.onBgFile}
               onClearBg={props.onClearBg}
             />
@@ -250,19 +243,13 @@ export function SidePanel(props: SidePanelProps): React.JSX.Element {
             customFontFamily={props.customFontFamily}
             customFontName={props.customFontName}
             onPickFont={props.onPickFont}
-            kfOps={props.kfOps}
           />
         )}
         {tab === 'visualizer' && (
-          <VisualizerPanel
-            config={props.visualizer}
-            onChange={props.onVisualizerChange}
-            kfOps={props.kfOps}
-          />
+          <VisualizerPanel config={props.visualizer} onChange={props.onVisualizerChange} />
         )}
         {tab === 'fx' && (
           <FxPanel
-            kfOps={props.kfOps}
             backgroundFx={props.backgroundFx}
             imageFx={props.imageFx}
             songTitleEntry={props.songTitleEntry}
