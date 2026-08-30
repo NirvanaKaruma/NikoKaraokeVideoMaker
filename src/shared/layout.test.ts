@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import {
   DEFAULT_LAYOUT,
+  EXPORT_BITRATE_KBPS,
   LOGICAL_HEIGHT,
   LOGICAL_WIDTH,
   RESOLUTIONS,
   clampNormRect,
+  videoBitrateKbpsFor,
   defaultLayerOrder,
   hasCustomLayerOrder,
   hasDynamicFx,
@@ -139,6 +141,17 @@ describe('归一化布局模型', () => {
     withMask.mainImage.fx.mask = 'star'
     withMask.mainImage.fx.border = 0.01
     expect(hasDynamicFx(withMask)).toBe(false)
+  })
+
+  it('视频码率：自定义值优先、自动按分辨率表格、钳制与未知分辨率回退', () => {
+    expect(videoBitrateKbpsFor({ videoBitrateKbps: null }, '1080p')).toBe(
+      EXPORT_BITRATE_KBPS['1080p']
+    )
+    expect(videoBitrateKbpsFor({ videoBitrateKbps: 5000 }, '720p')).toBe(5000)
+    expect(videoBitrateKbpsFor({ videoBitrateKbps: 1 }, '1080p')).toBe(500) // 下限钳制
+    expect(videoBitrateKbpsFor({ videoBitrateKbps: 999999 }, '1080p')).toBe(100000) // 上限钳制
+    expect(videoBitrateKbpsFor({ videoBitrateKbps: 8000 }, 'unknown')).toBe(8000)
+    expect(videoBitrateKbpsFor({ videoBitrateKbps: null }, 'unknown')).toBe(10000) // 回退
   })
 
   it('hasDynamicFx：附加层的呼吸/旋转/发光/入场 = true；纯静态（无图或者 mask/border）不触发', () => {

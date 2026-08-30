@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import type { ExportConfig } from '@shared/layout'
 import { useLocale } from '../hooks/useLocale'
-import { RESOLUTIONS } from '@shared/layout'
+import { EXPORT_BITRATE_KBPS, RESOLUTIONS, videoBitrateKbpsFor } from '@shared/layout'
 import type { ExporterState } from '../hooks/useExporter'
 import { getEncodeModePref, setEncodeModePref, type EncodeModePref } from '../export/exportVideo'
 
@@ -102,6 +102,48 @@ export function ExportDialog(props: ExportDialogProps): React.JSX.Element | null
               <option value="sw">{t(MODE_LABEL_KEY.sw)}</option>
             </select>
           </label>
+          <label className="field">
+            <span>{t('exportDialog.bitrate')}</span>
+            <select
+              value={config.videoBitrateKbps == null ? 'auto' : 'custom'}
+              disabled={busy}
+              onChange={(e) =>
+                onChange({
+                  videoBitrateKbps:
+                    e.target.value === 'auto'
+                      ? null
+                      : (config.videoBitrateKbps ??
+                        EXPORT_BITRATE_KBPS[config.resolutionId] ??
+                        10000)
+                })
+              }
+            >
+              <option value="auto">{t('exportDialog.bitrateAuto')}</option>
+              <option value="custom">{t('exportDialog.bitrateCustom')}</option>
+            </select>
+          </label>
+          {config.videoBitrateKbps != null && (
+            <label className="field">
+              <span>{t('exportDialog.bitrateValue')}</span>
+              <input
+                type="number"
+                min={500}
+                max={100000}
+                step={500}
+                value={config.videoBitrateKbps}
+                disabled={busy}
+                onChange={(e) => {
+                  const v = Number(e.target.value)
+                  if (Number.isFinite(v)) onChange({ videoBitrateKbps: v })
+                }}
+              />
+            </label>
+          )}
+          <p className="panel-note">
+            {t('exportDialog.bitrateHint', {
+              mbps: (videoBitrateKbpsFor(config, config.resolutionId) / 1000).toFixed(1)
+            })}
+          </p>
           <p className="panel-note">{t('exportDialog.detailNote')}</p>
 
           {!ffmpegAvailable && <p className="field-error">{t('exportDialog.noFfmpeg')}</p>}

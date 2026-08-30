@@ -271,6 +271,28 @@ export interface ExportConfig {
   resolutionId: string
   /** 30 或 60，默认 30（规格）；60 更丝滑但编码耗时约翻倍 */
   fps: number
+  /** 视频码率（kbps）；null/缺省 = 自动（按分辨率表格） */
+  videoBitrateKbps?: number | null
+}
+
+/** 自动码率表（kbps，H.264 各分辨率推荐；随项目保存的 auto 档参考值） */
+export const EXPORT_BITRATE_KBPS: Record<string, number> = {
+  '720p': 6000,
+  '1080p': 10000,
+  '2k': 16000,
+  '4k': 28000
+}
+
+/** 生效视频码率（kbps）：自定义值（500–100000 钳制）优先，否则按分辨率表格，未知分辨率回退 10000 */
+export function videoBitrateKbpsFor(
+  cfg: Pick<ExportConfig, 'videoBitrateKbps'>,
+  resolutionId: string
+): number {
+  const v = cfg.videoBitrateKbps
+  if (v != null && Number.isFinite(v) && v > 0) {
+    return Math.min(100000, Math.max(500, Math.round(v)))
+  }
+  return EXPORT_BITRATE_KBPS[resolutionId] ?? 10000
 }
 
 export interface ProjectLayout {

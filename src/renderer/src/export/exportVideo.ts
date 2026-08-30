@@ -3,6 +3,7 @@ import { openDiskStream, STREAM_CHUNK_BYTES, type DiskStreamSink } from './strea
 import {
   hasCustomLayerOrder,
   hasDynamicFx,
+  videoBitrateKbpsFor,
   type ProjectLayout,
   type ResolutionOption
 } from '@shared/layout'
@@ -23,13 +24,6 @@ export interface ExportProgressInfo {
   total: number
   mergePercent: number | null
   message: string
-}
-
-const BITRATE_TABLE: Record<string, number> = {
-  '720p': 6_000_000,
-  '1080p': 10_000_000,
-  '2k': 16_000_000,
-  '4k': 28_000_000
 }
 
 const H264_CODECS = ['avc1.640033', 'avc1.640028', 'avc1.4d0028', 'avc1.42e01f', 'avc1.42001f']
@@ -242,7 +236,7 @@ export async function encodeVideo(opts: EncodeVideoOptions): Promise<ExportVideo
     resolution.width,
     resolution.height,
     fps,
-    BITRATE_TABLE[resolution.id] ?? 10_000_000
+    videoBitrateKbpsFor(layout.export, resolution.id) * 1000
   )
   if (!picked) {
     throw new Error(t('exporter.unsupportedH264'))

@@ -174,6 +174,11 @@ export const jp = {
     modeAuto: '自動（このパソコンの検出結果に基づく）',
     modeHw: 'GPU ハードウェアエンコードを強制',
     modeSw: 'CPU ソフトウェアエンコードを強制',
+    bitrate: 'ビデオビットレート',
+    bitrateAuto: '自動（解像度による）',
+    bitrateCustom: 'カスタム',
+    bitrateValue: 'ビットレート（kbps）',
+    bitrateHint: '現在 {mbps} Mbps。自動：720p 6M / 1080p 10M / 2K 16M / 4K 28M。',
     detailNote: '詳細な検出は「設定 → エンコード高速化」を参照してください。',
     noFfmpeg:
       'ffmpeg が検出されません：書き出しは無効です。「設定 → ffmpeg」でインストールまたは指定してください。',
