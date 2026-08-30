@@ -14,7 +14,7 @@ TEST-ARTIFACTS/
 .plan/
 
 # 版本化过程文件（里程碑任务清单快照——历史过程，不入库）
-nikokaraoke-0*.md
+nikokaraoke-*.md
 lint-*.txt
 vislog*.txt
 

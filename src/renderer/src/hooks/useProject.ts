@@ -1071,7 +1071,16 @@ export function useProject(): {
           artist: { ...base.texts.artist, ...incoming.texts.artist }
         },
         visualizer: { ...base.visualizer, ...incoming.visualizer },
-        export: { ...base.export, ...incoming.export }
+        export: { ...base.export, ...incoming.export },
+        // 其余节（0.4–0.9 时代的存档缺少后来新增的节——如 editor/audio/beat/canvasFx/introOutro），
+        // 与默认值深合并：旧档缺字段回落默认、新档包含的全部保留
+        beat: { ...base.beat, ...incoming.beat },
+        canvasFx: { ...base.canvasFx, ...incoming.canvasFx },
+        introOutro: { ...base.introOutro, ...incoming.introOutro },
+        audio: { ...base.audio, ...incoming.audio },
+        editor: { ...base.editor, ...incoming.editor },
+        overlayLayers: incoming.overlayLayers ?? [],
+        timeline: incoming.timeline ?? base.timeline
       }
       setLayout(merged)
 

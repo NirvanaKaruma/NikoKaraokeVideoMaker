@@ -1954,7 +1954,56 @@ function App(): React.JSX.Element {
       project.updateLayerState('main', { locked: true })
       project.updateLayerState('visualizer', { hidden: true })
       project.moveLayerState('visualizer', -1)
-      await sleep(200)
+      // 1.0.0 全字段覆盖：时间轴（段+段过渡+关键帧+空帧槽+全局关键帧）+ 特效（beat/canvasFx/audio/editor）
+      const seg1 = project.addSegment(0, 1.5)
+      const seg2 = project.addSegment(1.5, 3)
+      project.updateSegmentLayout(seg1, {
+        mainImage: {
+          ...project.layout.mainImage,
+          rect: { ...project.layout.mainImage.rect, x: 0.3 }
+        }
+      })
+      project.updateSegmentTracks(seg2, [
+        {
+          path: 'mainImage.rect.x',
+          frames: [
+            { t: 0, value: 0.2, easing: 'linear' },
+            { t: 1.5, value: 0.6, easing: 'linear' }
+          ]
+        }
+      ])
+      project.updateSegmentTransition(seg1, 'out', { durationSec: 0.8, easing: 'easeOutCubic' })
+      project.updateSegmentTransition(seg2, 'in', { durationSec: 0.5, easing: 'linear' })
+      project.addEmptyFrame(seg2, 2.2)
+      project.addEmptyFrame(null, 2.6)
+      project.updateDocKeyframes([
+        {
+          path: 'texts.songTitle.style.fontSize',
+          frames: [
+            { t: 0, value: 0.08, easing: 'linear' },
+            { t: 2.8, value: 0.13, easing: 'easeOutCubic' }
+          ]
+        }
+      ])
+      project.updateBeatFx({
+        pulse: 0.3,
+        burst: 0.2,
+        particlePreset: 'star',
+        particleDensity: 0.15
+      })
+      project.updateVisualizer({ bpm: 120 })
+      project.updateCanvasFx({
+        vignette: 0.25,
+        grain: 0.1,
+        scanline: 0.05,
+        beatFlash: 0.2,
+        lightLeak: 0.15
+      })
+      project.updateIntroOutro({ introFade: 0.8, outroFade: 0.8 })
+      project.updateAudioEngine({ leadMs: 120, fadeInSec: 0.5, fadeOutSec: 0.6 })
+      project.updateEditor({ snapEnabled: false })
+      await sleep(250)
+      const layoutJsonBefore = JSON.stringify(projectRef.current.layout)
       // 先走真实保存路径（更新已保存快照，同步 dirty 状态）
       await project.saveProject()
       // 再用带音频磁盘路径的版本覆盖磁盘文件（smoke 音频是内存生成，需落盘路径）
@@ -2064,6 +2113,13 @@ function App(): React.JSX.Element {
           l.visualizer.barCount +
           ' 模糊=' +
           l.background.blur
+      )
+      // 1.0.0 全字段往返：保存前的布局 JSON 与加载后完全一致（时间轴/一键修改/特效全字段）
+      const layoutJsonAfter = JSON.stringify(projectRef.current.layout)
+      add(
+        '全字段往返对比',
+        layoutJsonBefore === layoutJsonAfter,
+        '深比较 ' + (layoutJsonBefore === layoutJsonAfter ? '一致' : '不一致')
       )
       // 独立背景图恢复
       const bgWait = Date.now()
