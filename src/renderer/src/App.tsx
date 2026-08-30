@@ -10,6 +10,7 @@ import { useAudioPlayback, type PlaybackApi } from './hooks/useAudioPlayback'
 import { useCustomFont, customFontFamily } from './hooks/useCustomFont'
 import { useFfmpegDownload, useFfmpegStatus } from './hooks/useFfmpeg'
 import { useExporter } from './hooks/useExporter'
+import { useAppPrefs } from './hooks/useAppPrefs'
 import { benchmarkEncoder } from './export/exportVideo'
 import { openDiskStream } from './export/streamMuxer'
 import { drawCanvasFx } from '@shared/canvasfx'
@@ -394,23 +395,34 @@ async function runAudioSmoke(
   }
 
   // ── 0.9.0 图层：隐藏主图 → 主图区域像素变化；锁定 → 主图层组 draggable=false 探针 ──
-  // 【二分诊断：临时仅探针，不做任何图层状态变更】
+  // 【Flake 修复 2026-02：固定 sleep 250ms 在重负载下偶尔不够（Konva 重渲染/React 提交未落地）——
+  //   改为轮询确认（≤2s 超时），稳定通过；不再有 hideDiff=0 / lockProbe=false 交替假失败】
   const mainRegion = (): Uint8ClampedArray =>
     captureRegion(stage, 0.3 * 1920, 0.3 * 1080, 0.6 * 1920, 0.7 * 1080)
   const mainShown = mainRegion()
   project.updateLayerState('main', { hidden: true })
-  await sleep(250)
-  const mainHiddenTmp = mainRegion()
-  const hideDiff = countDiffPixels(mainShown, mainHiddenTmp)
+  let hideDiff = 0
+  {
+    const t0 = Date.now()
+    while (Date.now() - t0 < 2000) {
+      await sleep(120)
+      hideDiff = countDiffPixels(mainShown, mainRegion())
+      if (hideDiff > 300) break
+    }
+  }
   project.updateLayerState('main', { hidden: false })
   await sleep(250)
   project.updateLayerState('main', { locked: true })
-  await sleep(250)
   let lockProbe = false
   {
-    const layer = stage.getLayers().find((l) => l.name() === 'main')
-    const g = layer?.findOne('Group')
-    lockProbe = g != null && g.draggable() === false
+    const t0 = Date.now()
+    while (Date.now() - t0 < 2000) {
+      await sleep(120)
+      const layer = stage.getLayers().find((l) => l.name() === 'main')
+      const g = layer?.findOne('Group')
+      lockProbe = g != null && g.draggable() === false
+      if (lockProbe) break
+    }
   }
   project.updateLayerState('main', { locked: false })
   await sleep(250)
@@ -1227,14 +1239,18 @@ function App(): React.JSX.Element {
   const [exportOpen, setExportOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [timelineOpen, setTimelineOpen] = useState(true)
-  /** 主题（深色=默认；浅色可选；localStorage niko.theme 持久化） */
-  const [theme, setTheme] = useState<'dark' | 'light'>(() => {
-    try {
-      return localStorage.getItem('niko.theme') === 'light' ? 'light' : 'dark'
-    } catch {
-      return 'dark'
-    }
-  })
+  /** 应用级偏好（1.0.0 设置重构）：主题/预览音量/自动保存/快捷键——main config.json 持久化 */
+  const { prefs, ready: prefsReady, setPrefs, matchAction } = useAppPrefs()
+  /** 主题（深色=默认；浅色可选）：prefs 就绪前用 localStorage 旧值（迁移），就绪后以 prefs 为唯一事实源 */
+  const theme: 'dark' | 'light' = prefsReady
+    ? prefs.theme
+    : (() => {
+        try {
+          return localStorage.getItem('niko.theme') === 'light' ? 'light' : 'dark'
+        } catch {
+          return 'dark'
+        }
+      })()
   useEffect(() => {
     document.documentElement.dataset.theme = theme
     try {
@@ -1309,7 +1325,8 @@ function App(): React.JSX.Element {
     frameTRef,
     layerFxRef,
     playTimeRef,
-    project.layout.audio.leadMs
+    project.layout.audio.leadMs,
+    prefs.previewVolume
   )
   const pbRef = useRef<PlaybackApi>(pb)
   /** 普通定位（播放条/时间轴空白拖动）＝取消关键帧选择；点关键帧走 onKfSeek 分离 */
@@ -1439,7 +1456,24 @@ function App(): React.JSX.Element {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // 全局撤销/重做快捷键（输入框内保留原生行为）+ 关闭前未保存确认接口
+  // 自动保存（1.0.0 设置重构）：周期性静默保存（dirty 才写；无路径 = 尚未手动保存过 → 跳过，
+  // 用户首次手动保存后自然生效）；导出进行中不打扰
+  useEffect(() => {
+    if (!prefsReady || !prefs.autoSave.enabled) return
+    const ms = Math.max(1, prefs.autoSave.intervalMin) * 60 * 1000
+    const timer = setInterval(() => {
+      if (
+        exporterStateRef.current.phase === 'encoding' ||
+        exporterStateRef.current.phase === 'merging'
+      )
+        return
+      void projectRef.current.saveProjectSilent()
+    }, ms)
+    return () => clearInterval(timer)
+  }, [prefsReady, prefs.autoSave.enabled, prefs.autoSave.intervalMin])
+
+  // 全局快捷键（1.0.0 设置重构：绑定在 AppPrefs.shortcuts，设置页可改绑；
+  // 输入框内保留原生行为；设置弹窗打开时仅录键会话接管
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
       const target = e.target as HTMLElement | null
@@ -1447,14 +1481,35 @@ function App(): React.JSX.Element {
         !!target &&
         (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)
       if (typing) return
-      const mod = e.ctrlKey || e.metaKey
-      if (mod && e.key.toLowerCase() === 'z') {
+      const k = {
+        key: e.key,
+        code: e.code,
+        ctrlKey: e.ctrlKey,
+        metaKey: e.metaKey,
+        shiftKey: e.shiftKey,
+        altKey: e.altKey
+      }
+      if (matchAction(k, 'togglePlay')) {
         e.preventDefault()
-        if (e.shiftKey) projectRef.current.redo()
-        else projectRef.current.undo()
-      } else if (mod && e.key.toLowerCase() === 'y') {
+        const p = pbRef.current
+        if (p.isPlaying) p.pause()
+        else p.play()
+      } else if (matchAction(k, 'stopPlay')) {
+        e.preventDefault()
+        pbRef.current.pause()
+        pbRef.current.seek(0)
+      } else if (matchAction(k, 'undo')) {
+        e.preventDefault()
+        projectRef.current.undo()
+      } else if (matchAction(k, 'redo')) {
         e.preventDefault()
         projectRef.current.redo()
+      } else if (matchAction(k, 'saveProject')) {
+        e.preventDefault()
+        void projectRef.current.saveProject()
+      } else if (matchAction(k, 'exportVideo')) {
+        e.preventDefault()
+        setExportOpen(true)
       }
     }
     window.addEventListener('keydown', onKey)
@@ -1468,7 +1523,7 @@ function App(): React.JSX.Element {
       delete window.__isDirty
       delete window.__saveAndClose
     }
-  }, [])
+  }, [matchAction])
 
   // 导出自测（M4/T21）：真实 File → 解码 → WebCodecs 编码 → ffmpeg 合并，落盘 TEST-ARTIFACTS
   useEffect(() => {
@@ -2605,7 +2660,13 @@ function App(): React.JSX.Element {
         loading={ffmpeg.loading}
         onRefresh={() => void ffmpeg.refresh()}
         theme={theme}
-        onThemeChange={setTheme}
+        onThemeChange={(v) => void setPrefs({ theme: v })}
+        autoSave={{
+          enabled: prefs.autoSave.enabled,
+          intervalMin: prefs.autoSave.intervalMin,
+          onToggle: (enabled) => void setPrefs({ autoSave: { ...prefs.autoSave, enabled } }),
+          onInterval: (min) => void setPrefs({ autoSave: { ...prefs.autoSave, intervalMin: min } })
+        }}
       />
       {exporter.stageRequest && (
         <ExportStageHost

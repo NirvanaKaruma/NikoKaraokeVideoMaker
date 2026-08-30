@@ -194,6 +194,8 @@ export function useProject(): {
   setBgFile: (file: File | null) => void
   clearBgImage: () => void
   saveProject: () => Promise<boolean>
+  /** 1.0.0 自动保存：静默写上次保存路径（无路径 → false，不弹对话框） */
+  saveProjectSilent: () => Promise<boolean>
   loadProject: () => Promise<void>
   resetProject: () => void
   undo: () => void
@@ -212,6 +214,9 @@ export function useProject(): {
   const [notice, setNotice] = useState<string | null>(null)
   const layoutRef = useRef(layout)
   const assetsRef = useRef(assets)
+  /** 最近一次保存/打开的路径（1.0.0 自动保存：saveProjectSilent 静默写、无对话框） */
+  const lastSavePathRef = useRef('')
+  const dirtyRef = useRef(false)
   /** 撤销/重做历史（布局快照 JSON 栈；用 ref + 版本号驱动按钮状态） */
   const pastRef = useRef<string[]>([])
   const futureRef = useRef<string[]>([])
@@ -226,6 +231,10 @@ export function useProject(): {
 
   /** 脏标记：渲染期派生（快照字符串对比，不产生级联渲染） */
   const dirty = snapshotOf(layout, assets) !== savedSnapshot
+  // ref 同步（setSavedSnapshot 之外的单点——渲染期直接读 dirty 也行，但定时器在 effect 里读 ref 最稳）
+  useEffect(() => {
+    dirtyRef.current = dirty
+  }, [dirty])
 
   // ── 1.0.0 T4：编辑上下文化。编辑目标（null=全局基线）→ 所有布局写入路由（继承式写时复制）──
   const [editSegId, setEditSegIdState] = useState<string | null>(null)
@@ -1176,6 +1185,7 @@ export function useProject(): {
       )
       if (res.canceled) return false
       if (res.ok) {
+        lastSavePathRef.current = res.path ?? ''
         setNotice(t('project.saved', { path: res.path ?? '' }))
         // 更新已保存快照（脏标记复位）
         const a = assetsRef.current
@@ -1190,6 +1200,26 @@ export function useProject(): {
     }
   }, [buildProjectFile])
 
+  /**
+   * 1.0.0 自动保存：静默写上次保存路径（首次还需对话框 → saveProject 返回 false 提示用户先手动保存）；
+   * dirty 才写；写成功更新快照 + 无声通知（记录到 notice 不打扰——仅状态行）。
+   */
+  const saveProjectSilent = useCallback(async (): Promise<boolean> => {
+    const path = lastSavePathRef.current
+    if (!path) return false
+    if (!dirtyRef.current) return true
+    try {
+      const pf = await buildProjectFile()
+      const res = await window.api.project.saveTo(JSON.stringify(pf, null, 2), path)
+      if (!res.ok) return false
+      const a = assetsRef.current
+      setSavedSnapshot(snapshotOf(layoutRef.current, a))
+      return true
+    } catch {
+      return false
+    }
+  }, [buildProjectFile])
+
   /** 打开项目（对话框 + 解析 + 应用 + 通知） */
   const loadProject = useCallback(async (): Promise<void> => {
     try {
@@ -1199,6 +1229,8 @@ export function useProject(): {
         setFileError(t('project.openFailed', { err: res.error ?? '未知错误' }))
         return
       }
+      // 1.0.0 自动保存：记下打开路径（saveProjectSilent 静默写回）
+      lastSavePathRef.current = res.path ?? ''
       const pf = JSON.parse(res.json) as ProjectFile
       if (!pf || pf.version !== 1 || !pf.layout) {
         setFileError(t('project.badFormat'))
@@ -1359,6 +1391,7 @@ export function useProject(): {
     clampTimelineToDuration,
     applySegmentToAll,
     saveProject,
+    saveProjectSilent,
     loadProject,
     resetProject,
     undo,

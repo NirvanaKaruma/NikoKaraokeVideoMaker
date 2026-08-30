@@ -172,12 +172,17 @@ export function useAudioPlayback(
   /** 播放时间值盒（CanvasFX overlay 等 rAF 自绘组件读取最新 t） */
   timeBoxRef?: { current: number },
   /** 前导留白（0.7.0，ms）：播放时间轴含前导——前奏黑场/标题卡 + 音乐延后（与导出一致）；0 = 旧行为 */
-  leadMs = 0
+  leadMs = 0,
+  /** 预览音量（1.0.0 设置重构）：0–1；仅扬声器输出（频谱/导出不受影响）；运行时即时生效 */
+  volume = 1
 ): PlaybackApi {
   const ctxRef = useRef<AudioContext | null>(null)
   const bufferRef = useRef<AudioBuffer | null>(null)
   const analyzerRef = useRef<SpectrumAnalyzer | null>(null)
   const sourceRef = useRef<AudioBufferSourceNode | null>(null)
+  /** 预览增益节点：src → gain → destination（0 音量时 src 仍跑——频谱不动；close 时释放） */
+  const gainRef = useRef<GainNode | null>(null)
+  const volumeRef = useRef(volume)
   const startedAtRef = useRef(0)
   const offsetRef = useRef(0)
   const playingRef = useRef(false)
@@ -187,6 +192,12 @@ export function useAudioPlayback(
   const configRef = useRef(config)
   /** 前导秒（ref 化：rAF/回调里读到最新值；0 = 无前导） */
   const leadSecRef = useRef(Math.max(0, leadMs) / 1000)
+  // 预览音量生效（ref 化避免每次渲染重建 gain；播放中调音量即时改变响度）
+  useEffect(() => {
+    volumeRef.current = volume
+    const g = gainRef.current
+    if (g) g.gain.value = Math.min(1, Math.max(0, volume))
+  }, [volume])
   const sinkRef = useRef(barsSink)
   const frameTSinkRef = useRef(frameTSink)
   const layerFxSinkRef = useRef(layerFxSink)
@@ -278,7 +289,14 @@ export function useAudioPlayback(
     if (!buf) return
     const src = ctx.createBufferSource()
     src.buffer = buf
-    src.connect(ctx.destination)
+    let g = gainRef.current
+    if (!g || g.context !== ctx) {
+      g = ctx.createGain()
+      g.gain.value = volumeRef.current
+      g.connect(ctx.destination)
+      gainRef.current = g
+    }
+    src.connect(g)
     manualStopRef.current = false
     const lead = leadSecRef.current
     // AudioBufferSourceNode.start(when, offset)：when 未来 = 前导剩余；offset = 音频内位置

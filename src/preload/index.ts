@@ -27,6 +27,16 @@ const api = {
     }
   },
 
+  /** 应用级偏好（1.0.0 设置重构）：整体读写（main 归一化持久化） */
+  appPrefs: {
+    get: (): Promise<import('../shared/appSettings').AppPrefs> =>
+      ipcRenderer.invoke(IPC.appPrefsGet),
+    set: (
+      patch: import('../shared/appSettings').AppPrefs
+    ): Promise<import('../shared/appSettings').AppPrefs> =>
+      ipcRenderer.invoke(IPC.appPrefsSet, patch)
+  },
+
   ffmpeg: {
     detect: (): Promise<FfmpegStatusReport> => ipcRenderer.invoke(IPC.ffmpegDetect),
     getConfig: (): Promise<FfmpegConfig> => ipcRenderer.invoke(IPC.ffmpegConfigGet),
@@ -58,8 +68,18 @@ const api = {
       defaultName: string
     ): Promise<{ ok: boolean; canceled?: boolean; path: string | null }> =>
       ipcRenderer.invoke(IPC.projectSave, json, defaultName),
-    load: (): Promise<{ ok: boolean; canceled?: boolean; json: string | null; error?: string }> =>
-      ipcRenderer.invoke(IPC.projectLoad),
+    saveTo: (
+      json: string,
+      path: string
+    ): Promise<{ ok: boolean; canceled?: boolean; path: string | null }> =>
+      ipcRenderer.invoke(IPC.projectSaveTo, json, path),
+    load: (): Promise<{
+      ok: boolean
+      canceled?: boolean
+      json: string | null
+      path?: string | null
+      error?: string
+    }> => ipcRenderer.invoke(IPC.projectLoad),
     readFile: (path: string): Promise<{ ok: boolean; buffer?: ArrayBuffer; error?: string }> =>
       ipcRenderer.invoke(IPC.projectReadFile, path),
     readBytes: (path: string): Promise<Uint8Array> => ipcRenderer.invoke('fs:read-bytes', path),

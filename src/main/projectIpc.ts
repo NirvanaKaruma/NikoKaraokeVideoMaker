@@ -71,6 +71,17 @@ export function registerProjectIpc(): void {
     return { ok: true, canceled: false, path }
   })
 
+  // 1.0.0 自动保存：静默写指定路径（无对话框）；非法/空路径返回 canceled
+  ipcMain.handle(IPC.projectSaveTo, async (_e, json: string, path: string) => {
+    if (typeof path !== 'string' || !path.trim()) {
+      return { ok: false, canceled: true, path: null }
+    }
+    const tmp = path + '.tmp'
+    await fs.writeFile(tmp, encryptProject(json))
+    await fs.rename(tmp, path)
+    return { ok: true, canceled: false, path }
+  })
+
   ipcMain.handle(IPC.projectLoad, async (e) => {
     let path: string
     if (isSmoke()) {
@@ -89,7 +100,7 @@ export function registerProjectIpc(): void {
     try {
       const buf = await fs.readFile(path)
       const json = decryptProject(buf)
-      return { ok: true, canceled: false, json }
+      return { ok: true, canceled: false, json, path }
     } catch (err) {
       return {
         ok: false,

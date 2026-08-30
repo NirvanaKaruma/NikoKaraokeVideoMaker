@@ -6,7 +6,9 @@
 export const zhCn = {
   common: {
     close: '✕ 关闭',
-    cancel: '取消'
+    cancel: '取消',
+    on: '开',
+    off: '关'
   },
   app: {
     title: 'NikoKaraokeVideoMaker'
@@ -204,7 +206,52 @@ export const zhCn = {
     hw: '硬件编码：{v}',
     sw: '软件编码：{v}',
     unavailable: '不可用',
-    autoNote: '「自动」模式会按本机实测结果选择更快的编码方式。'
+    autoNote: '「自动」模式会按本机实测结果选择更快的编码方式。',
+
+    // 1.0.0 设置窗口重构（KTV 打轴工具参考布局）
+    tabGeneral: '常规',
+    tabAutoSave: '自动保存',
+    tabShortcuts: '快捷键',
+    tabExport: '导出',
+    tabAbout: '关于',
+    secGeneral: '常规',
+    secAutoSave: '自动保存',
+    secShortcuts: '快捷键',
+    secExport: '导出',
+    secAbout: '关于',
+    descLanguage: '界面语言即时生效并自动保存。',
+    descTheme: '深色适合暗光环境，浅色适合明亮环境。',
+    previewVolume: '预览音量',
+    descPreviewVolume: '仅预览播放的扬声器输出音量，不影响导出音频与频谱分析。',
+    previewVolumeValue: '预览音量：{v}%',
+    autoSave: '定时自动保存',
+    descAutoSave: '按间隔自动保存当前工程（草稿不丢失；无保存路径时静默跳过）。',
+    autoSaveInterval: '自动保存间隔',
+    descAutoSaveInterval: '1–60 分钟。',
+    autoSaveIntervalValue: '每 {v} 分钟',
+    defaultResolution: '默认导出分辨率',
+    descDefaultResolution: '新建工程或一键导出时预选；「跟随工程」则使用工程当前设置。',
+    resolutionFollowProject: '跟随工程',
+    descEncodeAccel: 'GPU/CPU 编码选择，改动立即生效。',
+    aboutText: 'NikoKaraokeVideoMaker——KTV 字幕视频生成工具。使用 WebCodecs 编码与 ffmpeg 混流。'
+  },
+  shortcuts: {
+    togglePlay: '播放/暂停',
+    descTogglePlay: '空格：播放或暂停预览（剪辑软件通用语义）。',
+    stopPlay: '停止',
+    descStopPlay: '停止播放并回到时间轴开头。',
+    undo: '撤销',
+    descUndo: '撤销最近一次编辑操作。',
+    redo: '重做',
+    descRedo: '重做被撤销的编辑操作。',
+    saveProject: '保存工程',
+    descSaveProject: '立即保存当前工程（Ctrl+S）。',
+    exportVideo: '导出视频',
+    descExportVideo: '打开导出对话框（Ctrl+E）。',
+    recordingHint: '点击右侧按键可重新绑定：先在窗口内按下新组合键。',
+    pressKey: '请按键…',
+    clickToRebind: '点击后按新组合键改绑',
+    resetAll: '恢复默认快捷键'
   },
   ffmpegPanel: {
     title: 'ffmpeg 设置',

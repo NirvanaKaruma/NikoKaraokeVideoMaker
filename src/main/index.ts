@@ -204,6 +204,16 @@ function registerIpcHandlers(): void {
     }
     return cfg.locale
   })
+
+  // 应用级偏好（1.0.0 设置窗口重构）：整体读写 + 归一化（越界/缺失安全）
+  ipcMain.handle(IPC.appPrefsGet, async () => (await getConfig()).prefs)
+  ipcMain.handle(IPC.appPrefsSet, async (_e, patch: unknown) => {
+    const prefs =
+      patch && typeof patch === 'object'
+        ? (patch as import('../shared/appSettings').AppPrefs)
+        : undefined
+    return (await setConfig({ prefs })).prefs
+  })
 }
 
 async function runSmokeVisual(win: BrowserWindow): Promise<void> {

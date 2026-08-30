@@ -148,6 +148,213 @@ body {
   margin-bottom: 8px;
 }
 
+/* ===== 设置窗口 1.0.0 重构（参考 KTV 打轴工具：左侧 Tab + 分组行） ===== */
+.modal-settings {
+  width: min(860px, 94vw);
+  height: min(620px, 88vh);
+}
+
+.settings-layout {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 150px 1fr;
+  gap: 0;
+  padding: 0;
+}
+
+.settings-tabs {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 12px 8px;
+  border-right: 1px solid var(--ev-c-gray-2);
+  background: rgba(255, 255, 255, 0.02);
+  overflow-y: auto;
+}
+
+.settings-tab {
+  text-align: left;
+  padding: 9px 14px;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  color: var(--ev-c-text-1);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.settings-tab:hover {
+  background: var(--btn-bg-hover);
+}
+
+.settings-tab.active {
+  background: var(--btn-bg);
+  color: var(--text-accent);
+  font-weight: 600;
+}
+
+.settings-content {
+  padding: 18px 22px 22px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.settings-content > h2 {
+  font-size: 15px;
+  margin: 0 0 4px;
+}
+
+.settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 12px;
+  border: 1px solid var(--ev-c-gray-2);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.015);
+}
+
+.settings-row-main {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  min-width: 0;
+}
+
+.settings-row-icon {
+  font-size: 15px;
+  line-height: 1.2;
+  margin-top: 1px;
+}
+
+.settings-row-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.settings-row-label {
+  font-size: 13px;
+  color: var(--ev-c-text-1);
+  font-weight: 600;
+}
+
+.settings-row-desc {
+  font-size: 11px;
+  color: var(--ev-c-text-3);
+  line-height: 1.5;
+}
+
+.settings-row-ctl {
+  flex-shrink: 0;
+  min-width: 200px;
+  max-width: 320px;
+}
+
+.settings-row-ctl .slider-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.settings-row-ctl .slider-row input[type='range'] {
+  flex: 1;
+  min-width: 0;
+}
+
+.settings-row-ctl .slider-num {
+  width: 64px;
+}
+
+/* 快捷键按键徽章 */
+.shortcut-key {
+  min-width: 120px;
+  padding: 5px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--btn-border);
+  background: var(--btn-bg);
+  color: var(--btn-text);
+  font-size: 12px;
+  font-family: ui-monospace, Consolas, monospace;
+  cursor: pointer;
+  text-align: center;
+}
+
+.shortcut-key:hover {
+  background: var(--btn-bg-hover);
+  border-color: var(--accent-cyan-border);
+}
+
+.shortcut-key.disabled {
+  opacity: 0.45;
+  pointer-events: none;
+}
+
+.shortcut-key.recording,
+.mini-btn.recording {
+  border-color: var(--warn-orange);
+  color: var(--warn-orange-text);
+  animation: shortcut-blink 1s ease-in-out infinite alternate;
+}
+
+@keyframes shortcut-blink {
+  from { opacity: 1; }
+  to { opacity: 0.45; }
+}
+
+/* 开关（参考图 toggle） */
+.switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.switch input {
+  display: none;
+}
+
+.switch-track {
+  width: 38px;
+  height: 20px;
+  border-radius: 999px;
+  background: var(--ev-c-gray-3);
+  position: relative;
+  transition: background 160ms;
+}
+
+.switch-track::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  transition: left 160ms;
+}
+
+.switch input:checked + .switch-track {
+  background: var(--accent-cyan);
+}
+
+.switch input:checked + .switch-track::after {
+  left: 20px;
+}
+
+.switch-label {
+  font-size: 12px;
+  color: var(--ev-c-text-2);
+  min-width: 20px;
+}
+
+
 .help-list {
   padding-left: 20px;
   font-size: 13px;

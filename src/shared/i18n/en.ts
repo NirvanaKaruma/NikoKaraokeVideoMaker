@@ -6,7 +6,9 @@
 export const en = {
   common: {
     close: '✕ Close',
-    cancel: 'Cancel'
+    cancel: 'Cancel',
+    on: 'On',
+    off: 'Off'
   },
   app: {
     title: 'NikoKaraokeVideoMaker'
@@ -206,7 +208,52 @@ export const en = {
     hw: 'Hardware encoding: {v}',
     sw: 'Software encoding: {v}',
     unavailable: 'Unavailable',
-    autoNote: 'Auto mode selects the faster encoding method based on local benchmark results.'
+    autoNote: 'Auto mode selects the faster encoding method based on local benchmark results.',
+
+    tabGeneral: 'General',
+    tabAutoSave: 'Auto save',
+    tabShortcuts: 'Shortcuts',
+    tabExport: 'Export',
+    tabAbout: 'About',
+    secGeneral: 'General',
+    secAutoSave: 'Auto save',
+    secShortcuts: 'Shortcuts',
+    secExport: 'Export',
+    secAbout: 'About',
+    descLanguage: 'Interface language applies immediately and is saved.',
+    descTheme: 'Dark suits dim rooms; light suits bright rooms.',
+    previewVolume: 'Preview volume',
+    descPreviewVolume: 'Speaker output of preview only; export audio and spectrum are unaffected.',
+    previewVolumeValue: 'Preview volume: {v}%',
+    autoSave: 'Periodic auto save',
+    descAutoSave: 'Saves the project at interval (no path → silently skipped).',
+    autoSaveInterval: 'Auto save interval',
+    descAutoSaveInterval: '1–60 minutes.',
+    autoSaveIntervalValue: 'Every {v} minutes',
+    defaultResolution: 'Default export resolution',
+    descDefaultResolution:
+      'Preselected for new projects / one-click export; Follow project uses current.',
+    resolutionFollowProject: 'Follow project',
+    descEncodeAccel: 'GPU/CPU encoding choice; applied immediately.',
+    aboutText: 'NikoKaraokeVideoMaker — KTV subtitle video tool. WebCodecs encode + ffmpeg mux.'
+  },
+  shortcuts: {
+    togglePlay: 'Play / Pause',
+    descTogglePlay: 'Space: play or pause the preview (common editing-app semantics).',
+    stopPlay: 'Stop',
+    descStopPlay: 'Stop playback and return to the beginning.',
+    undo: 'Undo',
+    descUndo: 'Undo the last edit.',
+    redo: 'Redo',
+    descRedo: 'Redo the undone edit.',
+    saveProject: 'Save project',
+    descSaveProject: 'Save the project now (Ctrl+S).',
+    exportVideo: 'Export video',
+    descExportVideo: 'Open the export dialog (Ctrl+E).',
+    recordingHint: 'Click a key to rebind, then press the new combination in the window.',
+    pressKey: 'Press keys…',
+    clickToRebind: 'Click, then press the new combination',
+    resetAll: 'Reset to defaults'
   },
   ffmpegPanel: {
     title: 'ffmpeg Settings',

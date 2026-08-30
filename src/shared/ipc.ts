@@ -10,6 +10,10 @@ export const IPC = {
   appGetLocale: 'app:get-locale',
   appSetLocale: 'app:set-locale',
 
+  /** 应用级偏好（1.0.0）：主题/预览音量/自动保存/快捷键（AppPrefs 整体读写） */
+  appPrefsGet: 'app:prefs:get',
+  appPrefsSet: 'app:prefs:set',
+
   /** ffmpeg 三源管理 */
   ffmpegDetect: 'ffmpeg:detect',
   ffmpegConfigGet: 'ffmpeg:config:get',
@@ -34,6 +38,8 @@ export const IPC = {
 
   /** 项目保存/加载（T23） */
   projectSave: 'project:save',
+  /** 静默保存到指定路径（1.0.0 自动保存：renderer 记住上次路径；无路径则报 canceled） */
+  projectSaveTo: 'project:save-to',
   projectLoad: 'project:load',
   projectReadFile: 'project:read-file',
 

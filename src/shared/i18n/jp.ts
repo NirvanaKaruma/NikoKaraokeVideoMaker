@@ -6,7 +6,9 @@
 export const jp = {
   common: {
     close: '✕ 閉じる',
-    cancel: 'キャンセル'
+    cancel: 'キャンセル',
+    on: 'オン',
+    off: 'オフ'
   },
   app: {
     title: 'NikoKaraokeVideoMaker'
@@ -208,7 +210,53 @@ export const jp = {
     sw: 'ソフトウェアエンコード：{v}',
     unavailable: '利用不可',
     autoNote:
-      '「自動」モードは、このパソコンでの実測結果に基づき、より速いエンコード方法を選択します。'
+      '「自動」モードは、このパソコンでの実測結果に基づき、より速いエンコード方法を選択します。',
+
+    tabGeneral: '一般',
+    tabAutoSave: '自動保存',
+    tabShortcuts: 'ショートカット',
+    tabExport: '書き出し',
+    tabAbout: 'このアプリについて',
+    secGeneral: '一般',
+    secAutoSave: '自動保存',
+    secShortcuts: 'ショートカット',
+    secExport: '書き出し',
+    secAbout: 'このアプリについて',
+    descLanguage: '表示言語は即時反映され、自動保存されます。',
+    descTheme: 'ダークは薄暗い環境、ライトは明るい環境向け。',
+    previewVolume: 'プレビュー音量',
+    descPreviewVolume: 'プレビューのスピーカー出力のみ。書き出し音声・スペクトルには影響しません。',
+    previewVolumeValue: 'プレビュー音量：{v}%',
+    autoSave: '定期自動保存',
+    descAutoSave: '一定間隔でプロジェクトを自動保存します（保存先なしの場合はスキップ）。',
+    autoSaveInterval: '自動保存の間隔',
+    descAutoSaveInterval: '1〜60 分。',
+    autoSaveIntervalValue: '{v} 分ごと',
+    defaultResolution: '既定の書き出し解像度',
+    descDefaultResolution:
+      '新規プロジェクト / ワンクリック書き出しでプリセット；「プロジェクトに従う」は現在の設定を使用。',
+    resolutionFollowProject: 'プロジェクトに従う',
+    descEncodeAccel: 'GPU/CPU エンコードの選択。即時反映されます。',
+    aboutText:
+      'NikoKaraokeVideoMaker — KTV 字幕ビデオ生成ツール。WebCodecs エンコード + ffmpeg ミックス。'
+  },
+  shortcuts: {
+    togglePlay: '再生 / 一時停止',
+    descTogglePlay: 'スペース：プレビューの再生/一時停止（編集アプリの慣用操作）。',
+    stopPlay: '停止',
+    descStopPlay: '再生を停止してタイムラインの先頭に戻ります。',
+    undo: '取り消し',
+    descUndo: '直前の編集を取り消します。',
+    redo: 'やり直し',
+    descRedo: '取り消した編集をやり直します。',
+    saveProject: 'プロジェクトを保存',
+    descSaveProject: 'プロジェクトを今すぐ保存（Ctrl+S）。',
+    exportVideo: '動画を書き出し',
+    descExportVideo: '書き出しダイアログを開く（Ctrl+E）。',
+    recordingHint: '右側のキーをクリックし、新しい組み合わせを押して再バインドします。',
+    pressKey: 'キーを押してください…',
+    clickToRebind: 'クリック後、新しい組み合わせを押す',
+    resetAll: 'デフォルトに戻す'
   },
   ffmpegPanel: {
     title: 'ffmpeg 設定',

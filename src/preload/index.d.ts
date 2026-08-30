@@ -19,6 +19,13 @@ declare global {
       setLocale: (locale: string) => Promise<string>
       /** 获取文件的真实磁盘路径（无法获取时返回空串） */
       getFilePath: (file: File) => string
+      /** 应用级偏好（1.0.0 设置重构） */
+      appPrefs: {
+        get: () => Promise<import('../shared/appSettings').AppPrefs>
+        set: (
+          patch: import('../shared/appSettings').AppPrefs
+        ) => Promise<import('../shared/appSettings').AppPrefs>
+      }
       ffmpeg: {
         detect: () => Promise<FfmpegStatusReport>
         getConfig: () => Promise<FfmpegConfig>
@@ -43,8 +50,14 @@ declare global {
           ok: boolean
           canceled?: boolean
           json: string | null
+          path?: string | null
           error?: string
         }>
+        /** 1.0.0 自动保存：静默写指定路径 */
+        saveTo: (
+          json: string,
+          path: string
+        ) => Promise<{ ok: boolean; canceled?: boolean; path: string | null }>
         readFile: (path: string) => Promise<{ ok: boolean; buffer?: ArrayBuffer; error?: string }>
         readBytes: (path: string) => Promise<Uint8Array>
         /** P0 音频解码（文件流式）：start → read 循环 → dispose；cancel 中止 */
