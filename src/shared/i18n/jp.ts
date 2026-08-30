@@ -318,7 +318,6 @@ export const jp = {
   kf: {
     hint: 'プロパティを選択：再生ヘッドを目的位置へ、次に「ここにキーフレーム追加」。',
     hintNoSegment: 'タイムラインでセグメントを選択するとキーフレームを編集できます',
-    hintGlobal: 'セグメント未選択：キーフレームは曲全体に適用（グローバル基線）',
     groupText: 'テキスト',
     groupImage: 'メイン画像',
     groupBg: '背景',

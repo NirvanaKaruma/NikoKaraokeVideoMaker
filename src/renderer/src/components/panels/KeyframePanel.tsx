@@ -184,7 +184,6 @@ export function KeyframePanel(props: KeyframePanelProps): React.JSX.Element {
 
   return (
     <div className="kf-panel">
-      <div className="panel-note">{props.segId ? t('kf.hint') : t('kf.hintGlobal')}</div>
       {/* 轨道清单（分组折叠） */}
       {GROUPS.map((gr) => {
         const entriesG = allEntries.filter((c) => gr.test(c.path))

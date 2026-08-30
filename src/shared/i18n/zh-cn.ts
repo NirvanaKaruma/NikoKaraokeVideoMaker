@@ -316,7 +316,6 @@ export const zhCn = {
   kf: {
     hint: '选中属性后：把播放头拖到目标位置，点「在此添加关键帧」。',
     hintNoSegment: '在时间轴上选择段落后编辑该段的关键帧',
-    hintGlobal: '未选中段落：关键帧作用于整首（全局基线）',
     groupText: '文本',
     groupImage: '主图',
     groupBg: '背景',

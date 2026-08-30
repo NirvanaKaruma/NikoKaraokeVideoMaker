@@ -849,27 +849,28 @@ body {
 /* 关键帧标注（1.1.0）：段落块内小点（青）/ 全局基线点（轨道上竖标） */
 .segment-kf {
   position: absolute;
-  top: 55%;
-  width: 6px;
-  height: 6px;
-  margin: -3px 0 0 -3px;
+  top: 52%;
+  width: 10px;
+  height: 10px;
+  margin: -5px 0 0 -5px;
   border-radius: 50%;
   background: #7ce3ff;
-  border: 1px solid #123;
+  border: 2px solid #123;
   pointer-events: auto;
-  cursor: crosshair;
+  cursor: pointer;
 }
 
 .timeline-global-kf {
   position: absolute;
-  top: 17px;
-  width: 2px;
-  height: 5px;
-  margin-left: -1px;
+  top: 22px;
+  width: 10px;
+  height: 10px;
+  margin: -5px 0 0 -5px;
+  border-radius: 50%;
   background: #ff5f9e;
-  border-radius: 1px;
+  border: 2px solid #3a1220;
   pointer-events: auto;
-  cursor: crosshair;
+  cursor: pointer;
 }
 
 .segment-handle {
@@ -1087,6 +1088,27 @@ button:not(.mini-btn):not(.btn-sm):not(.kf-track):not(.tab):not(.banner-btn):not
 
 button:not(.mini-btn):not(.btn-sm):not(.kf-track):not(.tab):not(.banner-btn):not(.tab-bar):hover {
   background: var(--btn-bg-hover);
+}
+
+/* ④ 根绝：所有未被面板显式样式的 input/select/textarea 深色兜底（曾反复出现白底输入框） */
+input:not([type='checkbox']):not([type='radio']):not([type='color']):not([type='file']):not(
+    [type='range']
+  ),
+select,
+textarea {
+  background: var(--ev-c-black-mute);
+  color: var(--ev-c-text-1);
+  border: 1px solid var(--ev-c-gray-2);
+  border-radius: 6px;
+}
+
+input:not([type='checkbox']):not([type='radio']):not([type='color']):not([type='file']):not(
+    [type='range']
+  ):focus,
+select:focus,
+textarea:focus {
+  border-color: #ff5f9e;
+  outline: none;
 }
 
 .kf-select {

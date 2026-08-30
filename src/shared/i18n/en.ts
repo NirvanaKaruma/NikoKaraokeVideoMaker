@@ -316,7 +316,6 @@ export const en = {
   kf: {
     hint: 'Select a property: move the playhead, then "Add keyframe here".',
     hintNoSegment: 'Select a segment on the timeline to edit its keyframes',
-    hintGlobal: 'No segment selected: keyframes apply to the whole song (global baseline)',
     groupText: 'Text',
     groupImage: 'Main image',
     groupBg: 'Background',

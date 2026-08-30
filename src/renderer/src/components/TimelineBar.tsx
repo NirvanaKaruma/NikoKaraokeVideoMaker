@@ -160,6 +160,10 @@ export function TimelineBar(props: TimelineBarProps): React.JSX.Element {
                     left: (f.t / Math.max(0.1, s.endSec - s.startSec)) * 100 + '%'
                   }}
                   title={'t=' + (s.startSec + f.t).toFixed(2) + 's ' + String(f.value)}
+                  onClick={(ev) => {
+                    ev.stopPropagation()
+                    props.onSeek(s.startSec + f.t)
+                  }}
                 />
               ))}
             <span className="segment-handle l" onPointerDown={(e) => resize(e, s.id, 'l')} />
@@ -175,6 +179,7 @@ export function TimelineBar(props: TimelineBarProps): React.JSX.Element {
               className="timeline-global-kf"
               style={{ left: ratio(f.t) * 100 + '%' }}
               title={'t=' + f.t.toFixed(2) + 's ' + String(f.value)}
+              onClick={() => props.onSeek(f.t)}
             />
           ))}
         {/* 播放头 */}
