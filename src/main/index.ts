@@ -161,7 +161,11 @@ function createWindow(): BrowserWindow {
   if (isSmokeVisual || isSmokeBench) {
     mainWindow.loadFile(join(__dirname, '../renderer/index.html'), { query: { smokeVisual: '1' } })
   } else if (isSmokeExport) {
-    mainWindow.loadFile(join(__dirname, '../renderer/index.html'), { query: { smokeExport: '1' } })
+    // P1a 基线：fx 变体分辨率经 query 透传（--smoke-export=fx4k@35 场景）
+    const fxRes = process.env['NIKO_SMOKE_FX_RES']
+    mainWindow.loadFile(join(__dirname, '../renderer/index.html'), {
+      query: fxRes ? { smokeExport: '1', smokeFxRes: fxRes } : { smokeExport: '1' }
+    })
   } else if (isSmokeProject) {
     mainWindow.loadFile(join(__dirname, '../renderer/index.html'), { query: { smokeProject: '1' } })
   } else if (isSmokeTime) {

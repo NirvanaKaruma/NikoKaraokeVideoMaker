@@ -217,6 +217,41 @@ export interface EncodeVideoOptions {
 export interface ExportVideoResult {
   buffer: ArrayBuffer | null
   streamPath: string | null
+  /** P1a 计量：各阶段帧耗时 p50/p95（resolve=布局解析 / draw=渲染 / transfer=提交 /
+   * encodeWait=编码器背压 / mux=写盘 / yield=让出事件循环 / frame=整帧） */
+  metrics?: ExportFrameMetrics
+}
+
+/** 单阶段统计：p50/p95/avg（毫秒） */
+export interface PhaseStat {
+  p50: number
+  p95: number
+  avg: number
+}
+export interface ExportFrameMetrics {
+  frames: number
+  fpsActual: number
+  resolve: PhaseStat
+  draw: PhaseStat
+  transfer: PhaseStat
+  encodeWait: PhaseStat
+  mux: PhaseStat
+  yield: PhaseStat
+  frame: PhaseStat
+}
+
+function percentile(sorted: number[], p: number): number {
+  if (sorted.length === 0) return 0
+  const idx = Math.min(sorted.length - 1, Math.max(0, Math.floor((p / 100) * sorted.length)))
+  return sorted[idx]
+}
+function phaseStat(ms: number[]): PhaseStat {
+  const s = [...ms].sort((a, b) => a - b)
+  return {
+    p50: Math.round(percentile(s, 50) * 10) / 10,
+    p95: Math.round(percentile(s, 95) * 10) / 10,
+    avg: Math.round((ms.reduce((a, b) => a + b, 0) / Math.max(1, ms.length)) * 10) / 10
+  }
 }
 
 /**
@@ -278,7 +313,11 @@ export async function encodeVideo(opts: EncodeVideoOptions): Promise<ExportVideo
 
   let encoderError: Error | null = null
   const encoder = new VideoEncoder({
-    output: (chunk, meta) => muxer.addVideoChunk(chunk, meta),
+    output: (chunk, meta) => {
+      const t0 = performance.now()
+      muxer.addVideoChunk(chunk, meta)
+      muxMs.push(performance.now() - t0)
+    },
     error: (e) => {
       encoderError = e instanceof Error ? e : new Error(String(e))
     }
@@ -320,6 +359,14 @@ export async function encodeVideo(opts: EncodeVideoOptions): Promise<ExportVideo
     analyzer.freqMax = Math.min(half, Math.max(vizCfg.freqMax, lo + 1))
   }
   const frameMs: number[] = []
+  // P1a 计量：单阶段计时数组（resolve=布局解析+提交 / draw=渲染合成 / transfer=VideoFrame+encode /
+  // encodeWait=编码器背压等待 / mux=写盘回调 / yield=让出事件循环）
+  const resolveMs: number[] = []
+  const drawMs: number[] = []
+  const transferMs: number[] = []
+  const encodeWaitMs: number[] = []
+  const muxMs: number[] = []
+  const yieldMs: number[] = []
   const totalT0 = performance.now()
   let lastDlKey = '' // T7 差异门控：最近一次提交到导出场景的布局快照键
 
@@ -367,6 +414,7 @@ export async function encodeVideo(opts: EncodeVideoOptions): Promise<ExportVideo
       stage.setFrame(tSec)
       // 1.0.0 T7：时间轴逐帧解析（tSec = wall 总轴；片段按 wall 轴分割）并应用到导出场景。
       // 差异门控：快照键不变（该帧布局与上一帧视觉等价）→ 跳过 React flushSync 重渲（与预览同策略）
+      const tResolve0 = performance.now()
       if (tlActive) {
         const resolved = resolveLayoutAt(layout, tSec)
         const key = resolvedSnapshotKey(resolved)
@@ -375,6 +423,8 @@ export async function encodeVideo(opts: EncodeVideoOptions): Promise<ExportVideo
           lastDlKey = key
         }
       }
+      resolveMs.push(performance.now() - tResolve0)
+      const tDraw0 = performance.now()
       if (dynamic) {
         // 全层逐帧渲染（含背景/主图/文本动效、片头片尾；同一 SceneLayers 绘制代码）
         ctx.clearRect(0, 0, resolution.width, resolution.height)
@@ -425,7 +475,9 @@ export async function encodeVideo(opts: EncodeVideoOptions): Promise<ExportVideo
           )
         }
       }
+      drawMs.push(performance.now() - tDraw0)
       // 1.0.0 T7b 背压①：编码器排队 ≤2（4K RGBA≈30MB/帧，防原始帧队列 OOM）
+      const tWait0 = performance.now()
       while (encoder.encodeQueueSize > 2) {
         await new Promise<void>((res) => {
           const h = (): void => {
@@ -438,6 +490,8 @@ export async function encodeVideo(opts: EncodeVideoOptions): Promise<ExportVideo
       // 1.0.0 T7b 背压③：流式积压 ≤ 2 块 = 8MB → 慢盘写回压编码
       if (diskSink) await diskSink.throttle(STREAM_CHUNK_BYTES * 2)
       if (diskError) throw diskError
+      encodeWaitMs.push(performance.now() - tWait0)
+      const tXfer0 = performance.now()
       const frame = new VideoFrame(compose, {
         timestamp: Math.round((i * 1_000_000) / fps),
         duration: Math.round(1_000_000 / fps)
@@ -445,6 +499,7 @@ export async function encodeVideo(opts: EncodeVideoOptions): Promise<ExportVideo
       encoder.encode(frame, { keyFrame: i % (fps * 2) === 0 })
       frame.close()
       if (encoderError) throw encoderError
+      transferMs.push(performance.now() - tXfer0)
       frameMs.push(performance.now() - f0)
       let message = t('exporter.encoding')
       if ((i + 1) % 15 === 0) {
@@ -470,9 +525,30 @@ export async function encodeVideo(opts: EncodeVideoOptions): Promise<ExportVideo
         message
       })
       // 每 2 帧让出事件循环（进度 UI / 取消响应）；MessageChannel 不受后台节流影响
-      if (i % 2 === 1) await yieldToEventLoop()
+      if (i % 2 === 1) {
+        const tYield0 = performance.now()
+        await yieldToEventLoop()
+        yieldMs.push(performance.now() - tYield0)
+      }
     }
     const totalMs = performance.now() - totalT0
+    // P1a 计量汇总（导出日志：报 p50/p95；调用方 smoke 报告透传）
+    const metrics: ExportFrameMetrics = {
+      frames: totalFrames,
+      fpsActual: Math.round((totalFrames / Math.max(0.001, totalMs / 1000)) * 10) / 10,
+      resolve: phaseStat(resolveMs),
+      draw: phaseStat(drawMs),
+      transfer: phaseStat(transferMs),
+      encodeWait: phaseStat(encodeWaitMs),
+      mux: phaseStat(muxMs),
+      yield: phaseStat(yieldMs),
+      frame: phaseStat(frameMs)
+    }
+    console.log(
+      '[export-metrics]',
+      resolution.id + '@' + fps,
+      JSON.stringify(metrics).replace(/"p50":(d+.?d*),"p95"/g, '"p50":$1,"p95"')
+    )
     onProgress({
       phase: 'encoding',
       encoded: totalFrames,
@@ -486,9 +562,9 @@ export async function encodeVideo(opts: EncodeVideoOptions): Promise<ExportVideo
     if (diskSink) {
       // 流式：等待全部 ACK（含 moov 尾块）→ 主进程 end 流 → 临时文件路径
       const path = await diskSink.finish()
-      return { buffer: null, streamPath: path }
+      return { buffer: null, streamPath: path, metrics }
     }
-    return { buffer: (muxer.target as ArrayBufferTarget).buffer, streamPath: null }
+    return { buffer: (muxer.target as ArrayBufferTarget).buffer, streamPath: null, metrics }
   } finally {
     // 失败/取消：主进程摧毁流并删临时文件；成功路径 job 已删除（cancel 幂等）
     if (diskSink) void diskSink.cancel()

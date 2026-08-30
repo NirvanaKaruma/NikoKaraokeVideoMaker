@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
 import { Stage } from 'react-konva'
 import type Konva from 'konva'
@@ -8,13 +8,16 @@ import { SceneLayers } from './SceneLayers'
 import type { CanvasImageElement } from '../hooks/useProject'
 
 export interface ExportStageHandle {
-  /** 静态层（背景/主图/文本）合成画布（无动态动效的快速路径） */
+  /** 静态层（背景/主图/文本）合成画布（无动态动效的快速路径，仅一次） */
   renderStatic: () => HTMLCanvasElement
   /** 命令式更新频谱柱（同一批 Konva 节点 = 同一绘制代码） */
   setBars: (bars: number[]) => void
   /** 动效帧时间（秒）：flow 相位 + 背景/主图/文本/片头片尾每帧更新 */
   setFrame: (t: number) => void
-  /** 可视化层画布 */
+  /**
+   * 可视化层画布（P1a：持久复合画布——逐帧同步 drawScene 到各 Layer 原生画布后
+   * 按 z 序 drawImage 进复用画布；不再逐帧 toCanvas 新建画布+全量重渲，零分配）。
+   */
   renderViz: () => HTMLCanvasElement
   /** 全层渲染画布（存在动态动效时逐帧调用：所有层同一批节点 = 同一绘制代码） */
   renderFull: () => HTMLCanvasElement
@@ -72,6 +75,41 @@ export function ExportStageHost(props: ExportStageHostProps): React.JSX.Element 
   const fullBarsHandleRef = useRef<((bars: number[]) => void) | null>(null)
   const fullFrameTHandleRef = useRef<((t: number) => void) | null>(null)
   const fullFxHandleRef = useRef<((t: number, audioT?: number) => void) | null>(null)
+  /** P1a：持久复合画布（三个 Stage 各一；逐帧复用，零分配替代 toCanvas 新建+全量重渲） */
+  const staticOutRef = useRef<HTMLCanvasElement | null>(null)
+  const vizOutRef = useRef<HTMLCanvasElement | null>(null)
+  const fullOutRef = useRef<HTMLCanvasElement | null>(null)
+
+  /**
+   * P1a：把 Stage 的 Layer 原生画布按 z 序逐张 drawImage 到持久复合画布（零分配）。
+   * ⚠ 必须在 drawScene 之后读——setBars/setFrame 只标记 dirty，Konva 渲染在 rAF；
+   * 这里逐层同步 layer.drawScene() 保证立即生效（toCanvas 内部同函数但新建画布）。
+   */
+  const compositeStage = useCallback(
+    (stage: Konva.Stage | null, outRef: React.MutableRefObject<HTMLCanvasElement | null>) => {
+      let out = outRef.current
+      if (!out || out.width !== width || out.height !== height) {
+        out = document.createElement('canvas')
+        out.width = width
+        out.height = height
+        outRef.current = out
+      }
+      const octx = out.getContext('2d')
+      if (!octx || !stage) return out
+      octx.clearRect(0, 0, width, height)
+      for (const layer of stage.getLayers()) {
+        if (!layer.isVisible()) continue
+        layer.drawScene()
+        const native = layer.getNativeCanvasElement()
+        // Layer 画布以 Konva 全局 pixelRatio（=devicePixelRatio）缩放；按逻辑尺寸绘制保证与
+        // toCanvas({pixelRatio:1}) 输出一致（DPR=1 时 1:1 零采样）
+        const ratio = layer.getCanvas().getPixelRatio() || 1
+        octx.drawImage(native, layer.x(), layer.y(), native.width / ratio, native.height / ratio)
+      }
+      return out
+    },
+    [width, height]
+  )
 
   useEffect(() => {
     // 等 Konva 挂载 + 背景模糊缓存完成后交付句柄
@@ -82,7 +120,7 @@ export function ExportStageHost(props: ExportStageHostProps): React.JSX.Element 
       if (s && v && f && barsHandleRef.current) {
         s.draw()
         onReady({
-          renderStatic: () => s.toCanvas({ pixelRatio: 1 }),
+          renderStatic: () => compositeStage(s, staticOutRef),
           setBars: (bars) => {
             barsHandleRef.current?.(bars)
             fullBarsHandleRef.current?.(bars)
@@ -97,14 +135,14 @@ export function ExportStageHost(props: ExportStageHostProps): React.JSX.Element 
             fullFxHandleRef.current?.(tt, at)
             fullFrameTHandleRef.current?.(at)
           },
-          renderViz: () => v.toCanvas({ pixelRatio: 1 }),
-          renderFull: () => f.toCanvas({ pixelRatio: 1 }),
+          renderViz: () => compositeStage(v, vizOutRef),
+          renderFull: () => compositeStage(f, fullOutRef),
           setLayout: (l) => flushSync(() => setDl(l))
         })
       }
     }, 500)
     return () => clearTimeout(t)
-  }, [layout, coverElement, width, height, onReady, leadSec])
+  }, [layout, coverElement, width, height, onReady, leadSec, compositeStage])
 
   const noop = (): void => undefined
 

@@ -1509,6 +1509,17 @@ function App(): React.JSX.Element {
         error: string | null
         message: string
         outputPath: string
+        metrics?: {
+          resolve: { p50: number; p95: number; avg: number }
+          draw: { p50: number; p95: number; avg: number }
+          transfer: { p50: number; p95: number; avg: number }
+          encodeWait: { p50: number; p95: number; avg: number }
+          mux: { p50: number; p95: number; avg: number }
+          yield: { p50: number; p95: number; avg: number }
+          frame: { p50: number; p95: number; avg: number }
+          frames: number
+          fpsActual: number
+        }
       }> => {
         await sleep(400)
         exporterRef.current.reset()
@@ -1542,7 +1553,8 @@ function App(): React.JSX.Element {
           seconds: Math.round((performance.now() - started) / 100) / 10,
           error: st.error,
           message: st.encodeInfo ?? st.message,
-          outputPath: st.outputPath ?? ''
+          outputPath: st.outputPath ?? '',
+          metrics: st.metrics ?? undefined
         }
       }
       for (const rid of resolutions) {
@@ -1594,10 +1606,12 @@ function App(): React.JSX.Element {
       } else {
         project.updateText('songTitle', { text: 'smoke-fx' })
       }
-      project.updateExport({ resolutionId: '1080p', fps: 30 })
+      // P1a 基线：fx 变体分辨率经 main query 透传（默认 1080p；4K 动态基线用）
+      const fxRes = new URLSearchParams(window.location.search).get('smokeFxRes') ?? '1080p'
+      project.updateExport({ resolutionId: fxRes, fps: 30 })
       await sleep(400)
       const fxDone = await runExportOnce()
-      results.push({ ...fxDone, resolution: '1080p+fx' })
+      results.push({ ...fxDone, resolution: fxRes + '+fx' })
       project.removeOverlayLayer(fxOvId)
       project.setFontFile(null)
       // 0.7.0 音频工程端到端：lead 2s + fade 0.5s（视频总长 = 音频 + 2s；黑场/标题卡填充）

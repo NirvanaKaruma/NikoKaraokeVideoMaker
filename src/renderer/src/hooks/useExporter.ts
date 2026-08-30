@@ -3,7 +3,11 @@ import type { ProjectLayout } from '@shared/layout'
 import { RESOLUTIONS } from '@shared/layout'
 import type { SpectrumAnalyzer } from '@shared/spectrum'
 import type { ExportStageHandle } from '../components/ExportStageHost'
-import { encodeVideo, type ExportProgressInfo } from '../export/exportVideo'
+import {
+  encodeVideo,
+  type ExportFrameMetrics,
+  type ExportProgressInfo
+} from '../export/exportVideo'
 import { t } from '@shared/i18n'
 
 export interface ExporterState extends ExportProgressInfo {
@@ -11,6 +15,8 @@ export interface ExporterState extends ExportProgressInfo {
   outputPath: string | null
   /** 编码阶段的最终统计消息（含 ms/帧） */
   encodeInfo: string | null
+  /** P1a 计量：每帧分阶段 p50/p95（导出日志/smoke 报告透传） */
+  metrics: ExportFrameMetrics | null
 }
 
 export interface UseExporterArgs {
@@ -41,7 +47,8 @@ const IDLE: ExporterState = {
   message: '',
   error: null,
   outputPath: null,
-  encodeInfo: null
+  encodeInfo: null,
+  metrics: null
 }
 
 /**
@@ -97,6 +104,7 @@ export function useExporter(args: UseExporterArgs): {
                   : undefined
             })
         })
+        if (result.metrics) update({ metrics: result.metrics })
         if (!result.buffer && !result.streamPath) {
           update({ phase: 'cancelled', message: t('exporter.exportCancelled') })
           setStageRequest(null)
