@@ -264,3 +264,11 @@
 - **收益**：截断消除（race 不再存在）+ 解码提前等待重排（start invoke 等待完整解码，UI 经 invoke 异步响应不受影响；播放 ready 由 worker finalize 门控，无早期播放收益）；临时文件 60min≈1.27GB、读毕即删，仍在 4.19GB 堆护栏内。
 - **代价**：磁盘 IO 一次顺序写 + 一次分块读（首次解码延迟窗口 ≈ 编码耗时，与旧推送流相同）；临时文件路径在 app.getPath('temp')，异常退出留残（dispose/cancel/error 三处清理 + 新请求 kill 旧请求）。
 - **验收**：smoke-export 1080p@35 全 fx → ffprobe 35.00s（此前 11.6s/23.3s）；smoke-time 8s 解码 + smoke-visual 音频链全绿；vitest 119 例全绿。
+## 28. P1a 导出渲染：逐阶段计量定位 → 模糊缓存身份修复（2026-02-15）
+> 用户要求：先计量后决策（P1b/P2/P3 以数据为准）。P0 验收后立即落地 P1a：逐帧分阶段计时（resolve/draw/encode/mux p50/p95 进导出日志）+ renderFull/renderViz 原生画布复合（替代逐帧 toCanvas 新建画布）。
+- **计量结论（1080p@35 基线）**：静态帧 draw 0.7ms；fx 动态帧 draw p50=35.8ms 中 **background 层独占 34.9ms（97%）**，其余层全部 ≤0.5ms → 瓶颈不是 Konva 渲染代数，是单层重滤。
+- **根因**：<Group filters={[Blur]}> 每帧渲染新建数组 → react-konva 每帧调 node.filters() → Konva setter 无条件 _filterUpToDate=false → 下帧 drawScene 全缓存 getImageData/putImageData 重滤（0.5× 缓存；4K 缓存=1080p 尺寸 → 120ms）。**修复：blurFilters useMemo（固定身份）+ blurRadius 同理由**——一次过滤、逐帧仅 drawImage。
+- **结果（35s@30fps，smoke-export 全链条）**：1080p+fx **47.4s→14.5s（3.3×）**；4K+fx **164s→50.6s（3.3×）**；720p+af 24.2s→12.6s；静态基本不变（编码器变为新瓶颈：4K fx frame p50=30ms≈30fps，encodeWait 24.6ms 占 82%）。
+- **P1b/P2/P3 决策（按用户规则）**：P3（ffmpeg x264）**不做**——编码占比高仅出现在 4K 动态、且是硬件编码器排队（encodeQueueSize 背压）而非 CPU 编码耗时；1080p 动态 frame 8.1ms 已远快于 30fps。P1b（SceneLayers 裸 canvas 重写）**不做**——draw 已非瓶颈（stage 1.1ms）。P2（worker 池）暂缓——编码器吞吐即在途上限；若编码器成瓶颈再评估。
+- **验收**：ffprobe 35.00s/37.00s 不变；vitest 119 例全绿；逐层计时窗留在 exportVideo/ExportStageHost 供后续基线对照。
+
