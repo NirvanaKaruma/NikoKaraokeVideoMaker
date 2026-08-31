@@ -120,6 +120,8 @@ export const jp = {
     extraNone:
       'カスタムテキストボックスはありません —「追加」で作成できます（曲名/アーティストと同じ編集）。',
     extraUntitled: '新しいテキスト',
+    extraHint: '追加/削除は「レイヤー」タブで管理します。',
+    content: 'テキスト内容',
     defaultCustomText: '新規テキスト',
     fontDefault: 'システム既定',
     fontYahei: 'Microsoft YaHei',
@@ -482,6 +484,9 @@ export const jp = {
     overlayI: 'レイヤー {i}',
     extraText: 'テキスト：{n}',
     extraTextUntitled: 'テキスト',
+    addOverlay: '＋ オーバーレイ',
+    addText: '＋ テキストボックス',
+    remove: '削除',
     hide: '非表示',
     hideOff: '表示',
     lock: 'ロック',

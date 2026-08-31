@@ -529,10 +529,12 @@ function ExtraTextBox({
   // slotRef 为稳定裸 { current: fn } 对象（TextNode 直接消费；map 值 = 同一对象引用）
   const slotRef = useMemo(() => ({ current: null as ((t: number) => void) | null }), [])
   useEffect(() => {
-    textSlotsRef.current.set(tid, slotRef)
+    const map = textSlotsRef.current
+    map.set(tid, slotRef)
     return () => {
-      if (textSlotsRef.current.get(tid) === slotRef) {
-        textSlotsRef.current.delete(tid)
+      // cleanup 时 map 可能在组件树外已变（ref 快照安全）：恒等才删
+      if (map.get(tid) === slotRef) {
+        map.delete(tid)
       }
     }
   }, [tid, textSlotsRef, slotRef])

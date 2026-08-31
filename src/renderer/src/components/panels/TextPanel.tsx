@@ -58,6 +58,11 @@ function StyleControls({
   return (
     <div className="text-block">
       <h3>{title}</h3>
+      {/* 文字内容输入（1.1.1：自定义文本框无法从别处改内容；歌名/作者同款） */}
+      <label className="field">
+        <span>{t('textPanel.content')}</span>
+        <input type="text" value={cfg.text} onChange={(e) => onChange({ text: e.target.value })} />
+      </label>
       <label className="field">
         <span>{t('textPanel.font')}</span>
         <select value={s.fontFamily} onChange={(e) => setStyle({ fontFamily: e.target.value })}>
@@ -238,31 +243,11 @@ export function TextPanel(props: TextPanelProps): React.JSX.Element {
         kfOps={props.kfOps}
         onChange={props.onArtistChange}
       />
-      {/* 1.1.1 自定义文本框：行选择器 + 与歌名/作者同款编辑（含入字段落） */}
+      {/* 1.1.1 自定义文本框：行切换 + 内容/样式编辑（新增/删除在图层面板——统一入口） */}
       <div className="text-extra-section">
         <div className="text-extra-head">
           <h3>{t('textPanel.extraTitle')}</h3>
-          <div className="audio-row">
-            <button
-              type="button"
-              className="mini-btn"
-              onClick={() => props.onSelectExtraText(props.onExtraTextAdd())}
-            >
-              {t('textPanel.extraAdd')}
-            </button>
-            {props.selectedExtraTextId && (
-              <button
-                type="button"
-                className="mini-btn danger"
-                onClick={() => {
-                  props.onExtraTextRemove(props.selectedExtraTextId!)
-                  props.onSelectExtraText(null)
-                }}
-              >
-                {t('textPanel.extraRemove')}
-              </button>
-            )}
-          </div>
+          <span className="panel-note">{t('textPanel.extraHint')}</span>
         </div>
         <div className="text-extra-head">
           <div className="audio-row">

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type {
   BackgroundConfig,
   MainImageConfig,
@@ -41,6 +41,12 @@ export interface SidePanelProps {
   onOverlayUpdate: (id: string, patch: Partial<OverlayLayerConfig>) => void
   onOverlayRemove: (id: string) => void
   onOverlayMove: (id: string, dir: -1 | 1) => void
+  /** 1.1.1 图层页统一入口（新增/删除图层） */
+  onAddOverlay: () => string
+  onAddText: () => string
+  onRemoveLayer: (id: string) => void
+  /** 1.1.1 外部请求切换面板 tab（{tab, nonce}；nonce 每次请求递增） */
+  pendingTab?: { tab: SideTab; nonce: number } | null
   // 图层面板（0.9.0）
   layerRows: LayerRow[]
   snapEnabled: boolean
@@ -166,6 +172,14 @@ const TABS: { id: SideTab; labelKey: string }[] = [
 export function SidePanel(props: SidePanelProps): React.JSX.Element {
   const { t } = useLocale()
   const [tab, setTab] = useState<SideTab>('assets')
+  // 1.1.1 外部请求切页（图层页新增后自动跳对应编辑面板）：pendingTab 带自增 nonce 去重
+  const lastTabNonceRef = useRef(-1)
+  useEffect(() => {
+    if (props.pendingTab && props.pendingTab.nonce !== lastTabNonceRef.current) {
+      lastTabNonceRef.current = props.pendingTab.nonce
+      setTab(props.pendingTab.tab)
+    }
+  }, [props.pendingTab])
   return (
     <aside className="side-panel">
       <div className="edit-ctx-bar">
@@ -256,6 +270,9 @@ export function SidePanel(props: SidePanelProps): React.JSX.Element {
             onToggleLocked={props.onLayerToggleLocked}
             onMove={props.onLayerMove}
             onSnapToggle={props.onSnapToggle}
+            onAddOverlay={props.onAddOverlay}
+            onAddText={props.onAddText}
+            onRemove={props.onRemoveLayer}
           />
         )}
         {tab === 'text' && (

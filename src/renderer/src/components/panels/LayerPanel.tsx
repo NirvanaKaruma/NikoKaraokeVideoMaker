@@ -17,14 +17,27 @@ interface LayerPanelProps {
   onToggleLocked: (id: string) => void
   onMove: (id: string, dir: -1 | 1) => void
   onSnapToggle: (v: boolean) => void
+  /** 1.1.1 新增图层入口（统一收编到图层页：附加层 / 文本框） */
+  onAddOverlay: () => string
+  onAddText: () => string
+  /** 删除指定图层（仅 overlay:/text: 可删；返回后自动选中下一行由调用方处理） */
+  onRemove: (id: string) => void
 }
 
-/** 图层面板（0.9.0）：z 序（↑↓）/ 隐藏（👁）/ 锁定（🔒）；吸附开关也在本页。 */
+/** 图层面板（0.9.0）：z 序（↑↓）/ 隐藏（👁）/ 锁定（🔒）+ 1.1.1 统一新增/删除入口；吸附开关也在本页。 */
 export function LayerPanel(props: LayerPanelProps): React.JSX.Element {
   const { t } = useLocale()
   return (
     <section className="panel-section">
       <h2>{t('layers.tab')}</h2>
+      <div className="audio-row">
+        <button type="button" className="mini-btn" onClick={() => void props.onAddOverlay()}>
+          {t('layers.addOverlay')}
+        </button>
+        <button type="button" className="mini-btn" onClick={() => void props.onAddText()}>
+          {t('layers.addText')}
+        </button>
+      </div>
       <label className="check-row">
         <input
           type="checkbox"
@@ -71,6 +84,16 @@ export function LayerPanel(props: LayerPanelProps): React.JSX.Element {
             >
               ↓
             </button>
+            {(r.id.startsWith('overlay:') || r.id.startsWith('text:')) && (
+              <button
+                type="button"
+                className="danger"
+                title={t('layers.remove')}
+                onClick={() => props.onRemove(r.id)}
+              >
+                ✕
+              </button>
+            )}
           </span>
         </div>
       ))}

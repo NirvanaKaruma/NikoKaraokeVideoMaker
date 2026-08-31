@@ -121,6 +121,8 @@ export const en = {
     extraNone:
       'No custom text boxes — click "Add text box" to create one (same editing as title/artist).',
     extraUntitled: 'New text',
+    extraHint: 'Add/remove is managed in the Layers tab.',
+    content: 'Text content',
     defaultCustomText: 'New text',
     fontDefault: 'System default',
     fontYahei: 'Microsoft YaHei',
@@ -478,6 +480,9 @@ export const en = {
     overlayI: 'Layer {i}',
     extraText: 'Text: {n}',
     extraTextUntitled: 'Text',
+    addOverlay: '＋ Overlay layer',
+    addText: '＋ Text box',
+    remove: 'Remove',
     hide: 'Hide',
     hideOff: 'Show',
     lock: 'Lock',

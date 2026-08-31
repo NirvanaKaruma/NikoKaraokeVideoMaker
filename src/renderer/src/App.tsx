@@ -1237,6 +1237,11 @@ function App(): React.JSX.Element {
   const [selectedId, setSelectedId] = useState<SelectableId>(null)
   /** 1.1.1 自定义文本框：面板选中编辑的 id（点画布 text: 同步） */
   const [selectedTextId, setSelectedTextId] = useState<string | null>(null)
+  /** 1.1.1 面板 tab 外部切换请求（图层页新增后自动跳转） */
+  const [pendingTab, setPendingTab] = useState<{ tab: 'assets' | 'text'; nonce: number } | null>(
+    null
+  )
+  const pendingTabNonce = useRef(1)
   const [helpOpen, setHelpOpen] = useState(false)
   const [exportOpen, setExportOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
@@ -2542,7 +2547,34 @@ function App(): React.JSX.Element {
             onOverlayPickImage={project.setOverlayFile}
             onOverlayUpdate={project.updateOverlayLayer}
             onOverlayRemove={project.removeOverlayLayer}
+            pendingTab={pendingTab}
             onOverlayMove={project.moveOverlayLayer}
+            onAddOverlay={() => {
+              const id = project.addOverlayLayer()
+              // 新增后自动切到素材页 + 选中新层（OverlayPanel 内继续选图/调属性）
+              setPendingTab({ tab: 'assets', nonce: pendingTabNonce.current++ })
+              setSelectedId(('overlay:' + id) as SelectableId)
+              setSelectedTextId(null)
+              return id
+            }}
+            onAddText={() => {
+              const id = project.addTextLayer()
+              setPendingTab({ tab: 'text', nonce: pendingTabNonce.current++ })
+              setSelectedId(('text:' + id) as SelectableId)
+              setSelectedTextId(id)
+              return id
+            }}
+            onRemoveLayer={(id) => {
+              if (id.startsWith('overlay:')) {
+                project.removeOverlayLayer(id.slice(9))
+                if (selectedId === id) setSelectedId(null)
+              } else if (id.startsWith('text:')) {
+                const tid = id.slice(5)
+                project.removeTextLayer(tid)
+                if (selectedTextId === tid) setSelectedTextId(null)
+                if (selectedId === id) setSelectedId(null)
+              }
+            }}
             songTitle={project.layout.texts.songTitle.text}
             artist={project.layout.texts.artist.text}
             extraTexts={panelView.texts.extraTexts ?? {}}
