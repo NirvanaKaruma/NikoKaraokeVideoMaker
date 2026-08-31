@@ -549,6 +549,7 @@ function ExtraTextBox({
       onSelect={onSelect}
       onRectChange={onRectChange}
       textFxSlotRef={slotRef}
+      selectId={('text:' + tid) as `text:${string}`}
     />
   )
 }
@@ -562,7 +563,8 @@ function TextNode({
   snapCtxRef,
   onSelect,
   onRectChange,
-  textFxSlotRef
+  textFxSlotRef,
+  selectId
 }: {
   kind: 'songTitle' | 'artist'
   cfg: TextLayerConfig
@@ -576,6 +578,8 @@ function TextNode({
   onRectChange: (rect: NormRect) => void
   /** 每帧入场动画更新槽（SceneLayers 分发 frame(t)） */
   textFxSlotRef?: { current: ((t: number) => void) | null }
+  /** 1.1.1 自定义文本框：点选回调的选中 id（缺省 = kind；ExtraTextBox 传 'text:<id>'） */
+  selectId?: SelectableId
 }): React.JSX.Element {
   const groupRef = useRef<Konva.Group>(null)
   const textRef = useRef<Konva.Text>(null)
@@ -653,13 +657,13 @@ function TextNode({
         height={px.h}
         draggable={!locked}
         onClick={() => {
-          if (!locked) onSelect(kind)
+          if (!locked) onSelect(selectId ?? kind)
         }}
         onTap={() => {
-          if (!locked) onSelect(kind)
+          if (!locked) onSelect(selectId ?? kind)
         }}
         onDragStart={() => {
-          if (!locked) onSelect(kind)
+          if (!locked) onSelect(selectId ?? kind)
         }}
         onDragMove={(e: KonvaEventObject<DragEvent>) =>
           snapDragNode(e.target as Konva.Group, snapCtxRef?.current ?? null, canvas)
