@@ -240,6 +240,26 @@ export const jp = {
     aboutText:
       'NikoKaraokeVideoMaker — KTV 字幕ビデオ生成ツール。WebCodecs エンコード + ffmpeg ミックス。'
   },
+  updater: {
+    title: 'アップデートを確認',
+    descCheck: 'GitHub Releases から新バージョンを確認（現在 v{cur}）。',
+    checkNow: '今すぐ確認',
+    checking: '確認中…',
+    newVersion: '新しいバージョンがあります',
+    descNewVersion:
+      '新しいビルドが利用可能。ポータブル exe をダウンロード（SHA-256 検証後、自己置換）。',
+    versionLine: '{cur} → {latest}',
+    download: 'アップデートをダウンロード',
+    downloading: 'ダウンロード中… {p}%',
+    verifying: 'SHA-256 を検証中…',
+    downloadFailed:
+      'ダウンロードまたは検証に失敗しました。再試行してください（ネットワーク/整合性）。',
+    readyApply: 'アップデート準備完了',
+    descReadyApply: '「適用」をクリック：プロジェクト保存 → 終了 → exe 置換 → 新ビルドで再起動。',
+    applyNow: '適用',
+    upToDate: '最新です（v{v}）',
+    checkFailed: 'アップデート確認に失敗'
+  },
   shortcuts: {
     togglePlay: '再生 / 一時停止',
     descTogglePlay: 'スペース：プレビューの再生/一時停止（編集アプリの慣用操作）。',

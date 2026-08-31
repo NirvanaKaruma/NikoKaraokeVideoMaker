@@ -37,6 +37,30 @@ const api = {
       ipcRenderer.invoke(IPC.appPrefsSet, patch)
   },
 
+  /** 自更新（1.0.0）：GitHub 检测 + 下载 + portable 自替换 */
+  updater: {
+    check: (): Promise<import('../shared/updater').UpdateCheckResult> =>
+      ipcRenderer.invoke(IPC.updaterCheck),
+    download: (
+      jobId: string,
+      url: string,
+      sha256?: string | null
+    ): Promise<{ ok: boolean; path?: string; error?: string }> =>
+      ipcRenderer.invoke(IPC.updaterDownload, jobId, url, sha256 ?? null),
+    apply: (path: string): Promise<{ ok: boolean; error?: string }> =>
+      ipcRenderer.invoke(IPC.updaterApply, path),
+    onDownloadProgress: (
+      cb: (p: import('../shared/updater').DownloadProgress) => void
+    ): (() => void) => {
+      const listener = (
+        _e: Electron.IpcRendererEvent,
+        p: import('../shared/updater').DownloadProgress
+      ): void => cb(p)
+      ipcRenderer.on(IPC.updaterDownloadProgress, listener)
+      return () => ipcRenderer.removeListener(IPC.updaterDownloadProgress, listener)
+    }
+  },
+
   ffmpeg: {
     detect: (): Promise<FfmpegStatusReport> => ipcRenderer.invoke(IPC.ffmpegDetect),
     getConfig: (): Promise<FfmpegConfig> => ipcRenderer.invoke(IPC.ffmpegConfigGet),

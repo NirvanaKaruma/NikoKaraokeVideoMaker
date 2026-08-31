@@ -9,6 +9,7 @@ import { getConfig, setConfig } from './config'
 import { registerFfmpegIpc } from './ffmpegIpc'
 import { registerProjectIpc } from './projectIpc'
 import { registerMuxIpc } from './muxIpc'
+import { registerUpdaterIpc } from './updaterIpc'
 import {
   detectFfmpegStatus,
   detectManagedFfmpeg,
@@ -681,6 +682,7 @@ app.whenReady().then(async () => {
   registerFfmpegIpc()
   registerProjectIpc()
   registerMuxIpc()
+  registerUpdaterIpc()
   // i18n：启动时按持久化偏好设置全局语言（默认 zh-cn，异步完成不影响 UI）
   void getConfig().then((cfg) => {
     if (cfg.locale === 'zh-cn' || cfg.locale === 'en' || cfg.locale === 'jp') setLocale(cfg.locale)

@@ -235,6 +235,24 @@ export const zhCn = {
     descEncodeAccel: 'GPU/CPU 编码选择，改动立即生效。',
     aboutText: 'NikoKaraokeVideoMaker——KTV 字幕视频生成工具。使用 WebCodecs 编码与 ffmpeg 混流。'
   },
+  updater: {
+    title: '检查更新',
+    descCheck: '从 GitHub Releases 检测新版本（本机 v{cur}）。',
+    checkNow: '检查更新',
+    checking: '检查中…',
+    newVersion: '发现新版本',
+    descNewVersion: '新版本已就绪，可下载便携版（校验 SHA-256 后自替换）。',
+    versionLine: '{cur} → {latest}',
+    download: '下载更新',
+    downloading: '下载中… {p}%',
+    verifying: '校验 SHA-256…',
+    downloadFailed: '下载或校验失败，请重试（网络/完整性）。',
+    readyApply: '更新就绪',
+    descReadyApply: '点「应用更新」后：保存工程 → 退出 → 自动替换 exe → 重启到新版。',
+    applyNow: '应用更新',
+    upToDate: '已是最新版本（v{v}）',
+    checkFailed: '检查更新失败'
+  },
   shortcuts: {
     togglePlay: '播放/暂停',
     descTogglePlay: '空格：播放或暂停预览（剪辑软件通用语义）。',

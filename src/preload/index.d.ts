@@ -26,6 +26,19 @@ declare global {
           patch: import('../shared/appSettings').AppPrefs
         ) => Promise<import('../shared/appSettings').AppPrefs>
       }
+      /** 自更新（1.0.0） */
+      updater: {
+        check: () => Promise<import('../shared/updater').UpdateCheckResult>
+        download: (
+          jobId: string,
+          url: string,
+          sha256?: string | null
+        ) => Promise<{ ok: boolean; path?: string; error?: string }>
+        apply: (path: string) => Promise<{ ok: boolean; error?: string }>
+        onDownloadProgress: (
+          cb: (p: import('../shared/updater').DownloadProgress) => void
+        ) => () => void
+      }
       ffmpeg: {
         detect: () => Promise<FfmpegStatusReport>
         getConfig: () => Promise<FfmpegConfig>

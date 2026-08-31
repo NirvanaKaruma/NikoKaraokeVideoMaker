@@ -6,6 +6,7 @@ import { prettyShortcut } from '@shared/appSettings'
 import { useLocale } from '../hooks/useLocale'
 import { useAppPrefs } from '../hooks/useAppPrefs'
 import { SettingsPanel } from './panels/SettingsPanel'
+import type { UpdateCheckResult, DownloadProgress } from '@shared/updater'
 import { DeferredSlider } from './DeferredSlider'
 import {
   benchmarkEncoder,
@@ -103,11 +104,22 @@ export function SettingsDialog(props: SettingsDialogProps): React.JSX.Element | 
   const [diagRunning, setDiagRunning] = useState(false)
   // 录键状态：正在改绑的 action（null = 未在录）
   const [recording, setRecording] = useState<ShortcutAction | null>(null)
+  // 自更新状态（1.0.0）：check 结果 / 下载进度 / 就绪的安装包路径
+  const [updateInfo, setUpdateInfo] = useState<UpdateCheckResult | null>(null)
+  const [updateBusy, setUpdateBusy] = useState(false)
+  const [dlProgress, setDlProgress] = useState<DownloadProgress | null>(null)
+  const [dlPath, setDlPath] = useState<string | null>(null)
   /** 录键提交回调（ref 化：hooks 顺序稳定；keyup 时读最新 prefs 不触发重渲染依赖） */
   const prefsRef = useRef(prefs)
   useEffect(() => {
     prefsRef.current = prefs
   }, [prefs])
+
+  // 下载进度订阅（下载会话生命周期内）
+  useEffect(() => {
+    const off = window.api.updater.onDownloadProgress((p) => setDlProgress(p))
+    return off
+  }, [])
 
   // 录键会话：window 级 keydown（capture）——录制时全接管，防止 Space/Enter 触发按钮或滚动
   // （React 合成事件绑定在容器 div 上时，按钮聚焦的 Space 会先触发 click）
@@ -152,6 +164,37 @@ export function SettingsDialog(props: SettingsDialogProps): React.JSX.Element | 
   }, [recording])
 
   if (!open) return null
+
+  // ── 自更新动作（1.0.0）──
+  const doCheck = async (): Promise<void> => {
+    setUpdateBusy(true)
+    try {
+      const r = await window.api.updater.check()
+      setUpdateInfo(r)
+    } finally {
+      setUpdateBusy(false)
+    }
+  }
+  const doDownload = async (): Promise<void> => {
+    if (!updateInfo?.downloadUrl) return
+    setDlProgress(null)
+    setDlPath(null)
+    const jobId = 'dl-' + Date.now()
+    const r = await window.api.updater.download(
+      jobId,
+      updateInfo.downloadUrl,
+      updateInfo.sha256 ?? null
+    )
+    if (r.ok && r.path) setDlPath(r.path)
+    else if (r.error) setDlProgress({ phase: 'error', percent: 0, receivedBytes: 0, totalBytes: 0 })
+  }
+  const doApply = async (): Promise<void> => {
+    if (!dlPath) return
+    const r = await window.api.updater.apply(dlPath)
+    if (!r.ok && r.error) {
+      setDlProgress({ phase: 'error', percent: 0, receivedBytes: 0, totalBytes: 0 })
+    }
+  }
 
   const runDiag = async (): Promise<void> => {
     setDiagRunning(true)
@@ -416,6 +459,98 @@ export function SettingsDialog(props: SettingsDialogProps): React.JSX.Element | 
               <>
                 <h2>{t('settings.secAbout')}</h2>
                 <p className="panel-note">{t('settings.aboutText')}</p>
+
+                {/* 1.0.0 自更新：检查 → 下载（进度+校验）→ portable 自替换 */}
+                <SettingsRow icon="🔄" labelKey="updater.title" descKey="updater.descCheck">
+                  <div className="updater-ctl">
+                    <button
+                      type="button"
+                      className="mini-btn"
+                      onClick={() => void doCheck()}
+                      disabled={updateBusy}
+                    >
+                      {updateBusy ? t('updater.checking') : t('updater.checkNow')}
+                    </button>
+                  </div>
+                </SettingsRow>
+
+                {updateInfo?.hasUpdate && (
+                  <SettingsRow
+                    icon="⬆"
+                    labelKey="updater.newVersion"
+                    descKey="updater.descNewVersion"
+                  >
+                    <div className="updater-ctl">
+                      <span className="updater-version">
+                        {t('updater.versionLine', {
+                          cur: updateInfo.current,
+                          latest: updateInfo.latest
+                        })}
+                      </span>
+                      {!dlPath && updateInfo.downloadUrl && (
+                        <button
+                          type="button"
+                          className="mini-btn"
+                          onClick={() => void doDownload()}
+                          disabled={
+                            dlProgress?.phase === 'downloading' || dlProgress?.phase === 'verifying'
+                          }
+                        >
+                          {t('updater.download')}
+                        </button>
+                      )}
+                    </div>
+                  </SettingsRow>
+                )}
+
+                {/* 更新日志摘要（存在时） */}
+                {updateInfo?.hasUpdate && updateInfo.notes && (
+                  <p className="panel-note updater-notes">{updateInfo.notes}</p>
+                )}
+
+                {/* 下载进度 UI */}
+                {dlProgress && dlProgress.phase === 'downloading' && (
+                  <div className="dl-row updater-dlrow">
+                    <div className="dl-bar">
+                      <div className="dl-fill" style={{ width: dlProgress.percent + '%' }} />
+                    </div>
+                    <span className="panel-note">
+                      {t('updater.downloading', { p: dlProgress.percent })}
+                    </span>
+                  </div>
+                )}
+                {dlProgress && dlProgress.phase === 'verifying' && (
+                  <p className="panel-note">{t('updater.verifying')}</p>
+                )}
+                {dlProgress && dlProgress.phase === 'error' && (
+                  <p className="field-error">{t('updater.downloadFailed')}</p>
+                )}
+
+                {/* 已下载 → 应用更新 */}
+                {dlPath != null && (
+                  <SettingsRow
+                    icon="🔧"
+                    labelKey="updater.readyApply"
+                    descKey="updater.descReadyApply"
+                  >
+                    <div className="updater-ctl">
+                      <button type="button" className="btn" onClick={() => void doApply()}>
+                        {t('updater.applyNow')}
+                      </button>
+                    </div>
+                  </SettingsRow>
+                )}
+
+                {/* 已是最新 / 有更新但无资产 */}
+                {updateInfo && !updateInfo.hasUpdate && !updateInfo.error && (
+                  <p className="panel-note">✓ {t('updater.upToDate', { v: updateInfo.latest })}</p>
+                )}
+                {updateInfo && updateInfo.error && (
+                  <p className="field-error">
+                    {t('updater.checkFailed')}（{updateInfo.error}）
+                  </p>
+                )}
+
                 <SettingsPanel status={status} loading={loading} onRefresh={onRefresh} />
               </>
             )}

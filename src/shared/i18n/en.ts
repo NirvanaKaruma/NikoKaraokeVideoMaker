@@ -237,6 +237,25 @@ export const en = {
     descEncodeAccel: 'GPU/CPU encoding choice; applied immediately.',
     aboutText: 'NikoKaraokeVideoMaker — KTV subtitle video tool. WebCodecs encode + ffmpeg mux.'
   },
+  updater: {
+    title: 'Check for updates',
+    descCheck: 'Check releases on GitHub Releases (current v{cur}).',
+    checkNow: 'Check now',
+    checking: 'Checking…',
+    newVersion: 'New version available',
+    descNewVersion:
+      'A new build is ready — download the portable exe (SHA-256 verified, self-replace).',
+    versionLine: '{cur} → {latest}',
+    download: 'Download update',
+    downloading: 'Downloading… {p}%',
+    verifying: 'Verifying SHA-256…',
+    downloadFailed: 'Download or verification failed. Please retry (network/integrity).',
+    readyApply: 'Update ready',
+    descReadyApply: 'Click "Apply update": save project → exit → replace exe → relaunch new build.',
+    applyNow: 'Apply update',
+    upToDate: 'Already up to date (v{v})',
+    checkFailed: 'Update check failed'
+  },
   shortcuts: {
     togglePlay: 'Play / Pause',
     descTogglePlay: 'Space: play or pause the preview (common editing-app semantics).',

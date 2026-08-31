@@ -774,6 +774,31 @@ body {
   color: var(--ev-c-text-3);
 }
 
+/* 自更新（1.0.0）：版本行 / 下载进度 / 更新日志 */
+.updater-ctl {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+.updater-version {
+  font-size: 13px;
+  color: var(--text-accent);
+  font-weight: 600;
+}
+
+.updater-notes {
+  white-space: pre-wrap;
+  border-left: 2px solid var(--accent-cyan-border);
+  padding-left: 8px;
+  margin: 0;
+}
+
+.updater-dlrow {
+  margin-top: 2px;
+}
+
 .text-block {
   border: 1px solid var(--ev-c-gray-2);
   border-radius: 8px;

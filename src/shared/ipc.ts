@@ -36,6 +36,13 @@ export const IPC = {
   audioDecodeDispose: 'audio:decode-dispose',
   audioDecodeCancel: 'audio:decode-cancel',
 
+  /** 自更新（1.0.0）：GitHub release 检测 + 下载 portable exe + bat 自替换 */
+  updaterCheck: 'updater:check',
+  updaterDownload: 'updater:download',
+  updaterApply: 'updater:apply',
+  /** main → renderer 下载进度事件（{percent, receivedBytes, totalBytes, phase}） */
+  updaterDownloadProgress: 'updater:download-progress',
+
   /** 项目保存/加载（T23） */
   projectSave: 'project:save',
   /** 静默保存到指定路径（1.0.0 自动保存：renderer 记住上次路径；无路径则报 canceled） */
