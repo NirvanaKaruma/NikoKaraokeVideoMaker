@@ -610,7 +610,7 @@ export const en = {
       scanline: 'Scanlines: {v}%',
       beatFlash: 'Beat flash: {v}%',
       lightLeak: 'Light leak: {v}%',
-      note: 'Beat flash is triggered by bass energy jumps (full beat detection lands in 0.6.0).'
+      note: 'Beat flash is triggered by bass energy jumps.'
     },
     introOutro: {
       introFade: 'Intro fade from black: {v}s',
