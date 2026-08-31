@@ -91,6 +91,13 @@ export interface SidePanelProps {
   artistCfg: TextLayerConfig
   onSongTitleCfgChange: (p: Partial<TextLayerConfig>) => void
   onArtistCfgChange: (p: Partial<TextLayerConfig>) => void
+  /** 1.1.1 自定义文本框 */
+  extraTexts: Record<string, TextLayerConfig>
+  selectedExtraTextId: string | null
+  onSelectExtraText: (id: string | null) => void
+  onExtraTextChange: (id: string, patch: Partial<TextLayerConfig>) => void
+  onExtraTextAdd: () => string
+  onExtraTextRemove: (id: string) => void
   // 可视化
   visualizer: VisualizerConfig
   onVisualizerChange: (patch: Partial<VisualizerConfig>) => void
@@ -257,6 +264,12 @@ export function SidePanel(props: SidePanelProps): React.JSX.Element {
             artist={props.artistCfg}
             onSongTitleChange={props.onSongTitleCfgChange}
             onArtistChange={props.onArtistCfgChange}
+            extraTexts={props.extraTexts}
+            selectedExtraTextId={props.selectedExtraTextId}
+            onSelectExtraText={props.onSelectExtraText}
+            onExtraTextChange={props.onExtraTextChange}
+            onExtraTextAdd={props.onExtraTextAdd}
+            onExtraTextRemove={props.onExtraTextRemove}
             customFontFamily={props.customFontFamily}
             customFontName={props.customFontName}
             onPickFont={props.onPickFont}

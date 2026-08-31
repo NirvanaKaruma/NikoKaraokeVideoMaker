@@ -303,8 +303,12 @@ body {
 }
 
 @keyframes shortcut-blink {
-  from { opacity: 1; }
-  to { opacity: 0.45; }
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0.45;
+  }
 }
 
 /* 开关（参考图 toggle） */
@@ -353,7 +357,6 @@ body {
   color: var(--ev-c-text-2);
   min-width: 20px;
 }
-
 
 .help-list {
   padding-left: 20px;
@@ -772,6 +775,30 @@ body {
   font-size: 11px;
   line-height: 1.6;
   color: var(--ev-c-text-3);
+}
+
+/* 1.1.1 自定义文本框区（文本样式页尾部） */
+.text-extra-section {
+  border-top: 1px solid var(--ev-c-gray-2);
+  padding-top: 10px;
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.text-extra-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.text-extra-head h3 {
+  font-size: 13px;
+  font-weight: 700;
+  margin: 0;
 }
 
 /* 自更新（1.0.0）：版本行 / 下载进度 / 更新日志 */

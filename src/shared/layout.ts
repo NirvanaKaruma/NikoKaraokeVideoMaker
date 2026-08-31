@@ -303,6 +303,9 @@ export interface ProjectLayout {
   texts: {
     songTitle: TextLayerConfig
     artist: TextLayerConfig
+    /** 1.1.1 自定义文本框（id 为 key——关键帧点路径 'texts.extraTexts.<id>.*' 天然稳定，
+     * 增删不影响其他文本的关键帧；对象而非数组避免下标漂移） */
+    extraTexts: Record<string, TextLayerConfig>
   }
   visualizer: VisualizerConfig
   /** 全局后期叠加（0.5.0） */
@@ -394,7 +397,8 @@ export const DEFAULT_LAYOUT: ProjectLayout = {
       // §4：作者在歌名下方，y≈26%（上移后 24.5%）
       rect: { x: 0.54, y: 0.245, w: 0.4, h: 0.07 },
       entry: { type: 'none', durationSec: 1.2, delaySec: 0 }
-    }
+    },
+    extraTexts: {}
   },
   visualizer: {
     style: 'bars',
@@ -432,15 +436,18 @@ export const DEFAULT_LAYOUT: ProjectLayout = {
   }
 }
 
-/** 默认层序（0.9.0）：背景 → 主图 → 附加层（数组序）→ 歌名 → 作者 → 可视化 */
-export function defaultLayerOrder(overlayIds: string[]): string[] {
-  return ['background', 'main', ...overlayIds, 'songTitle', 'artist', 'visualizer']
+/** 默认层序（0.9.0）：背景 → 主图 → 附加层（数组序）→ 歌名/作者/自定义文本 → 可视化 */
+export function defaultLayerOrder(overlayIds: string[], textIds: string[] = []): string[] {
+  return ['background', 'main', ...overlayIds, 'songTitle', 'artist', ...textIds, 'visualizer']
 }
 
 /** 0.9.0：图层顺序是否异于默认（异于 → 导出走全层逐帧路径，保证任意 z 序所见即所得） */
 export function hasCustomLayerOrder(layout: ProjectLayout): boolean {
   if (!layout.layers) return false
-  const def = defaultLayerOrder((layout.overlayLayers ?? []).map((o) => 'overlay:' + o.id))
+  const def = defaultLayerOrder(
+    (layout.overlayLayers ?? []).map((o) => 'overlay:' + o.id),
+    Object.keys(layout.texts.extraTexts ?? {}).map((id) => 'text:' + id)
+  )
   if (layout.layers.length !== def.length) return true
   for (let i = 0; i < def.length; i++) {
     if (layout.layers[i]?.id !== def[i]) return true
@@ -456,6 +463,10 @@ export function hasDynamicFx(layout: ProjectLayout): boolean {
   if (i.breathe > 0 || i.rotateDeg > 0 || i.glowPulse > 0) return true
   if (layout.texts.songTitle.entry.type !== 'none' || layout.texts.artist.entry.type !== 'none')
     return true
+  // 1.1.1 自定义文本入场动画
+  if (Object.values(layout.texts.extraTexts ?? {}).some((x) => x.entry.type !== 'none')) {
+    return true
+  }
   // 0.8.0 附加层：任一层有随时间动画（呼吸/旋转/发光/入场）→ 动态路径（mask/border 为静态装饰，不算）
   if (
     (layout.overlayLayers ?? []).some(

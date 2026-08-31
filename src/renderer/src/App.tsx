@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type Konva from 'konva'
 import { SUBTITLE_ZONE_Y, defaultLayerOrder, type ProjectLayout } from '@shared/layout'
 import { beatTimeAt, resolveLayoutAt, segmentOverlaps, setByPath } from '@shared/timeline'
@@ -1235,6 +1235,8 @@ function App(): React.JSX.Element {
     return out
   })()
   const [selectedId, setSelectedId] = useState<SelectableId>(null)
+  /** 1.1.1 自定义文本框：面板选中编辑的 id（点画布 text: 同步） */
+  const [selectedTextId, setSelectedTextId] = useState<string | null>(null)
   const [helpOpen, setHelpOpen] = useState(false)
   const [exportOpen, setExportOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
@@ -1286,11 +1288,22 @@ function App(): React.JSX.Element {
   }, [project.assets.overlayImages])
   // 图层面板行（0.9.0）：按渲染顺序展开（null=默认序）；名称 i18n key + 附加层序号
   // 1.0.0 T4：行来自当前编辑视图（段视图里隐藏/锁定/顺序按段呈现）
+  // 画布选择 → 面板选中同步（text:<id>）：包一层 setter（选择时同步，避免 effect 级联重渲）
+  const selectWithTextSync = useCallback((id: SelectableId) => {
+    setSelectedId(id)
+    if (id != null && id.startsWith('text:')) {
+      setSelectedTextId(id.slice('text:'.length))
+    }
+  }, [])
   const layerRows = useMemo(() => {
     const overlays = edit.view.overlayLayers ?? []
     // layers 已物化时为 LayerItem[]（取 id）；null 时按默认序（string[]）
     const order = (
-      edit.view.layers ?? defaultLayerOrder(overlays.map((o) => 'overlay:' + o.id))
+      edit.view.layers ??
+      defaultLayerOrder(
+        overlays.map((o) => 'overlay:' + o.id),
+        Object.keys(edit.view.texts.extraTexts ?? {}).map((id) => 'text:' + id)
+      )
     ).map((l) => (typeof l === 'string' ? l : l.id))
     const state = new Map((edit.view.layers ?? []).map((l) => [l.id, l]))
     return order.map((id) => {
@@ -1303,7 +1316,21 @@ function App(): React.JSX.Element {
       if (id.startsWith('overlay:')) {
         const oid = id.slice('overlay:'.length)
         const idx = overlays.findIndex((o) => o.id === oid)
-        return { ...base, nameKey: 'layers.overlayI', nameArg: { i: idx + 1 } }
+        return {
+          ...base,
+          nameKey: 'layers.overlayI',
+          nameArg: { i: idx + 1 } as Record<string, string | number>
+        }
+      }
+      if (id.startsWith('text:')) {
+        // 1.1.1：显示文本内容（空则占位「文本」）
+        const tid = id.slice('text:'.length)
+        const txt = (edit.view.texts.extraTexts ?? {})[tid]?.text?.trim()
+        return {
+          ...base,
+          nameKey: 'layers.extraText',
+          nameArg: { n: txt || t('layers.extraTextUntitled') } as Record<string, string | number>
+        }
       }
       const nameKey =
         id === 'background'
@@ -1317,7 +1344,7 @@ function App(): React.JSX.Element {
                 : 'layers.visualizer'
       return { ...base, nameKey }
     })
-  }, [edit.view.overlayLayers, edit.view.layers])
+  }, [edit.view.overlayLayers, edit.view.layers, edit.view.texts.extraTexts])
   const pb = useAudioPlayback(
     project.assets.audioFile,
     project.layout.visualizer,
@@ -2106,6 +2133,26 @@ function App(): React.JSX.Element {
       project.updateIntroOutro({ introFade: 0.8, outroFade: 0.8 })
       project.updateAudioEngine({ leadMs: 120, fadeInSec: 0.5, fadeOutSec: 0.6 })
       project.updateEditor({ snapEnabled: false })
+      // 1.1.1 自定义文本框：新增 → 等提交 → 改内容/样式 → 验证进布局（往返对比自动覆盖 extraTexts）
+      const txtId = project.addTextLayer()
+      {
+        const t0 = Date.now()
+        while (Date.now() - t0 < 3000 && !projectRef.current.layout.texts.extraTexts?.[txtId]) {
+          await sleep(100)
+        }
+      }
+      project.updateTextLayer(txtId, {
+        text: '往返文本',
+        rect: { x: 0.5, y: 0.5, w: 0.4, h: 0.08 }
+      })
+      project.updateTextLayer(txtId, {
+        style: {
+          ...projectRef.current.layout.texts.extraTexts[txtId].style,
+          fontSize: 0.08
+        }
+      })
+      const extraCount = Object.keys(projectRef.current.layout.texts.extraTexts ?? {}).length
+      add('文本框新增', extraCount === 1, 'extraTexts=' + extraCount)
       await sleep(250)
       const layoutJsonBefore = JSON.stringify(projectRef.current.layout)
       // 先走真实保存路径（更新已保存快照，同步 dirty 状态）
@@ -2498,6 +2545,12 @@ function App(): React.JSX.Element {
             onOverlayMove={project.moveOverlayLayer}
             songTitle={project.layout.texts.songTitle.text}
             artist={project.layout.texts.artist.text}
+            extraTexts={panelView.texts.extraTexts ?? {}}
+            selectedExtraTextId={selectedTextId}
+            onSelectExtraText={setSelectedTextId}
+            onExtraTextChange={project.updateTextLayer}
+            onExtraTextAdd={project.addTextLayer}
+            onExtraTextRemove={project.removeTextLayer}
             coverUrl={project.assets.coverUrl}
             coverFile={project.assets.coverFile}
             audioFile={project.assets.audioFile}
@@ -2589,9 +2642,10 @@ function App(): React.JSX.Element {
               coverElement={project.assets.coverElement}
               bgElement={project.assets.bgElement}
               selectedId={selectedId}
-              onSelect={setSelectedId}
+              onSelect={selectWithTextSync}
               onMainRectChange={project.updateMainRect}
               onTextRectChange={(kind, rect) => project.updateText(kind, { rect })}
+              onExtraTextRectChange={(id, rect) => project.updateTextLayer(id, { rect })}
               onVisualizerRectChange={(rect) => project.updateVisualizer({ rect })}
               overlayElements={overlayElements}
               onOverlayRectChange={(id, rect) => project.updateOverlayLayer(id, { rect })}

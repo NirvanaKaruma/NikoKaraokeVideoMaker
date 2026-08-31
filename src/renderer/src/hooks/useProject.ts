@@ -10,6 +10,7 @@ import {
   IntroOutroConfig,
   LayerItem,
   MainImageConfig,
+  CJK_FONT_STACK,
   NormRect,
   OverlayLayerConfig,
   ProjectLayout,
@@ -160,6 +161,12 @@ export function useProject(): {
   removeOverlayLayer: (id: string) => void
   /** 附加层：z 序上移/下移（-1=上，1=下） */
   moveOverlayLayer: (id: string, dir: -1 | 1) => void
+  /** 1.1.1 自定义文本框：新增（右下角默认位），返回 id */
+  addTextLayer: () => string
+  /** 1.1.1 自定义文本框：改配置（text/style/rect/entry——与歌曲名/作者同构） */
+  updateTextLayer: (id: string, patch: Partial<TextLayerConfig>) => void
+  /** 1.1.1 自定义文本框：删除 */
+  removeTextLayer: (id: string) => void
   /** 1.0.0 时间轴段级 API */
   getSegmentLayoutView: (segId: string) => ProjectLayout
   updateSegmentLayout: (segId: string, patch: Partial<ProjectLayout>) => void
@@ -585,9 +592,12 @@ export function useProject(): {
     }
   }, [])
 
-  /** 图层清单物化（0.9.0）：layers=null 时按默认序展开；已有清单则补入缺失项（如新附加层） */
+  /** 图层清单物化（0.9.0）：layers=null 时按默认序展开；已有清单则补入缺失项（如新附加层/新文本） */
   const materializeLayers = useCallback((cur: ProjectLayout): LayerItem[] => {
-    const def = defaultLayerOrder((cur.overlayLayers ?? []).map((o) => 'overlay:' + o.id))
+    const def = defaultLayerOrder(
+      (cur.overlayLayers ?? []).map((o) => 'overlay:' + o.id),
+      Object.keys(cur.texts.extraTexts ?? {}).map((id) => 'text:' + id)
+    )
     if (!cur.layers) return def.map((id) => ({ id, hidden: false, locked: false }))
     const ids = new Set(cur.layers.map((x) => x.id))
     const missing = def.filter((id) => !ids.has(id))
@@ -699,6 +709,82 @@ export function useProject(): {
       const cur = layoutRef.current
       const next = mover(cur)
       const tl = mirrorSegments(mover)
+      applyLayout(tl ? { ...next, timeline: tl } : next)
+    },
+    [applyLayout, pushHistory]
+  )
+
+  // ── 1.1.1 自定义文本框（texts.extraTexts: Record<id, TextLayerConfig>）──
+  // 新文本框默认位：歌名下方（y≈0.36 右侧），样式与作者一致（易辨、可直接拖调）；
+  // id 用短随机（crypto.randomUUID 太长——关键帧路径/图层 id 都不需要全局唯一碰撞防御）
+  const addTextLayer = useCallback((): string => {
+    pushHistory()
+    const id = 'tx-' + Math.random().toString(36).slice(2, 8)
+    const cfg: TextLayerConfig = {
+      text: t('textPanel.defaultCustomText'),
+      style: {
+        fontFamily: CJK_FONT_STACK,
+        fontSize: 0.05,
+        color: '#ffffff',
+        strokeColor: '#000000',
+        strokeWidth: 0.002,
+        glowColor: '#000000',
+        glowBlur: 0.008,
+        glowEnabled: true,
+        bold: false,
+        align: 'left'
+      },
+      rect: { x: 0.54, y: 0.36, w: 0.4, h: 0.07 },
+      entry: { type: 'none', durationSec: 1.2, delaySec: 0 }
+    }
+    const addTo = (l: ProjectLayout): ProjectLayout => ({
+      ...l,
+      texts: { ...l.texts, extraTexts: { ...l.texts.extraTexts, [id]: cfg } },
+      // 已物化图层清单：把新文本插入歌名前（文本区整体在附加层与可视化之间）
+      layers: l.layers
+        ? materializeLayers({
+            ...l,
+            texts: { ...l.texts, extraTexts: { ...l.texts.extraTexts, [id]: cfg } }
+          })
+        : null
+    })
+    const next = addTo(layoutRef.current)
+    const tl = mirrorSegments(addTo)
+    applyLayout(tl ? { ...next, timeline: tl } : next)
+    return id
+  }, [applyLayout, materializeLayers, pushHistory])
+
+  const updateTextLayer = useCallback(
+    (id: string, patch: Partial<TextLayerConfig>) => {
+      commit((l) => {
+        const cur = l.texts.extraTexts[id]
+        if (!cur) return l
+        return {
+          ...l,
+          texts: { ...l.texts, extraTexts: { ...l.texts.extraTexts, [id]: { ...cur, ...patch } } }
+        }
+      })
+    },
+    [commit]
+  )
+
+  const removeTextLayer = useCallback(
+    (id: string) => {
+      pushHistory()
+      const strip = (l: ProjectLayout): ProjectLayout => {
+        const next: Record<string, TextLayerConfig> = {}
+        for (const [k, v] of Object.entries(l.texts.extraTexts)) {
+          if (k !== id) next[k] = v
+        }
+        return {
+          ...l,
+          texts: { ...l.texts, extraTexts: next },
+          layers: l.layers ? l.layers.filter((x) => x.id !== 'text:' + id) : null
+        }
+      }
+      const cur = layoutRef.current
+      const next = strip(cur)
+      const tl = mirrorSegments(strip)
       applyLayout(tl ? { ...next, timeline: tl } : next)
     },
     [applyLayout, pushHistory]
@@ -1077,7 +1163,9 @@ export function useProject(): {
         mainImage: { ...base.mainImage, ...incoming.mainImage },
         texts: {
           songTitle: { ...base.texts.songTitle, ...incoming.texts.songTitle },
-          artist: { ...base.texts.artist, ...incoming.texts.artist }
+          artist: { ...base.texts.artist, ...incoming.texts.artist },
+          // 1.1.1 自定义文本框：旧档无此字段 → 空；只取对象（防污染）
+          extraTexts: incoming.texts?.extraTexts ?? {}
         },
         visualizer: { ...base.visualizer, ...incoming.visualizer },
         export: { ...base.export, ...incoming.export },
@@ -1374,6 +1462,9 @@ export function useProject(): {
     updateOverlayLayer,
     removeOverlayLayer,
     moveOverlayLayer,
+    addTextLayer,
+    updateTextLayer,
+    removeTextLayer,
     updateLayerState,
     moveLayerState,
     updateEditor,

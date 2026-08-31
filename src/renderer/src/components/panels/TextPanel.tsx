@@ -23,8 +23,8 @@ const systemFontValue = (family: string): string => '"' + family.replace(/"/g, '
 interface StyleControlsProps {
   title: string
   cfg: TextLayerConfig
-  /** 用于构造关键帧路径：texts.<kind>.style.* */
-  kind: 'songTitle' | 'artist'
+  /** 关键帧路径前缀：songTitle/artist → texts.<kind>.*；'text:<id>' → texts.extraTexts.<id>.* */
+  kind: string
   systemFonts: string[]
   /** P3b 菱形打帧入口 */
   kfOps?: {
@@ -47,7 +47,10 @@ function StyleControls({
   onChange,
   kfOps
 }: StyleControlsProps): React.JSX.Element {
-  const kfp = (p: string): string => 'texts.' + kind + '.' + p
+  const kfp = (p: string): string =>
+    kind.startsWith('text:')
+      ? 'texts.extraTexts.' + kind.slice('text:'.length) + '.' + p
+      : 'texts.' + kind + '.' + p
   const { t } = useLocale()
   const s = cfg.style
   const setStyle = (patch: Partial<TextLayerConfig['style']>): void =>
@@ -161,6 +164,14 @@ interface TextPanelProps {
   artist: TextLayerConfig
   onSongTitleChange: (patch: Partial<TextLayerConfig>) => void
   onArtistChange: (patch: Partial<TextLayerConfig>) => void
+  /** 1.1.1 自定义文本框（id → 配置；选中一个编辑其全部属性） */
+  extraTexts: Record<string, TextLayerConfig>
+  selectedExtraTextId: string | null
+  onSelectExtraText: (id: string | null) => void
+  onExtraTextChange: (id: string, patch: Partial<TextLayerConfig>) => void
+  /** 1.1.1 增删自定义文本框 */
+  onExtraTextAdd: () => string
+  onExtraTextRemove: (id: string) => void
   /** 自定义字体（0.8.0） */
   customFontFamily?: string | null
   customFontName?: string | null
@@ -227,6 +238,64 @@ export function TextPanel(props: TextPanelProps): React.JSX.Element {
         kfOps={props.kfOps}
         onChange={props.onArtistChange}
       />
+      {/* 1.1.1 自定义文本框：行选择器 + 与歌名/作者同款编辑（含入字段落） */}
+      <div className="text-extra-section">
+        <div className="text-extra-head">
+          <h3>{t('textPanel.extraTitle')}</h3>
+          <div className="audio-row">
+            <button
+              type="button"
+              className="mini-btn"
+              onClick={() => props.onSelectExtraText(props.onExtraTextAdd())}
+            >
+              {t('textPanel.extraAdd')}
+            </button>
+            {props.selectedExtraTextId && (
+              <button
+                type="button"
+                className="mini-btn danger"
+                onClick={() => {
+                  props.onExtraTextRemove(props.selectedExtraTextId!)
+                  props.onSelectExtraText(null)
+                }}
+              >
+                {t('textPanel.extraRemove')}
+              </button>
+            )}
+          </div>
+        </div>
+        <div className="text-extra-head">
+          <div className="audio-row">
+            {Object.keys(props.extraTexts).map((id) => (
+              <button
+                key={id}
+                type="button"
+                className={
+                  'mini-btn' + (props.selectedExtraTextId === id ? ' mini-btn-active' : '')
+                }
+                onClick={() => props.onSelectExtraText(id)}
+              >
+                {props.extraTexts[id].text || t('textPanel.extraUntitled')}
+              </button>
+            ))}
+            {Object.keys(props.extraTexts).length === 0 && (
+              <span className="panel-note">{t('textPanel.extraNone')}</span>
+            )}
+          </div>
+        </div>
+        {props.selectedExtraTextId && props.extraTexts[props.selectedExtraTextId] && (
+          <StyleControls
+            title={t('textPanel.extraTitle')}
+            kind={'text:' + props.selectedExtraTextId}
+            cfg={props.extraTexts[props.selectedExtraTextId]}
+            systemFonts={sys.fonts}
+            customFontFamily={props.customFontFamily}
+            customFontName={props.customFontName}
+            kfOps={props.kfOps}
+            onChange={(patch) => props.onExtraTextChange(props.selectedExtraTextId!, patch)}
+          />
+        )}
+      </div>
     </section>
   )
 }

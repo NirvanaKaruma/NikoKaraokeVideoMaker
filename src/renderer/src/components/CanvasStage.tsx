@@ -150,6 +150,8 @@ export interface CanvasStageProps {
   onSelect: (id: SelectableId) => void
   onMainRectChange: (rect: NormRect) => void
   onTextRectChange: (kind: 'songTitle' | 'artist', rect: NormRect) => void
+  /** 1.1.1 自定义文本框矩形变化 */
+  onExtraTextRectChange?: (id: string, rect: NormRect) => void
   onVisualizerRectChange: (rect: NormRect) => void
   bars: number[]
   /** 播放中命令式更新频谱柱（性能优化：绕过 React 每帧重渲染） */
@@ -183,6 +185,7 @@ export function CanvasStage(props: CanvasStageProps): React.JSX.Element {
     onSelect,
     onMainRectChange,
     onTextRectChange,
+    onExtraTextRectChange,
     onVisualizerRectChange,
     bars,
     barsHandleRef,
@@ -266,6 +269,7 @@ export function CanvasStage(props: CanvasStageProps): React.JSX.Element {
           onSelect={onSelect}
           onMainRectChange={onMainRectChange}
           onTextRectChange={onTextRectChange}
+          onExtraTextRectChange={onExtraTextRectChange}
           onVisualizerRectChange={onVisualizerRectChange}
           bars={bars}
           barsHandleRef={barsHandleRef}

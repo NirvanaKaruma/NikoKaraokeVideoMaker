@@ -56,12 +56,26 @@ import type { CanvasImageElement } from '../hooks/useProject'
 /** 背景动效种子（确定性；Ken Burns 随时间推进） */
 const SEED_BG_FX = 987654321
 
-/** 可选中元素：主图 / 歌名 / 作者 / 可视化 / 附加层（overlay:<id>） */
+/** 可选中元素：主图 / 歌名 / 作者 / 可视化 / 附加层（overlay:<id>）/ 自定义文本（text:<id>） */
 export type SelectableId =
-  'mainImage' | 'songTitle' | 'artist' | 'visualizer' | `overlay:${string}` | null
+  | 'mainImage'
+  | 'songTitle'
+  | 'artist'
+  | 'visualizer'
+  | `overlay:${string}`
+  | `text:${string}`
+  | null
 
 export type SceneLayerName =
-  'background' | 'main' | 'overlay' | 'songTitle' | 'artist' | 'visualizer' | 'fx' | 'snap-guides'
+  | 'background'
+  | 'main'
+  | 'overlay'
+  | 'songTitle'
+  | 'artist'
+  | 'text'
+  | 'visualizer'
+  | 'fx'
+  | 'snap-guides'
 
 /** 吸附上下文（0.9.0）：拖动中读取目标集与开关，写回引导线 */
 export interface SnapCtx {
@@ -101,6 +115,8 @@ export interface SceneLayersProps {
   onSelect: (id: SelectableId) => void
   onMainRectChange: (rect: NormRect) => void
   onTextRectChange: (kind: 'songTitle' | 'artist', rect: NormRect) => void
+  /** 1.1.1 自定义文本框：拖动/缩放矩形变更（id → rect） */
+  onExtraTextRectChange?: (id: string, rect: NormRect) => void
   onVisualizerRectChange: (rect: NormRect) => void
   /** 可视化柱高数组（0–1），长度 = layout.visualizer.barCount */
   bars: number[]
@@ -485,6 +501,56 @@ function IntroOutroLayer({
 /** 文本层：歌曲名/作者——可拖动、可缩放文本框（字号不变，宽度驱动自动换行；选中显示虚线框）。
  * 0.5.0：入场动画（fade/slide/typewriter/bounce）——作用于内部文字节点（不动可拖组），
  * 由 textFxSlot 逐帧驱动（时间轴语义：进入即生效，暂停/seek 同步，预览/导出同源）。 */
+/**
+ * 1.1.1 自定义文本框包装：持有 slot ref 对象，effect 注册/注销到父级 Map——
+ * 渲染期不读任何 ref（react-hooks/refs），入场动画与歌名/作者同机制。
+ */
+function ExtraTextBox({
+  tid,
+  cfg,
+  canvas,
+  selected,
+  locked,
+  snapCtxRef,
+  onSelect,
+  onRectChange,
+  textSlotsRef
+}: {
+  tid: string
+  cfg: TextLayerConfig
+  canvas: CanvasSize
+  selected: boolean
+  locked: boolean
+  snapCtxRef?: { current: SnapCtx }
+  onSelect: (id: SelectableId) => void
+  onRectChange: (rect: NormRect) => void
+  textSlotsRef: React.MutableRefObject<Map<string, { current: ((t: number) => void) | null }>>
+}): React.JSX.Element {
+  // slotRef 为稳定裸 { current: fn } 对象（TextNode 直接消费；map 值 = 同一对象引用）
+  const slotRef = useMemo(() => ({ current: null as ((t: number) => void) | null }), [])
+  useEffect(() => {
+    textSlotsRef.current.set(tid, slotRef)
+    return () => {
+      if (textSlotsRef.current.get(tid) === slotRef) {
+        textSlotsRef.current.delete(tid)
+      }
+    }
+  }, [tid, textSlotsRef, slotRef])
+  return (
+    <TextNode
+      kind="songTitle"
+      cfg={cfg}
+      canvas={canvas}
+      selected={selected}
+      locked={locked}
+      snapCtxRef={snapCtxRef}
+      onSelect={onSelect}
+      onRectChange={onRectChange}
+      textFxSlotRef={slotRef}
+    />
+  )
+}
+
 function TextNode({
   kind,
   cfg,
@@ -1614,6 +1680,7 @@ export function SceneLayers(props: SceneLayersProps): React.JSX.Element {
     onSelect,
     onMainRectChange,
     onTextRectChange,
+    onExtraTextRectChange,
     onVisualizerRectChange,
     bars,
     canvasSize,
@@ -1651,6 +1718,8 @@ export function SceneLayers(props: SceneLayersProps): React.JSX.Element {
     push('main', layout.mainImage.rect)
     push('songTitle', layout.texts.songTitle.rect)
     push('artist', layout.texts.artist.rect)
+    for (const [tid, tcfg] of Object.entries(layout.texts.extraTexts ?? {}))
+      push('text:' + tid, tcfg.rect)
     push('visualizer', layout.visualizer.rect)
     for (const o of layout.overlayLayers ?? []) push('overlay:' + o.id, o.rect)
     snapCtxRef.current = {
@@ -1671,6 +1740,8 @@ export function SceneLayers(props: SceneLayersProps): React.JSX.Element {
   const overlaySlotsRef = useRef(
     new Map<string, { current: ((t: number, audioT: number) => void) | null }>()
   )
+  // 1.1.1 自定义文本框入场槽：子组件持 ref + effect 注册/注销（渲染期不读 map——满足 react-hooks/refs）
+  const textSlotsRef = useRef<Map<string, { current: ((t: number) => void) | null }>>(new Map())
   useEffect(() => {
     if (!layerFxRef) return
     layerFxRef.current = (t: number, audioT?: number) => {
@@ -1679,6 +1750,7 @@ export function SceneLayers(props: SceneLayersProps): React.JSX.Element {
       imgFxSlot.current?.(t, at)
       titleFxSlot.current?.(t)
       artistFxSlot.current?.(t)
+      textSlotsRef.current.forEach((slot) => slot.current?.(t))
       introFxSlot.current?.(t, at)
       overlaySlotsRef.current.forEach((slot) => slot.current?.(t, at))
     }
@@ -1691,13 +1763,16 @@ export function SceneLayers(props: SceneLayersProps): React.JSX.Element {
   // hidden 不渲染、locked 画布禁选禁拖（预览/导出同一渲染代码 → 同源）；fx 特效层永远最后（置顶）
   const layerItems: { id: string; hidden: boolean; locked: boolean }[] =
     layout.layers ??
-    defaultLayerOrder((layout.overlayLayers ?? []).map((o) => 'overlay:' + o.id)).map((id) => ({
+    defaultLayerOrder(
+      (layout.overlayLayers ?? []).map((o) => 'overlay:' + o.id),
+      Object.keys(layout.texts.extraTexts ?? {}).map((id) => 'text:' + id)
+    ).map((id) => ({
       id,
       hidden: false,
       locked: false
     }))
   const elemName = (id: string): SceneLayerName =>
-    id.startsWith('overlay:') ? 'overlay' : (id as SceneLayerName)
+    id.startsWith('overlay:') ? 'overlay' : id.startsWith('text:') ? 'text' : (id as SceneLayerName)
   return (
     <>
       {layerItems.map((item) => {
@@ -1773,6 +1848,28 @@ export function SceneLayers(props: SceneLayersProps): React.JSX.Element {
             )
           default: {
             if (typeof item.id !== 'string') return null
+            if (item.id.startsWith('text:')) {
+              // 1.1.1 自定义文本框：与歌曲名/作者同渲染（TextNode）+ 同选中/拖动/入场动画；
+              // slot 由 ExtraTextBox 自持（渲染期零 ref 读取——react-hooks/refs）
+              const tid = item.id.slice('text:'.length)
+              const tcfg = (layout.texts.extraTexts ?? {})[tid]
+              if (!tcfg) return null
+              return (
+                <Layer key={item.id} name="text">
+                  <ExtraTextBox
+                    tid={tid}
+                    cfg={tcfg}
+                    canvas={canvas}
+                    selected={selectedId === 'text:' + tid}
+                    locked={item.locked}
+                    snapCtxRef={snapCtxRef}
+                    onSelect={onSelect}
+                    onRectChange={(rect) => onExtraTextRectChange?.(tid, rect)}
+                    textSlotsRef={textSlotsRef}
+                  />
+                </Layer>
+              )
+            }
             if (!item.id.startsWith('overlay:')) return null
             const o = (layout.overlayLayers ?? []).find((x) => 'overlay:' + x.id === item.id)
             if (!o) return null
